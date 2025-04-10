@@ -178,6 +178,11 @@ namespace Server
 
                         var data = JsonSerializer.Deserialize<CommunicationData>(Encoding.UTF8.GetString(dataBuffer));
 
+                        if(data == null)
+                        {
+                            continue;
+                        }
+
                         _lastHeartbeatTimes[client.Id] = DateTime.Now;
                         client.UpdateHeartbeat();
 
