@@ -15,6 +15,7 @@ using System.Net.Security;
 using System.Security.Authentication;
 using Microsoft.VisualBasic;
 using System.Security.Cryptography;
+using System.Threading.Channels;
 
 namespace Server
 {
@@ -43,6 +44,9 @@ namespace Server
         // 新增文件传输相关字段
         private readonly ConcurrentDictionary<string, FileTransferInfo> _activeTransfers = new();
         private SemaphoreSlim _fileLock = new SemaphoreSlim(1, 1); // 异步锁
+        private Channel<ClientMessage> _messageQueue = Channel.CreateUnbounded<ClientMessage>();
+        private readonly CancellationTokenSource _processingCts = new();
+        private readonly int MaxQueueSize = int.MaxValue;
 
         public Server(int port, int sslPort, string certPath = null)
         {
@@ -60,6 +64,7 @@ namespace Server
 
             _heartbeatTimer = new Timer(_ => CheckHeartbeats(), null, Timeout.Infinite, Timeout.Infinite);
             _trafficMonitorTimer = new Timer(_ => _trafficMonitor.Monitor(), null, Timeout.Infinite, Timeout.Infinite);
+            StartProcessing();
         }
 
         public void Start(bool enableMonitoring = false)
@@ -153,13 +158,12 @@ namespace Server
             }
         }
 
-        // 修改后的客户端处理（需支持SslStream）
+        // 修改后的HandleClient方法（生产者）
         private async Task HandleClient(ClientConfig client)
         {
             try
             {
                 var buffer = new byte[BufferSize];
-
                 Stream stream = client.Socket != null
                     ? new NetworkStream(client.Socket)
                     : client.SslStream;
@@ -168,66 +172,34 @@ namespace Server
                 {
                     try
                     {
-                        // 接收带长度前缀的消息（兼容两种流）
+                        // 接收消息头
                         var header = new byte[4];
                         await stream.ReadAsync(header, 0, 4);
                         int msgLength = BitConverter.ToInt32(header, 0);
 
+                        // 接收消息体
                         var dataBuffer = new byte[msgLength];
                         await stream.ReadAsync(dataBuffer, 0, msgLength);
 
-                        var data = JsonSerializer.Deserialize<CommunicationData>(Encoding.UTF8.GetString(dataBuffer));
-
-                        if(data == null)
+                        // 将消息加入队列
+                        var message = new ClientMessage
                         {
-                            continue;
-                        }
-
-                        _lastHeartbeatTimes[client.Id] = DateTime.Now;
-                        client.UpdateHeartbeat();
-
-                        if (data.InfoType == InfoType.HeartBeat)
-                        {
-                            var ack1 = new CommunicationData
-                            {
-                                InfoType = InfoType.HeartBeat,
-                                Message = "ACK",
-                                AckNum = data.SeqNum,
-                            };
-
-                            logger.Log(LogLevel.Info, $"Client {client.Id} heartbeat");
-                            await SendData(client, ack1);
-                            continue;
-                        }
-
-                        // 新增文件传输处理
-                        if (data.InfoType == InfoType.File)
-                        {
-                            client.AddFileReceivedBytes(msgLength + 4);
-                            await HandleFileTransfer(client, data);
-                            continue;
-                        }
-
-                        client.AddReceivedBytes(msgLength + 4);
-
-                        var ack = new CommunicationData
-                        {
-                            InfoType = InfoType.Normal,
-                            AckNum = data.SeqNum,
-                            Message = "ACK"
+                            Client = client,
+                            Data = dataBuffer,
+                            ReceivedTime = DateTime.Now
                         };
-                        await SendData(client, ack);
-                        logger.Log(LogLevel.Info, $"Client {client.Id} ACK: {data.SeqNum}");
-                    }
-                    catch (IOException ex) when (ex.InnerException is AuthenticationException)
-                    {
-                        // 处理SSL认证失败
-                        logger.Log(LogLevel.Warning, $"SSL authentication failed: {ex.Message}");
-                        break;
+                        await _messageQueue.Writer.WriteAsync(message);
+
+                        // 控制队列积压（可选）
+                        if (_messageQueue.Reader.Count > MaxQueueSize)
+                        {
+                            logger.Log(LogLevel.Warning, $"Client {client.Id} message queue growing");
+                            // 可在此处实施背压策略，如暂停接收等
+                        }
                     }
                     catch (Exception ex)
                     {
-                        logger.Log(LogLevel.Error, $"Client {client.Id} error: {ex.Message}");
+                        // 异常处理...
                         break;
                     }
                 }
@@ -238,6 +210,90 @@ namespace Server
             }
         }
 
+        // 新增消费者处理方法
+        private async Task ProcessMessages(CancellationToken token)
+        {
+            try
+            {
+                await foreach (var message in _messageQueue.Reader.ReadAllAsync(token))
+                {
+                    try
+                    {
+                        var dataStr = Encoding.UTF8.GetString(message.Data);
+                        var data = JsonSerializer.Deserialize<CommunicationData>(dataStr);
+
+                        if (data == null) continue;
+
+                        // 更新心跳
+                        _lastHeartbeatTimes[message.Client.Id] = message.ReceivedTime;
+                        message.Client.UpdateHeartbeat();
+
+                        // 处理不同类型消息
+                        switch (data.InfoType)
+                        {
+                            case InfoType.HeartBeat:
+                                await HandleHeartbeat(message.Client, data);
+                                break;
+                            case InfoType.File:
+                                await HandleFileTransfer(message.Client, data);
+                                break;
+                            default:
+                                await HandleNormalMessage(message.Client, data);
+                                break;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Log(LogLevel.Error, $"Processing error: {ex.Message}");
+                        // 可选择将失败消息重新入队或记录日志
+                    }
+                }
+            }
+            finally
+            {
+                _processingCts.Cancel();
+            }
+        }
+
+        // 启动消费者（在适当位置调用，如服务启动时）
+        public void StartProcessing()
+        {
+            // 根据CPU核心数设置消费者数量
+            int processorCount = Environment.ProcessorCount;
+            for (int i = 0; i < processorCount; i++)
+            {
+                _ = Task.Run(() => ProcessMessages(_processingCts.Token), _processingCts.Token);
+            }
+        }
+
+        // 心跳处理优化
+        private async Task HandleHeartbeat(ClientConfig client, CommunicationData data)
+        {
+            var ack = new CommunicationData
+            {
+                InfoType = InfoType.HeartBeat,
+                Message = "ACK",
+                AckNum = data.SeqNum
+            };
+            logger.Log(LogLevel.Info, $"Client {client.Id} heartbeat");
+            await SendData(client, ack);
+        }
+
+        // 普通消息处理
+        private async Task HandleNormalMessage(ClientConfig client, CommunicationData data)
+        {
+            client.AddReceivedBytes(data.Message.Length + 4);
+            var ack = new CommunicationData
+            {
+                InfoType = InfoType.Normal,
+                AckNum = data.SeqNum,
+                Message = "ACK"
+            };
+            await SendData(client, ack);
+            logger.Log(LogLevel.Info, $"Client {client.Id} ACK: {data.SeqNum}");
+        }
+
+        // 文件传输处理优化// 文件传输处理优化
         private async Task HandleFileTransfer(ClientConfig client, CommunicationData data)
         {
             await _fileLock.WaitAsync();
@@ -345,6 +401,7 @@ namespace Server
         public void Stop()
         {
             _cts.Cancel();
+            _processingCts.Cancel();
             _isRunning = false;
             _heartbeatTimer.Change(Timeout.Infinite, Timeout.Infinite);
             _trafficMonitorTimer.Change(Timeout.Infinite, Timeout.Infinite);
