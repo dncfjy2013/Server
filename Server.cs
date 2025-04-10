@@ -179,17 +179,19 @@ namespace Server
                         var data = JsonSerializer.Deserialize<CommunicationData>(Encoding.UTF8.GetString(dataBuffer));
 
                         _lastHeartbeatTimes[client.Id] = DateTime.Now;
+                        client.UpdateHeartbeat();
 
                         if (data.InfoType == InfoType.HeartBeat)
                         {
-                            client.UpdateHeartbeat();
                             var ack1 = new CommunicationData
                             {
-                                Message = "HeartbeatACK",
+                                InfoType = InfoType.HeartBeat,
+                                Message = "ACK",
+                                AckNum = data.SeqNum,
                             };
 
                             logger.Log(LogLevel.Info, $"Client {client.Id} heartbeat");
-
+                            await SendData(client, ack1);
                             continue;
                         }
 
@@ -205,6 +207,7 @@ namespace Server
 
                         var ack = new CommunicationData
                         {
+                            InfoType = InfoType.Normal,
                             AckNum = data.SeqNum,
                             Message = "ACK"
                         };
@@ -243,6 +246,7 @@ namespace Server
                         // 发送完成确认（可选，根据协议需求）
                         var completionAck = new CommunicationData
                         {
+                            InfoType = InfoType.File,
                             AckNum = data.SeqNum,
                             Message = "FILE_COMPLETE_ACK",
                             FileId = data.FileId
@@ -292,6 +296,7 @@ namespace Server
                 // 发送接收确认
                 var ack = new CommunicationData
                 {
+                    InfoType = InfoType.File,
                     AckNum = data.SeqNum,
                     Message = "FILE_ACK",
                     ReceivedChunks = transferInfo.ReceivedChunks.ToList()
