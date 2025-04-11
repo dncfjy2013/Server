@@ -20,7 +20,7 @@ namespace Server
         public int ExpectedAck { get; set; }
 
         public string FilePath { get; set; }
-
+        public bool IsConnect {  get; set; }
         public ClientConfig(int id, Socket socket)
         {
             Id = id;
@@ -29,6 +29,8 @@ namespace Server
             LastActivity = DateTime.Now;
 
             FilePath = "Client" + id.ToString();
+
+            IsConnect = true;
         }
         public ClientConfig(int id, SslStream sslStream)
         {
@@ -39,6 +41,8 @@ namespace Server
             LastActivity = DateTime.Now;
 
             FilePath = "Client" + id.ToString();
+
+            IsConnect = true;
         }
 
         private int _bytesReceived;

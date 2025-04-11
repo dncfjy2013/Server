@@ -9,7 +9,7 @@ namespace Server
     public class ClientMessage
     {
         public ClientConfig Client { get; set; }
-        public byte[] Data { get; set; }
+        public CommunicationData Data { get; set; }
         public DateTime ReceivedTime { get; set; }
     }
 }

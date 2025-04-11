@@ -33,7 +33,7 @@ namespace Server
         private bool _isRunning;
         private readonly int HeartbeatInterval = 10000;
         private readonly int TimeoutSeconds = 45;
-        private readonly int BufferSize = 1024;
+        private readonly int BufferSize = 2048;
         private readonly int ListenMax = 100;
         private int _monitorInterval = 5000; // 默认监控间隔
         private readonly CancellationTokenSource _cts = new();
@@ -161,6 +161,12 @@ namespace Server
         // 修改后的HandleClient方法（生产者）
         private async Task HandleClient(ClientConfig client)
         {
+            int bytesRead;
+            byte[] headerBuffer = new byte[8];
+            byte[] payloadBuffer;
+            int headerOffset = 0;
+            int payloadOffset = 0;
+
             try
             {
                 var buffer = new byte[BufferSize];
@@ -172,20 +178,61 @@ namespace Server
                 {
                     try
                     {
-                        // 接收消息头
-                        var header = new byte[4];
-                        await stream.ReadAsync(header, 0, 4);
-                        int msgLength = BitConverter.ToInt32(header, 0);
+                        // 第一阶段：接收协议头（带容错处理）
+                        headerOffset = 0;
+                        while (headerOffset < 8)
+                        {
+                            bytesRead = await stream.ReadAsync(headerBuffer, headerOffset, 8 - headerOffset);
+                            if (bytesRead == 0) return; // 连接关闭
+                            headerOffset += bytesRead;
+                        }
 
-                        // 接收消息体
-                        var dataBuffer = new byte[msgLength];
-                        await stream.ReadAsync(dataBuffer, 0, msgLength);
+                        // 使用Try模式解析协议头
+                        if (!ProtocolHeader.TryFromBytes(headerBuffer, out ProtocolHeader header))
+                        {
+                            logger.Log(LogLevel.Error, $"Invalid protocol header from {client.Id}");
+                            continue; // 丢弃错误头，继续接收
+                        }
 
-                        // 将消息加入队列
+                        // 版本兼容性检查（新增）
+                        if (!config.SupportedVersions.Contains(header.Version))
+                        {
+                            logger.Log(LogLevel.Warning, $"Unsupported version {header.Version} from {client.Id}");
+                            continue;
+                        }
+
+                        // 第二阶段：接收消息体（带长度校验）
+                        payloadBuffer = new byte[header.MessageLength];
+                        payloadOffset = 0;
+                        while (payloadOffset < header.MessageLength)
+                        {
+                            bytesRead = await stream.ReadAsync(
+                                payloadBuffer,
+                                payloadOffset,
+                                header.MessageLength - payloadOffset);
+
+                            if (bytesRead == 0) return; // 连接关闭
+                            payloadOffset += bytesRead;
+                        }
+
+                        // 第三阶段：完整解析（带校验和验证）
+                        byte[] fullPacket = new byte[8 + header.MessageLength];
+                        Array.Copy(headerBuffer, 0, fullPacket, 0, 8);
+                        Array.Copy(payloadBuffer, 0, fullPacket, 8, header.MessageLength);
+
+                        // 使用异步解析方法
+                        var parseResult = await ProtocolPacket.TryFromBytesAsync(fullPacket, config);
+                        if (!parseResult.Success)
+                        {
+                            logger.Log(LogLevel.Error, $"Invalid protocol packet from {client.Id}");
+                            continue; // 丢弃错误包，继续接收
+                        }
+
+                        // 处理有效数据包
                         var message = new ClientMessage
                         {
                             Client = client,
-                            Data = dataBuffer,
+                            Data = parseResult.Packet.Data,
                             ReceivedTime = DateTime.Now
                         };
                         await _messageQueue.Writer.WriteAsync(message);
@@ -199,8 +246,8 @@ namespace Server
                     }
                     catch (Exception ex)
                     {
-                        // 异常处理...
-                        break;
+                        logger.Log(LogLevel.Error, $"Client {client.Id} error: {ex}");
+                        break; // 发生异常时退出循环
                     }
                 }
             }
@@ -219,8 +266,7 @@ namespace Server
                 {
                     try
                     {
-                        var dataStr = Encoding.UTF8.GetString(message.Data);
-                        var data = JsonSerializer.Deserialize<CommunicationData>(dataStr);
+                        var data = message.Data;
 
                         if (data == null) continue;
 
@@ -416,19 +462,29 @@ namespace Server
 
             logger.Stop();
         }
+        // 创建协议配置（假设已在外部初始化）
+        ProtocolConfiguration config = new ProtocolConfiguration
+        {
+            DataSerializer = new JsonSerializerAdapter(),
+            ChecksumCalculator = new Crc16Calculator(),
+            SupportedVersions = new byte[] { 0x01, 0x02 },
+            MaxPacketSize = 2 * 1024 * 1024 // 与接收方配置一致
+        };
         private async Task SendData(ClientConfig client, CommunicationData data)
         {
-            var json = JsonSerializer.Serialize(data);
-            byte[] payload = Encoding.UTF8.GetBytes(json);
-            byte[] lengthPrefix = BitConverter.GetBytes(payload.Length);
+            // 创建协议数据包
+            var packet = new ProtocolPacket(config)
+            {
+                Header = new ProtocolHeader { Version = ProtocolHeader.CurrentVersion },
+                Data = data
+            };
 
-            // 合并长度前缀和实际数据
-            byte[] fullPacket = new byte[lengthPrefix.Length + payload.Length];
-            Buffer.BlockCopy(lengthPrefix, 0, fullPacket, 0, lengthPrefix.Length);
-            Buffer.BlockCopy(payload, 0, fullPacket, lengthPrefix.Length, payload.Length);
+            // 生成符合协议的字节数组
+            byte[] protocolBytes = packet.ToBytes();
 
-            await client.Socket.SendAsync(fullPacket, SocketFlags.None);
-            client.AddSentBytes(fullPacket.Length);
+            // 发送协议数据
+            await client.Socket.SendAsync(protocolBytes, SocketFlags.None);
+            client.AddSentBytes(protocolBytes.Length);
         }
 
 
@@ -467,6 +523,8 @@ namespace Server
                         client.SslStream?.Close();
                         client.Socket?.Dispose(); 
                     }
+
+                    client.IsConnect = false;
                 }
                 catch { /* 忽略关闭异常 */ }
 
