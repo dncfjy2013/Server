@@ -16,6 +16,7 @@ using System.Security.Authentication;
 using Microsoft.VisualBasic;
 using System.Security.Cryptography;
 using System.Threading.Channels;
+using Server.Client;
 
 namespace Server
 {
@@ -42,7 +43,7 @@ namespace Server
         Logger logger = Logger.GetInstance();
         private readonly TrafficMonitor _trafficMonitor;
         // 新增文件传输相关字段
-        private readonly ConcurrentDictionary<string, FileTransferInfo> _activeTransfers = new();
+        //private readonly ConcurrentDictionary<string, FileTransferInfo> _activeTransfers = new();
         private SemaphoreSlim _fileLock = new SemaphoreSlim(1, 1); // 异步锁
         private Channel<ClientMessage> _messageQueue = Channel.CreateUnbounded<ClientMessage>();
         private readonly CancellationTokenSource _processingCts = new();
@@ -257,61 +258,86 @@ namespace Server
             }
         }
 
-        // 新增消费者处理方法
-        private async Task ProcessMessages(CancellationToken token)
-        {
-            try
-            {
-                await foreach (var message in _messageQueue.Reader.ReadAllAsync(token))
-                {
-                    try
-                    {
-                        var data = message.Data;
-
-                        if (data == null) continue;
-
-                        // 更新心跳
-                        _lastHeartbeatTimes[message.Client.Id] = message.ReceivedTime;
-                        message.Client.UpdateHeartbeat();
-
-                        // 处理不同类型消息
-                        switch (data.InfoType)
-                        {
-                            case InfoType.HeartBeat:
-                                await HandleHeartbeat(message.Client, data);
-                                break;
-                            case InfoType.File:
-                                await HandleFileTransfer(message.Client, data);
-                                break;
-                            default:
-                                await HandleNormalMessage(message.Client, data);
-                                break;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.Log(LogLevel.Error, $"Processing error: {ex.Message}");
-                        // 可选择将失败消息重新入队或记录日志
-                    }
-                }
-            }
-            finally
-            {
-                _processingCts.Cancel();
-            }
-        }
-
         // 启动消费者（在适当位置调用，如服务启动时）
         public void StartProcessing()
         {
             // 根据CPU核心数设置消费者数量
-            int processorCount = Environment.ProcessorCount;
-            for (int i = 0; i < processorCount; i++)
+            // Start high priority processors
+            for (int i = 0; i < Environment.ProcessorCount; i++)
             {
-                _ = Task.Run(() => ProcessMessages(_processingCts.Token), _processingCts.Token);
+                _ = Task.Run(() => ProcessMessages(DataPriority.High));
+            }
+
+            // Start medium priority processors
+            for (int i = 0; i < Environment.ProcessorCount / 2; i++)
+            {
+                _ = Task.Run(() => ProcessMessages(DataPriority.Medium));
+            }
+
+            // Start low priority processor
+            _ = Task.Run(() => ProcessMessages(DataPriority.Low));
+        }
+        private readonly Dictionary<DataPriority, SemaphoreSlim> _prioritySemaphores = new()
+        {
+            [DataPriority.High] = new SemaphoreSlim(Environment.ProcessorCount * 2, Environment.ProcessorCount * 2),
+            [DataPriority.Medium] = new SemaphoreSlim(Environment.ProcessorCount, Environment.ProcessorCount),
+            [DataPriority.Low] = new SemaphoreSlim(Environment.ProcessorCount / 2, Environment.ProcessorCount / 2)
+        };
+        // 新增消费者处理方法
+        private async Task ProcessMessages(DataPriority priority)
+        {
+            var semaphore = _prioritySemaphores[priority];
+
+            await foreach (var message in _messageQueue.Reader.ReadAllAsync(_processingCts.Token))
+            {
+                if (message.Data.Priority != priority) continue;
+
+                await semaphore.WaitAsync(_processingCts.Token);
+                try
+                {
+                    await ProcessMessageWithPriority(message, priority);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error processing {priority} priority message: {ex.Message}");
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
             }
         }
+        private async Task ProcessMessageWithPriority(ClientMessage message, DataPriority priority)
+        {
+            var timeout = priority switch
+            {
+                DataPriority.High => TimeSpan.FromMilliseconds(100),
+                DataPriority.Medium => TimeSpan.FromMilliseconds(500),
+                _ => TimeSpan.FromSeconds(1)
+            };
 
+            using var cts = new CancellationTokenSource(timeout);
+
+            try
+            {
+                switch (message.Data.InfoType)
+                {
+                    case InfoType.HeartBeat:
+                        await HandleHeartbeat(message.Client, message.Data);
+                        break;
+                    case InfoType.File:
+                        await HandleFileTransfer(message.Client, message.Data);
+                        break;
+                    default:
+                        await HandleNormalMessage(message.Client, message.Data);
+                        break;
+                }
+            }
+            catch (OperationCanceledException) when (cts.IsCancellationRequested)
+            {
+                Console.WriteLine($"{priority} priority message processing timeout");
+            }
+        }
         // 心跳处理优化
         private async Task HandleHeartbeat(ClientConfig client, CommunicationData data)
         {
@@ -342,94 +368,94 @@ namespace Server
         // 文件传输处理优化// 文件传输处理优化
         private async Task HandleFileTransfer(ClientConfig client, CommunicationData data)
         {
-            await _fileLock.WaitAsync();
-            try
-            {
-                // 处理文件传输完成消息
-                if (data.Message == "FILE_COMPLETE")
-                {
-                    if (_activeTransfers.TryRemove(data.FileId, out var transferInfo1))
-                    {
-                        // 发送完成确认（可选，根据协议需求）
-                        var completionAck = new CommunicationData
-                        {
-                            InfoType = InfoType.File,
-                            AckNum = data.SeqNum,
-                            Message = "FILE_COMPLETE_ACK",
-                            FileId = data.FileId
-                        };
-                        await SendData(client, completionAck);
+            //await _fileLock.WaitAsync();
+            //try
+            //{
+            //    // 处理文件传输完成消息
+            //    if (data.Message == "FILE_COMPLETE")
+            //    {
+            //        if (_activeTransfers.TryRemove(data.FileId, out var transferInfo1))
+            //        {
+            //            // 发送完成确认（可选，根据协议需求）
+            //            var completionAck = new CommunicationData
+            //            {
+            //                InfoType = InfoType.File,
+            //                AckNum = data.SeqNum,
+            //                Message = "FILE_COMPLETE_ACK",
+            //                FileId = data.FileId
+            //            };
+            //            await SendData(client, completionAck);
 
-                        logger.Log(LogLevel.Info, $"File {transferInfo1.FileName} transfer complete，Clean log");
+            //            logger.Log(LogLevel.Info, $"File {transferInfo1.FileName} transfer complete，Clean log");
 
-                        // 可选：触发文件完成事件通知其他组件
-                        OnFileTransferCompleted?.Invoke(transferInfo1.FilePath);
-                    }
-                    else
-                    {
-                        logger.Log(LogLevel.Warning, $"Receive FILE_COMPLETE But {data.FileId} not exit");
-                    }
-                    return;
-                }
+            //            // 可选：触发文件完成事件通知其他组件
+            //            OnFileTransferCompleted?.Invoke(transferInfo1.FilePath);
+            //        }
+            //        else
+            //        {
+            //            logger.Log(LogLevel.Warning, $"Receive FILE_COMPLETE But {data.FileId} not exit");
+            //        }
+            //        return;
+            //    }
 
-                // 常规文件块处理逻辑
-                if (!_activeTransfers.TryGetValue(data.FileId, out var transferInfo))
-                {
-                    transferInfo = new FileTransferInfo
-                    {
-                        TotalChunks = data.TotalChunks,
-                        FileName = data.FileName,
-                        ReceivedChunks = new HashSet<int>(),
-                        FilePath = Path.Combine(client.FilePath, data.FileName)
-                    };
-                    _activeTransfers[data.FileId] = transferInfo;
-                    Directory.CreateDirectory(Path.GetDirectoryName(transferInfo.FilePath));
-                }
+            //    // 常规文件块处理逻辑
+            //    if (!_activeTransfers.TryGetValue(data.FileId, out var transferInfo))
+            //    {
+            //        transferInfo = new FileTransferInfo
+            //        {
+            //            TotalChunks = data.TotalChunks,
+            //            FileName = data.FileName,
+            //            ReceivedChunks = new HashSet<int>(),
+            //            FilePath = Path.Combine(client.FilePath, data.FileName)
+            //        };
+            //        _activeTransfers[data.FileId] = transferInfo;
+            //        Directory.CreateDirectory(Path.GetDirectoryName(transferInfo.FilePath));
+            //    }
 
-                using (var fs = new FileStream(transferInfo.FilePath, FileMode.OpenOrCreate, FileAccess.Write))
-                {
-                    foreach (var chunk in data.FileChunks)
-                    {
-                        if (transferInfo.ReceivedChunks.Contains(chunk.Index)) continue;
+            //    using (var fs = new FileStream(transferInfo.FilePath, FileMode.OpenOrCreate, FileAccess.Write))
+            //    {
+            //        foreach (var chunk in data.FileChunks)
+            //        {
+            //            if (transferInfo.ReceivedChunks.Contains(chunk.Index)) continue;
 
-                        fs.Seek(chunk.Index * Constants.ChunkSize, SeekOrigin.Begin);
-                        await fs.WriteAsync(chunk.Data, 0, chunk.Data.Length);
-                        transferInfo.ReceivedChunks.Add(chunk.Index);
-                    }
-                }
+            //            fs.Seek(chunk.Index * Constants.ChunkSize, SeekOrigin.Begin);
+            //            await fs.WriteAsync(chunk.Data, 0, chunk.Data.Length);
+            //            transferInfo.ReceivedChunks.Add(chunk.Index);
+            //        }
+            //    }
 
-                _activeTransfers[data.FileId] = transferInfo;
+            //    _activeTransfers[data.FileId] = transferInfo;
 
-                // 发送接收确认
-                var ack = new CommunicationData
-                {
-                    InfoType = InfoType.File,
-                    AckNum = data.SeqNum,
-                    Message = "FILE_ACK",
-                    ReceivedChunks = transferInfo.ReceivedChunks.ToList()
-                };
-                await SendData(client, ack);
+            //    // 发送接收确认
+            //    var ack = new CommunicationData
+            //    {
+            //        InfoType = InfoType.File,
+            //        AckNum = data.SeqNum,
+            //        Message = "FILE_ACK",
+            //        ReceivedChunks = transferInfo.ReceivedChunks.ToList()
+            //    };
+            //    await SendData(client, ack);
 
-                // 检查是否完成传输
-                if (transferInfo.ReceivedChunks.Count == transferInfo.TotalChunks)
-                {
-                    using (var md5 = MD5.Create())
-                    using (var stream = File.OpenRead(transferInfo.FilePath))
-                    {
-                        byte[] checksum = md5.ComputeHash(stream);
-                        if (BitConverter.ToString(checksum).Replace("-", "") != data.MD5Hash)
-                        {
-                            throw new InvalidOperationException("MD5校验失败");
-                        }
-                    }
+            //    // 检查是否完成传输
+            //    if (transferInfo.ReceivedChunks.Count == transferInfo.TotalChunks)
+            //    {
+            //        using (var md5 = MD5.Create())
+            //        using (var stream = File.OpenRead(transferInfo.FilePath))
+            //        {
+            //            byte[] checksum = md5.ComputeHash(stream);
+            //            if (BitConverter.ToString(checksum).Replace("-", "") != data.MD5Hash)
+            //            {
+            //                throw new InvalidOperationException("MD5校验失败");
+            //            }
+            //        }
 
-                    logger.Log(LogLevel.Info, $"文件 {data.FileName} 接收完成，MD5校验通过");
-                }
-            }
-            finally
-            {
-                _fileLock.Release();
-            }
+            //        logger.Log(LogLevel.Info, $"文件 {data.FileName} 接收完成，MD5校验通过");
+            //    }
+            //}
+            //finally
+            //{
+            //    _fileLock.Release();
+            //}
         }
 
         // 可选：定义文件完成事件
@@ -540,5 +566,7 @@ namespace Server
                 logger.Log(LogLevel.Info, message);
             }
         }
+
+
     }
 }
