@@ -247,7 +247,7 @@ namespace Server
                     }
                     catch (Exception ex)
                     {
-                        logger.Log(LogLevel.Error, $"Client {client.Id} error: {ex}");
+                        logger.Log(LogLevel.Error, $"Client {client.Id} error: {ex.Message}");
                         break; // 发生异常时退出循环
                     }
                 }
@@ -341,6 +341,7 @@ namespace Server
         // 心跳处理优化
         private async Task HandleHeartbeat(ClientConfig client, CommunicationData data)
         {
+            client.AddReceivedBytes(MemoryCalculator.CalculateObjectSize(data));
             var ack = new CommunicationData
             {
                 InfoType = InfoType.HeartBeat,
@@ -348,13 +349,14 @@ namespace Server
                 AckNum = data.SeqNum
             };
             logger.Log(LogLevel.Info, $"Client {client.Id} heartbeat");
+            client.AddSentBytes(MemoryCalculator.CalculateObjectSize(ack));
             await SendData(client, ack);
         }
 
         // 普通消息处理
         private async Task HandleNormalMessage(ClientConfig client, CommunicationData data)
         {
-            client.AddReceivedBytes(data.Message.Length + 4);
+            client.AddReceivedBytes(MemoryCalculator.CalculateObjectSize(data));
             var ack = new CommunicationData
             {
                 InfoType = InfoType.Normal,
@@ -362,100 +364,173 @@ namespace Server
                 Message = "ACK"
             };
             await SendData(client, ack);
+            client.AddSentBytes(MemoryCalculator.CalculateObjectSize(ack));
             logger.Log(LogLevel.Info, $"Client {client.Id} ACK: {data.SeqNum}");
         }
 
         // 文件传输处理优化// 文件传输处理优化
+        private readonly ConcurrentDictionary<string, FileTransferInfo> _activeTransfers = new();
         private async Task HandleFileTransfer(ClientConfig client, CommunicationData data)
         {
-            //await _fileLock.WaitAsync();
-            //try
-            //{
-            //    // 处理文件传输完成消息
-            //    if (data.Message == "FILE_COMPLETE")
-            //    {
-            //        if (_activeTransfers.TryRemove(data.FileId, out var transferInfo1))
-            //        {
-            //            // 发送完成确认（可选，根据协议需求）
-            //            var completionAck = new CommunicationData
-            //            {
-            //                InfoType = InfoType.File,
-            //                AckNum = data.SeqNum,
-            //                Message = "FILE_COMPLETE_ACK",
-            //                FileId = data.FileId
-            //            };
-            //            await SendData(client, completionAck);
+            client.AddFileReceivedBytes(MemoryCalculator.CalculateObjectSize(data));
+            await _fileLock.WaitAsync();
+            try
+            {
+                FileTransferInfo transferInfo;
+                // 处理文件传输完成消息
+                if (data.Message == "FILE_COMPLETE")
+                {
+                    if (_activeTransfers.TryRemove(data.FileId, out transferInfo))
+                    {
+                        // 验证文件完整性
+                        await VerifyFileIntegrity(transferInfo, data.MD5Hash);
 
-            //            logger.Log(LogLevel.Info, $"File {transferInfo1.FileName} transfer complete，Clean log");
+                        // 发送完成确认
+                        var completionAck = new CommunicationData
+                        {
+                            InfoType = InfoType.File,
+                            AckNum = data.SeqNum,
+                            Message = "FILE_COMPLETE_ACK",
+                            FileId = data.FileId
+                        };
 
-            //            // 可选：触发文件完成事件通知其他组件
-            //            OnFileTransferCompleted?.Invoke(transferInfo1.FilePath);
-            //        }
-            //        else
-            //        {
-            //            logger.Log(LogLevel.Warning, $"Receive FILE_COMPLETE But {data.FileId} not exit");
-            //        }
-            //        return;
-            //    }
+                        client.AddFileSentBytes(MemoryCalculator.CalculateObjectSize(completionAck));
 
-            //    // 常规文件块处理逻辑
-            //    if (!_activeTransfers.TryGetValue(data.FileId, out var transferInfo))
-            //    {
-            //        transferInfo = new FileTransferInfo
-            //        {
-            //            TotalChunks = data.TotalChunks,
-            //            FileName = data.FileName,
-            //            ReceivedChunks = new HashSet<int>(),
-            //            FilePath = Path.Combine(client.FilePath, data.FileName)
-            //        };
-            //        _activeTransfers[data.FileId] = transferInfo;
-            //        Directory.CreateDirectory(Path.GetDirectoryName(transferInfo.FilePath));
-            //    }
+                        await SendData(client, completionAck);
 
-            //    using (var fs = new FileStream(transferInfo.FilePath, FileMode.OpenOrCreate, FileAccess.Write))
-            //    {
-            //        foreach (var chunk in data.FileChunks)
-            //        {
-            //            if (transferInfo.ReceivedChunks.Contains(chunk.Index)) continue;
+                        logger.Log(LogLevel.Info, $"File {transferInfo.FileName} transfer completed successfully");
 
-            //            fs.Seek(chunk.Index * Constants.ChunkSize, SeekOrigin.Begin);
-            //            await fs.WriteAsync(chunk.Data, 0, chunk.Data.Length);
-            //            transferInfo.ReceivedChunks.Add(chunk.Index);
-            //        }
-            //    }
+                        // 触发文件完成事件
+                        OnFileTransferCompleted?.Invoke(transferInfo.FilePath);
+                    }
+                    else
+                    {
+                        logger.Log(LogLevel.Warning, $"Received FILE_COMPLETE for unknown file ID: {data.FileId}");
+                    }
+                    return;
+                }
 
-            //    _activeTransfers[data.FileId] = transferInfo;
+                // 处理文件块数据
+                if (!_activeTransfers.TryGetValue(data.FileId, out transferInfo))
+                {
+                    // 初始化新的文件传输
+                    transferInfo = new FileTransferInfo
+                    {
+                        FileId = data.FileId,
+                        FileName = data.FileName,
+                        FileSize = data.FileSize,
+                        TotalChunks = data.TotalChunks,
+                        ChunkSize = data.ChunkData.Length,
+                        ReceivedChunks = new ConcurrentDictionary<int, byte[]>(),
+                        FilePath = GetUniqueFilePath(Path.Combine(client.FilePath, data.FileName))
+                    };
 
-            //    // 发送接收确认
-            //    var ack = new CommunicationData
-            //    {
-            //        InfoType = InfoType.File,
-            //        AckNum = data.SeqNum,
-            //        Message = "FILE_ACK",
-            //        ReceivedChunks = transferInfo.ReceivedChunks.ToList()
-            //    };
-            //    await SendData(client, ack);
+                    Directory.CreateDirectory(Path.GetDirectoryName(transferInfo.FilePath));
+                    _activeTransfers[data.FileId] = transferInfo;
+                }
 
-            //    // 检查是否完成传输
-            //    if (transferInfo.ReceivedChunks.Count == transferInfo.TotalChunks)
-            //    {
-            //        using (var md5 = MD5.Create())
-            //        using (var stream = File.OpenRead(transferInfo.FilePath))
-            //        {
-            //            byte[] checksum = md5.ComputeHash(stream);
-            //            if (BitConverter.ToString(checksum).Replace("-", "") != data.MD5Hash)
-            //            {
-            //                throw new InvalidOperationException("MD5校验失败");
-            //            }
-            //        }
+                // 校验块MD5
+                var chunkMd5 = CalculateChunkHash(data.ChunkData);
+                if (chunkMd5 != data.ChunkMD5)
+                {
+                    logger.Log(LogLevel.Warning, $"Chunk {data.ChunkIndex} MD5 mismatch for file {data.FileId}");
+                    return;
+                }
 
-            //        logger.Log(LogLevel.Info, $"文件 {data.FileName} 接收完成，MD5校验通过");
-            //    }
-            //}
-            //finally
-            //{
-            //    _fileLock.Release();
-            //}
+                // 存储接收到的块
+                transferInfo.ReceivedChunks[data.ChunkIndex] = data.ChunkData;
+
+                // 如果所有块都已接收，组合文件
+                if (transferInfo.ReceivedChunks.Count == transferInfo.TotalChunks)
+                {
+                    await CombineFileChunks(transferInfo);
+                }
+
+                // 发送接收确认
+                var ack = new CommunicationData
+                {
+                    InfoType = InfoType.File,
+                    AckNum = data.SeqNum,
+                    Message = "FILE_ACK",
+                    FileId = data.FileId,
+                    ChunkIndex = data.ChunkIndex
+                };
+
+                client.AddFileSentBytes(MemoryCalculator.CalculateObjectSize(ack));
+                await SendData(client, ack);
+
+                logger.Log(LogLevel.Info, $"Received chunk {data.ChunkIndex} of {data.TotalChunks} for file {data.FileId}");
+            }
+            catch (Exception ex)
+            {
+                logger.Log(LogLevel.Error, $"Error processing file transfer: {ex.Message}");
+                throw;
+            }
+            finally
+            {
+                _fileLock.Release();
+            }
+        }
+
+        private async Task CombineFileChunks(FileTransferInfo transferInfo)
+        {
+            // 按顺序写入所有块
+            using (var fs = new FileStream(transferInfo.FilePath, FileMode.Create, FileAccess.Write))
+            {
+                for (int i = 0; i < transferInfo.TotalChunks; i++)
+                {
+                    if (!transferInfo.ReceivedChunks.TryGetValue(i, out var chunkData))
+                    {
+                        throw new InvalidOperationException($"Missing chunk {i} for file {transferInfo.FileId}");
+                    }
+
+                    await fs.WriteAsync(chunkData, 0, chunkData.Length);
+                }
+            }
+
+            logger.Log(LogLevel.Info, $"All chunks received for file {transferInfo.FileId}, combined successfully");
+        }
+
+        private async Task VerifyFileIntegrity(FileTransferInfo transferInfo, string expectedHash)
+        {
+            using (var md5 = MD5.Create())
+            using (var stream = File.OpenRead(transferInfo.FilePath))
+            {
+                var actualHash = BitConverter.ToString(await md5.ComputeHashAsync(stream))
+                    .Replace("-", "").ToLowerInvariant();
+
+                if (actualHash != expectedHash)
+                {
+                    File.Delete(transferInfo.FilePath);
+                    throw new InvalidOperationException($"File integrity check failed for {transferInfo.FileName}");
+                }
+            }
+        }
+
+        private string GetUniqueFilePath(string originalPath)
+        {
+            if (!File.Exists(originalPath)) return originalPath;
+
+            var directory = Path.GetDirectoryName(originalPath);
+            var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(originalPath);
+            var extension = Path.GetExtension(originalPath);
+
+            int counter = 1;
+            string newPath;
+            do
+            {
+                newPath = Path.Combine(directory, $"{fileNameWithoutExtension}_{counter}{extension}");
+                counter++;
+            } while (File.Exists(newPath));
+
+            return newPath;
+        }
+
+        private string CalculateChunkHash(byte[] data)
+        {
+            using var md5 = MD5.Create();
+            return BitConverter.ToString(md5.ComputeHash(data))
+                .Replace("-", "").ToLowerInvariant();
         }
 
         // 可选：定义文件完成事件

@@ -8,6 +8,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -144,5 +146,76 @@ namespace Server.Extend
             }
         }
 
+    }
+    public static class MemoryCalculator
+    {
+        public static long CalculateObjectSize<T>(T obj) where T : class
+        {
+            long size = 0;
+
+            // 获取类型信息
+            Type type = typeof(T);
+
+            // 对象头部开销（16字节：同步块索引 + 类型对象指针）
+            size += 16;
+
+            // 遍历所有字段
+            foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+            {
+                object value = field.GetValue(obj);
+                Type fieldType = field.FieldType;
+
+                // 计算基础类型大小
+                if (fieldType.IsPrimitive)
+                {
+                    size += Marshal.SizeOf(fieldType);
+                }
+                // 计算枚举类型大小（按基础类型计算）
+                else if (fieldType.IsEnum)
+                {
+                    Type underlyingType = Enum.GetUnderlyingType(fieldType);
+                    size += Marshal.SizeOf(underlyingType);
+                }
+                // 计算字符串大小
+                else if (fieldType == typeof(string))
+                {
+                    if (value != null)
+                    {
+                        // 字符串对象自身开销（24字节：对象头+字符串长度+字符数组引用）
+                        size += 24;
+                        // 字符数组开销（长度*2 + 数组对象头）
+                        string str = (string)value;
+                        size += (long)str.Length * 2 + 16;
+                    }
+                    else
+                    {
+                        size += IntPtr.Size; // 引用指针大小
+                    }
+                }
+                // 计算数组大小
+                else if (fieldType.IsArray)
+                {
+                    Array array = value as Array;
+                    if (array != null)
+                    {
+                        // 数组对象头（16字节）
+                        size += 16;
+                        // 数组元素大小
+                        size += array.Length * Marshal.SizeOf(fieldType.GetElementType());
+                    }
+                    else
+                    {
+                        size += IntPtr.Size; // 引用指针大小
+                    }
+                }
+                // 其他引用类型
+                else
+                {
+                    size += IntPtr.Size; // 引用指针大小
+                }
+            }
+
+            return size;
+        }
     }
 }

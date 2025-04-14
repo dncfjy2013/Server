@@ -45,8 +45,8 @@ namespace Server
             IsConnect = true;
         }
 
-        private int _bytesReceived;
-        private int _bytesSent;
+        private long _bytesReceived;
+        private long _bytesSent;
         // 新增大文件流量统计
         private long _FileBytesReceived;
         private long _FileBytesSent;
@@ -64,22 +64,22 @@ namespace Server
 
         public void AddFileReceivedBytes(long bytes) => Interlocked.Add(ref _FileBytesReceived, bytes);
         public void AddFileSentBytes(long bytes) => Interlocked.Add(ref _FileBytesSent, bytes);
-        public int BytesReceived
+        public long BytesReceived
         {
             get => _bytesReceived;
             set => Interlocked.Exchange(ref _bytesReceived, value);
         }
 
-        public int BytesSent
+        public long BytesSent
         {
             get => _bytesSent;
             set => Interlocked.Exchange(ref _bytesSent, value);
         }
 
-        public void AddReceivedBytes(int bytes) =>
+        public void AddReceivedBytes(long bytes) =>
             Interlocked.Add(ref _bytesReceived, bytes);
 
-        public void AddSentBytes(int bytes) =>
+        public void AddSentBytes(long bytes) =>
             Interlocked.Add(ref _bytesSent, bytes);
 
         public void UpdateHeartbeat()
