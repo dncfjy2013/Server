@@ -26,7 +26,7 @@ namespace Server.Extend
         private readonly int _samplingRate = 1; // Sample every 10th execution
         private int _sampleCounter;
         private bool _enableTrafficMonitoring = false;
-        private Logger logger = Logger.GetInstance();
+        private Logger logger = new Logger();
 
         public TrafficMonitor(ConcurrentDictionary<int, ClientConfig> clients, int monitorInterval)
         {
@@ -102,7 +102,7 @@ namespace Server.Extend
 
                         // Update stats for next interval
                         _clientTrafficStats[client.Id] = (client.BytesReceived, client.BytesSent, client.FileBytesReceived, client.FileBytesSent, connectionWatch);
-                        logger.LogTemp(LogLevel.Info, message);
+                        logger.LogDebug(message);
                     }
                 }
                 long recv = _clients.Values.Sum(c => c.BytesReceived);
@@ -117,7 +117,7 @@ namespace Server.Extend
                                        $"Nornal Recv {Function.FormatBytes(recv)}, Sent {Function.FormatBytes(send)}" +
                                        $"File Recv {Function.FormatBytes(filerecv)}, Sent {Function.FormatBytes(filesend)}" +
                                        $"Total: Recv {Function.FormatBytes(recv + filerecv)} Send {Function.FormatBytes(send + filesend)}";
-                    logger.LogTemp(LogLevel.Info, totalMessage);
+                    logger.LogDebug(totalMessage);
                 }
 
                 long oldrecv = _clients.Values.Sum(c => c.BytesReceived);
@@ -132,7 +132,7 @@ namespace Server.Extend
                                        $"Nornal Recv {Function.FormatBytes(oldrecv + recv)}, Sent {Function.FormatBytes(oldsend + send)}" +
                                        $"File Recv {Function.FormatBytes(oldfilerecv + oldfilerecv)}, Sent {Function.FormatBytes(oldfilesend + filesend)}" +
                                        $"Total: Recv {Function.FormatBytes(oldrecv + oldfilerecv + recv + filerecv)} Send {Function.FormatBytes(oldsend + oldfilesend + send + filesend)}";
-                    logger.Log(LogLevel.Info, totalMessage);
+                    logger.LogDebug(totalMessage);
                 }
 
                 DateTime currentTime = DateTime.Now;

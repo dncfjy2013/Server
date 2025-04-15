@@ -40,7 +40,7 @@ namespace Server
         private readonly CancellationTokenSource _cts = new();
         private readonly ConcurrentDictionary<int, DateTime> _lastHeartbeatTimes = new();
         private readonly object _lock = new(); // 用于线程安全日志记录
-        Logger logger = Logger.GetInstance();
+        Logger logger = new Logger();
         private readonly TrafficMonitor _trafficMonitor;
         // 新增文件传输相关字段
         //private readonly ConcurrentDictionary<string, FileTransferInfo> _activeTransfers = new();
@@ -58,13 +58,17 @@ namespace Server
             if (!string.IsNullOrEmpty(certPath))
             {
                 _serverCert = new X509Certificate2(certPath);
+                logger.LogWarning("SSL is not verified");
             }
-
+            
             // 初始化流量监控器（关键修改）
             _trafficMonitor = new TrafficMonitor(_clients, _monitorInterval);
 
             _heartbeatTimer = new Timer(_ => CheckHeartbeats(), null, Timeout.Infinite, Timeout.Infinite);
             _trafficMonitorTimer = new Timer(_ => _trafficMonitor.Monitor(), null, Timeout.Infinite, Timeout.Infinite);
+
+            logger.LogInformation("Start Sever");
+
             StartProcessing();
         }
 
@@ -83,14 +87,14 @@ namespace Server
             _listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             _listener.Bind(new IPEndPoint(IPAddress.Any, _port));
             _listener.Listen(ListenMax);
-            logger.Log(LogLevel.Info, $"Socket started on port {_port} with monitoring {(enableMonitoring ? "enabled" : "disabled")}.");
+            logger.LogInformation($"Socket started on port {_port} with monitoring {(enableMonitoring ? "enabled" : "disabled")}.");
 
             // 启动SSL端口监听
             if (_serverCert != null)
             {
                 _sslListener = new TcpListener(IPAddress.Any, _sslPort);
                 _sslListener.Start();
-                logger.Log(LogLevel.Info, $"SSL started on port {_port} with monitoring {(enableMonitoring ? "enabled" : "disabled")}.");
+                logger.LogInformation($"SSL started on port {_port} with monitoring {(enableMonitoring ? "enabled" : "disabled")}.");
                 _ = AcceptSslClients();
             }
 
@@ -122,12 +126,12 @@ namespace Server
                     var client = new ClientConfig(clientId, sslStream);
                     _clients[clientId] = client;
 
-                    logger.Log(LogLevel.Info, $"SSL Client {clientId} connected: {sslClient.Client.RemoteEndPoint}");
+                    logger.LogInformation($"SSL Client {clientId} connected: {sslClient.Client.RemoteEndPoint}");
                     _ = HandleClient(client);
                 }
                 catch (Exception ex)
                 {
-                    logger.Log(LogLevel.Error, $"SSL accept error: {ex.Message}");
+                    logger.LogError($"SSL accept error: {ex.Message}");
                 }
             }
         }
@@ -144,7 +148,7 @@ namespace Server
                     var client = new ClientConfig(clientId, clientSocket);
                     _clients[clientId] = client;
 
-                    logger.Log(LogLevel.Info, $"Socket Client {clientId} connected: {clientSocket.RemoteEndPoint}");
+                    logger.LogInformation($"Socket Client {clientId} connected: {clientSocket.RemoteEndPoint}");
 
                     _ = HandleClient(client);
                 }
@@ -154,7 +158,7 @@ namespace Server
                 }
                 catch (Exception ex)
                 {
-                    logger.Log(LogLevel.Error, $"Socket Accept error: {ex.Message}");
+                    logger.LogError($"Socket Accept error: {ex.Message}");
                 }
             }
         }
@@ -191,14 +195,14 @@ namespace Server
                         // 使用Try模式解析协议头
                         if (!ProtocolHeader.TryFromBytes(headerBuffer, out ProtocolHeader header))
                         {
-                            logger.Log(LogLevel.Error, $"Invalid protocol header from {client.Id}");
+                            logger.LogError($"Invalid protocol header from {client.Id}");
                             continue; // 丢弃错误头，继续接收
                         }
 
                         // 版本兼容性检查（新增）
                         if (!config.SupportedVersions.Contains(header.Version))
                         {
-                            logger.Log(LogLevel.Warning, $"Unsupported version {header.Version} from {client.Id}");
+                            logger.LogWarning($"Unsupported version {header.Version} from {client.Id}");
                             continue;
                         }
 
@@ -225,7 +229,7 @@ namespace Server
                         var parseResult = await ProtocolPacket.TryFromBytesAsync(fullPacket, config);
                         if (!parseResult.Success)
                         {
-                            logger.Log(LogLevel.Error, $"Invalid protocol packet from {client.Id}");
+                            logger.LogError($"Invalid protocol packet from {client.Id}");
                             continue; // 丢弃错误包，继续接收
                         }
 
@@ -241,13 +245,13 @@ namespace Server
                         // 控制队列积压（可选）
                         if (_messageQueue.Reader.Count > MaxQueueSize)
                         {
-                            logger.Log(LogLevel.Warning, $"Client {client.Id} message queue growing");
+                            logger.LogWarning($"Client {client.Id} message queue growing");
                             // 可在此处实施背压策略，如暂停接收等
                         }
                     }
                     catch (Exception ex)
                     {
-                        logger.Log(LogLevel.Error, $"Client {client.Id} error: {ex.Message}");
+                        logger.LogError($"Client {client.Id} error: {ex.Message}");
                         break; // 发生异常时退出循环
                     }
                 }
@@ -265,16 +269,19 @@ namespace Server
             // Start high priority processors
             for (int i = 0; i < Environment.ProcessorCount; i++)
             {
+                logger.LogInformation($"Start high priority processors Seq {i}");
                 _ = Task.Run(() => ProcessMessages(DataPriority.High));
             }
 
             // Start medium priority processors
             for (int i = 0; i < Environment.ProcessorCount / 2; i++)
             {
+                logger.LogInformation($"Start medium priority processors Seq {i}");
                 _ = Task.Run(() => ProcessMessages(DataPriority.Medium));
             }
 
             // Start low priority processor
+            logger.LogInformation($"Start low priority processors");
             _ = Task.Run(() => ProcessMessages(DataPriority.Low));
         }
         private readonly Dictionary<DataPriority, SemaphoreSlim> _prioritySemaphores = new()
@@ -299,7 +306,7 @@ namespace Server
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error processing {priority} priority message: {ex.Message}");
+                    logger.LogError($"Error processing {priority} priority message: {ex.Message}");
                 }
                 finally
                 {
@@ -328,6 +335,8 @@ namespace Server
                     case InfoType.File:
                         await HandleFileTransfer(message.Client, message.Data);
                         break;
+                    case InfoType.Ack:
+                        break;
                     default:
                         await HandleNormalMessage(message.Client, message.Data);
                         break;
@@ -335,7 +344,7 @@ namespace Server
             }
             catch (OperationCanceledException) when (cts.IsCancellationRequested)
             {
-                Console.WriteLine($"{priority} priority message processing timeout");
+                logger.LogError($"{priority} priority message processing timeout");
             }
         }
         // 心跳处理优化
@@ -348,7 +357,7 @@ namespace Server
                 Message = "ACK",
                 AckNum = data.SeqNum
             };
-            logger.Log(LogLevel.Info, $"Client {client.Id} heartbeat");
+            logger.LogInformation($"Client {client.Id} heartbeat");
             client.AddSentBytes(MemoryCalculator.CalculateObjectSize(ack));
             await SendData(client, ack);
         }
@@ -365,7 +374,7 @@ namespace Server
             };
             await SendData(client, ack);
             client.AddSentBytes(MemoryCalculator.CalculateObjectSize(ack));
-            logger.Log(LogLevel.Info, $"Client {client.Id} ACK: {data.SeqNum}");
+            logger.LogInformation($"Client {client.Id} ACK: {data.SeqNum}");
         }
 
         // 文件传输处理优化// 文件传输处理优化
@@ -398,14 +407,14 @@ namespace Server
 
                         await SendData(client, completionAck);
 
-                        logger.Log(LogLevel.Info, $"File {transferInfo.FileName} transfer completed successfully");
+                        logger.LogInformation($"File {transferInfo.FileName} transfer completed successfully");
 
                         // 触发文件完成事件
                         OnFileTransferCompleted?.Invoke(transferInfo.FilePath);
                     }
                     else
                     {
-                        logger.Log(LogLevel.Warning, $"Received FILE_COMPLETE for unknown file ID: {data.FileId}");
+                        logger.LogWarning($"Received FILE_COMPLETE for unknown file ID: {data.FileId}");
                     }
                     return;
                 }
@@ -433,7 +442,7 @@ namespace Server
                 var chunkMd5 = CalculateChunkHash(data.ChunkData);
                 if (chunkMd5 != data.ChunkMD5)
                 {
-                    logger.Log(LogLevel.Warning, $"Chunk {data.ChunkIndex} MD5 mismatch for file {data.FileId}");
+                    logger.LogWarning($"Chunk {data.ChunkIndex} MD5 mismatch for file {data.FileId}");
                     return;
                 }
 
@@ -459,11 +468,11 @@ namespace Server
                 client.AddFileSentBytes(MemoryCalculator.CalculateObjectSize(ack));
                 await SendData(client, ack);
 
-                logger.Log(LogLevel.Info, $"Received chunk {data.ChunkIndex} of {data.TotalChunks} for file {data.FileId}");
+                logger.LogInformation($"Received chunk {data.ChunkIndex} of {data.TotalChunks} for file {data.FileId}");
             }
             catch (Exception ex)
             {
-                logger.Log(LogLevel.Error, $"Error processing file transfer: {ex.Message}");
+                logger.LogError($"Error processing file transfer: {ex.Message}");
                 throw;
             }
             finally
@@ -488,7 +497,7 @@ namespace Server
                 }
             }
 
-            logger.Log(LogLevel.Info, $"All chunks received for file {transferInfo.FileId}, combined successfully");
+            logger.LogInformation($"All chunks received for file {transferInfo.FileId}, combined successfully");
         }
 
         private async Task VerifyFileIntegrity(FileTransferInfo transferInfo, string expectedHash)
@@ -502,14 +511,18 @@ namespace Server
                 if (actualHash != expectedHash)
                 {
                     File.Delete(transferInfo.FilePath);
-                    throw new InvalidOperationException($"File integrity check failed for {transferInfo.FileName}");
+                    logger.LogWarning($"File integrity check failed for {transferInfo.FileName}");
                 }
             }
         }
 
         private string GetUniqueFilePath(string originalPath)
         {
-            if (!File.Exists(originalPath)) return originalPath;
+            if (!File.Exists(originalPath))
+            {
+                logger.LogWarning($"not exit {originalPath}");
+                return originalPath;
+            }
 
             var directory = Path.GetDirectoryName(originalPath);
             var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(originalPath);
@@ -559,9 +572,9 @@ namespace Server
                 DisconnectClient(client.Id);
             }
 
-            logger.Log(LogLevel.Info, "Server stopped.");
+            logger.LogCritical("Server stopped.");
 
-            logger.Stop();
+            logger.Dispose();
         }
         // 创建协议配置（假设已在外部初始化）
         ProtocolConfiguration config = new ProtocolConfiguration
@@ -600,7 +613,7 @@ namespace Server
                 {
                     if (_clients.TryGetValue(clientId, out var client))
                     {
-                        logger.Log(LogLevel.Warning, $"Client {clientId} heartbeat timeout");
+                        logger.LogWarning($"Client {clientId} heartbeat timeout");
                         DisconnectClient(clientId);
                         _lastHeartbeatTimes.TryRemove(clientId, out _);
                     }
@@ -638,7 +651,7 @@ namespace Server
                                 $"Normal: Recv {Function.FormatBytes(client.BytesReceived)} Send {Function.FormatBytes(client.BytesSent)} | " +
                                 $"File: Recv {Function.FormatBytes(client.FileBytesReceived)} Send {Function.FormatBytes(client.FileBytesSent)} | " +
                                 $"Total: Recv {Function.FormatBytes(totalRec)} Send {Function.FormatBytes(totalSent)}";
-                logger.Log(LogLevel.Info, message);
+                logger.LogWarning(message);
             }
         }
 
