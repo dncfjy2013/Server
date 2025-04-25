@@ -28,35 +28,6 @@ public class CommunicationData
     public string MD5Hash { get; set; }         // 文件整体MD5
     public string ChunkMD5 { get; set; }        // 当前块MD5
 }
-public class FileTransferProgress
-{
-    public string FileId { get; set; }
-    public string FileName { get; set; }
-    public long TotalBytes { get; set; }
-    public long TransferredBytes { get; set; }
-    public double Progress => TotalBytes > 0 ? (double)TransferredBytes / TotalBytes : 0;
-    public TransferStatus Status { get; set; }
-}
-public class FileTransferSession
-{
-    public string FileId { get; set; }
-    public string FileName { get; set; }
-    public string FilePath { get; set; }
-    public long FileSize { get; set; }
-    public int TotalChunks { get; set; }
-    public int ChunkSize { get; set; }
-    public DataPriority Priority { get; set; }
-    public long TransferredBytes;
-    public string FileHash { get; set; }
-}
-public enum TransferStatus
-{
-    Preparing,
-    Transferring,
-    Verifying,
-    Completed,
-    Failed
-}
 // 文件传输信息类
 public class FileTransferInfo
 {
@@ -73,6 +44,13 @@ public enum DataPriority
     High = 0,    // 高优先级，需要严格SEQ
     Medium = 1,  // 中等优先级
     Low = 2      // 低优先级，宽松SEQ
+}
+public enum InfoType
+{
+    HeartBeat = 0,
+    Normal = 1,
+    File = 2,
+    Ack = 3,
 }
 // 协议配置类（新增）
 public class ProtocolConfiguration
