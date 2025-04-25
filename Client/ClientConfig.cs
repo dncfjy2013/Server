@@ -14,9 +14,8 @@ namespace Server
         public int Id { get; }
         public Socket Socket { get; }
         public SslStream SslStream { get; }
-        public DateTime LastHeartbeat { get; set; }
-        public Stopwatch ConnectionWatch { get; } = Stopwatch.StartNew();
         public DateTime LastActivity { get; set; }
+        public Stopwatch ConnectionWatch { get; } = Stopwatch.StartNew();
         public int ExpectedAck { get; set; }
 
         public string FilePath { get; set; }
@@ -25,7 +24,6 @@ namespace Server
         {
             Id = id;
             Socket = socket;
-            LastHeartbeat = DateTime.Now;
             LastActivity = DateTime.Now;
 
             FilePath = "Client" + id.ToString();
@@ -37,7 +35,6 @@ namespace Server
             Id = id;
             SslStream = sslStream;
 
-            LastHeartbeat = DateTime.Now;
             LastActivity = DateTime.Now;
 
             FilePath = "Client" + id.ToString();
@@ -82,9 +79,9 @@ namespace Server
         public void AddSentBytes(long bytes) =>
             Interlocked.Add(ref _bytesSent, bytes);
 
-        public void UpdateHeartbeat()
+        public void UpdateActivity()
         {
-            LastHeartbeat = DateTime.Now;
+            LastActivity = DateTime.Now;
         }
     }
 

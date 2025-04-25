@@ -178,7 +178,7 @@ namespace Server.Utils
             return $"[{message.Timestamp:yyyy-MM-dd HH:mm:ss.fff}] " +
                    $"[{message.Level.ToString().ToUpper()}] " +
                    $"[Thread: {message.ThreadId:0000}/{message.ThreadName ?? "Unknown"}] " +
-                   $"[Target: {target}] " +
+                   //$"[Target: {target}] " +
                    $"{message.Message}";
         }
 

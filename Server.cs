@@ -17,6 +17,7 @@ using Microsoft.VisualBasic;
 using System.Security.Cryptography;
 using System.Threading.Channels;
 using Server.Client;
+using System.Buffers;
 
 namespace Server
 {
@@ -38,16 +39,19 @@ namespace Server
         private readonly int ListenMax = 100;
         private int _monitorInterval = 5000; // 默认监控间隔
         private readonly CancellationTokenSource _cts = new();
-        private readonly ConcurrentDictionary<int, DateTime> _lastHeartbeatTimes = new();
         private readonly object _lock = new(); // 用于线程安全日志记录
         Logger logger = new Logger();
         private readonly TrafficMonitor _trafficMonitor;
         // 新增文件传输相关字段
         //private readonly ConcurrentDictionary<string, FileTransferInfo> _activeTransfers = new();
         private SemaphoreSlim _fileLock = new SemaphoreSlim(1, 1); // 异步锁
-        private Channel<ClientMessage> _messageQueue = Channel.CreateUnbounded<ClientMessage>();
+        private Channel<ClientMessage> _messageHighQueue = Channel.CreateUnbounded<ClientMessage>();
+        private Channel<ClientMessage> _messageMediumQueue = Channel.CreateUnbounded<ClientMessage>();
+        private Channel<ClientMessage> _messagelowQueue = Channel.CreateUnbounded<ClientMessage>();
         private readonly CancellationTokenSource _processingCts = new();
         private readonly int MaxQueueSize = int.MaxValue;
+
+        private readonly MemoryPool<byte> _memoryPool = MemoryPool<byte>.Shared;
 
         public Server(int port, int sslPort, string certPath = null)
         {
@@ -178,7 +182,7 @@ namespace Server
                 Stream stream = client.Socket != null
                     ? new NetworkStream(client.Socket)
                     : client.SslStream;
-
+                //using var buffer = _memoryPool.Rent(BufferSize);
                 while (_isRunning)
                 {
                     try
@@ -232,7 +236,7 @@ namespace Server
                             logger.LogError($"Invalid protocol packet from {client.Id}");
                             continue; // 丢弃错误包，继续接收
                         }
-
+                        client.UpdateActivity();
                         // 处理有效数据包
                         var message = new ClientMessage
                         {
@@ -240,12 +244,33 @@ namespace Server
                             Data = parseResult.Packet.Data,
                             ReceivedTime = DateTime.Now
                         };
-                        await _messageQueue.Writer.WriteAsync(message);
+                        switch (parseResult.Packet.Data.Priority)
+                        {
+                            case DataPriority.Low:
+                                await _messagelowQueue.Writer.WriteAsync(message);
+                                break;
+                            case DataPriority.High:
+                                await _messageHighQueue.Writer.WriteAsync(message);
+                                break;
+                            case DataPriority.Medium:
+                                await _messageMediumQueue.Writer.WriteAsync(message);
+                                break;
+                        }
 
                         // 控制队列积压（可选）
-                        if (_messageQueue.Reader.Count > MaxQueueSize)
+                        if (_messagelowQueue.Reader.Count > MaxQueueSize)
                         {
-                            logger.LogWarning($"Client {client.Id} message queue growing");
+                            logger.LogWarning($"Client {client.Id} message low queue growing");
+                            // 可在此处实施背压策略，如暂停接收等
+                        }
+                        if (_messageMediumQueue.Reader.Count > MaxQueueSize)
+                        {
+                            logger.LogWarning($"Client {client.Id} message medium queue growing");
+                            // 可在此处实施背压策略，如暂停接收等
+                        }
+                        if (_messageHighQueue.Reader.Count > MaxQueueSize)
+                        {
+                            logger.LogWarning($"Client {client.Id} message high queue growing");
                             // 可在此处实施背压策略，如暂停接收等
                         }
                     }
@@ -295,23 +320,68 @@ namespace Server
         {
             var semaphore = _prioritySemaphores[priority];
 
-            await foreach (var message in _messageQueue.Reader.ReadAllAsync(_processingCts.Token))
+            switch (priority)
             {
-                if (message.Data.Priority != priority) continue;
+                case DataPriority.High:
+                    await foreach (var message in _messageHighQueue.Reader.ReadAllAsync(_processingCts.Token))
+                    {
+                        if (message.Data.Priority != priority) continue;
 
-                await semaphore.WaitAsync(_processingCts.Token);
-                try
-                {
-                    await ProcessMessageWithPriority(message, priority);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError($"Error processing {priority} priority message: {ex.Message}");
-                }
-                finally
-                {
-                    semaphore.Release();
-                }
+                        await semaphore.WaitAsync(_processingCts.Token);
+                        try
+                        {
+                            await ProcessMessageWithPriority(message, priority);
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogError($"Error processing {priority} priority message: {ex.Message}");
+                        }
+                        finally
+                        {
+                            semaphore.Release();
+                        }
+                    }
+                    break;
+                case DataPriority.Medium:
+                    await foreach (var message in _messageMediumQueue.Reader.ReadAllAsync(_processingCts.Token))
+                    {
+                        if (message.Data.Priority != priority) continue;
+
+                        await semaphore.WaitAsync(_processingCts.Token);
+                        try
+                        {
+                            await ProcessMessageWithPriority(message, priority);
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogError($"Error processing {priority} priority message: {ex.Message}");
+                        }
+                        finally
+                        {
+                            semaphore.Release();
+                        }
+                    }
+                    break;
+                case DataPriority.Low:
+                    await foreach (var message in _messagelowQueue.Reader.ReadAllAsync(_processingCts.Token))
+                    {
+                        if (message.Data.Priority != priority) continue;
+
+                        await semaphore.WaitAsync(_processingCts.Token);
+                        try
+                        {
+                            await ProcessMessageWithPriority(message, priority);
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogError($"Error processing {priority} priority message: {ex.Message}");
+                        }
+                        finally
+                        {
+                            semaphore.Release();
+                        }
+                    }
+                    break;
             }
         }
         private async Task ProcessMessageWithPriority(ClientMessage message, DataPriority priority)
@@ -607,16 +677,13 @@ namespace Server
             var now = DateTime.Now;
             var timeout = TimeSpan.FromSeconds(TimeoutSeconds);
 
-            foreach (var clientId in _lastHeartbeatTimes.Keys)
+            foreach (var client in _clients)
             {
-                if (now - _lastHeartbeatTimes[clientId] > timeout)
+                if (now - client.Value.LastActivity > timeout)
                 {
-                    if (_clients.TryGetValue(clientId, out var client))
-                    {
-                        logger.LogWarning($"Client {clientId} heartbeat timeout");
-                        DisconnectClient(clientId);
-                        _lastHeartbeatTimes.TryRemove(clientId, out _);
-                    }
+                    logger.LogWarning($"Client {client.Key} heartbeat timeout");
+                    DisconnectClient(client.Key);
+                    _clients.TryRemove(client.Key, out _);
                 }
             }
         }
