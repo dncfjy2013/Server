@@ -66,7 +66,7 @@ namespace Server
 
         public void AddFileSentBytes(long bytes)
         {
-            Interlocked.And(ref _ReceiveFileCount, 1);
+            Interlocked.And(ref _SendFileCount, 1);
             Interlocked.Add(ref _FileBytesSent, bytes);
         }
 
