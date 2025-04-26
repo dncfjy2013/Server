@@ -451,7 +451,7 @@ namespace Server
             };
             await SendData(client, ack);
             client.AddSentBytes(MemoryCalculator.CalculateObjectSize(ack));
-            logger.LogInformation($"Client {client.Id} ACK: {data.SeqNum}");
+            logger.LogInformation($"Client {client.Id} ACK: {data.SeqNum} Message: {data.Message}");
         }
 
         // 文件传输处理优化// 文件传输处理优化
@@ -495,61 +495,74 @@ namespace Server
                     }
                     return;
                 }
-
-                // 处理文件块数据
-                if (!_activeTransfers.TryGetValue(data.FileId, out transferInfo))
+                else
                 {
-                    // 初始化新的文件传输
-                    transferInfo = new FileTransferInfo
+                    // 初始化传输会话（支持20G+文件，检查文件大小合法性）
+                    if (data.FileSize < 0)
                     {
+                        logger.LogCritical($"Client {client.Id} 非法文件大小 {nameof(data.FileSize)}");
+                        return;
+                    }
+
+                    // 处理文件块数据
+                    if (!_activeTransfers.TryGetValue(data.FileId, out transferInfo))
+                    {
+                        // 初始化新的文件传输
+                        transferInfo = new FileTransferInfo
+                        {
+                            FileId = data.FileId,
+                            FileName = data.FileName,
+                            FileSize = data.FileSize,
+                            TotalChunks = data.TotalChunks,
+                            ChunkSize = data.ChunkData.Length,
+                            ReceivedChunks = new ConcurrentDictionary<int, byte[]>(),
+                            FilePath = GetUniqueFilePath(Path.Combine(client.FilePath, data.FileName))
+                        };
+                        Directory.CreateDirectory(Path.GetDirectoryName(transferInfo.FilePath));
+                        _activeTransfers.TryAdd(data.FileId, transferInfo);
+                    }
+
+                    // 快速校验块MD5（提前终止无效块处理）
+                    if (CalculateChunkHash(data.ChunkData.ToByteArray()) != data.ChunkMd5)
+                    {
+                        logger.LogWarning($"Client {client.Id} 块 {data.ChunkIndex} MD5校验失败，丢弃");
+                        return;
+                    }
+
+                    // 存储块数据（支持并发写入，覆盖旧块）
+                    transferInfo.ReceivedChunks.AddOrUpdate(
+                        data.ChunkIndex,
+                        data.ChunkData.ToByteArray(),
+                        (i, old) => data.ChunkData.ToByteArray() // 新块覆盖旧块（处理重传）
+                    );
+
+                    // 立即发送ACK（高优先级，确保客户端及时释放窗口）
+                    var ack = new CommunicationData
+                    {
+                        InfoType = InfoType.Ack,
+                        AckNum = data.SeqNum,
                         FileId = data.FileId,
-                        FileName = data.FileName,
-                        FileSize = data.FileSize,
-                        TotalChunks = data.TotalChunks,
-                        ChunkSize = data.ChunkData.Length,
-                        ReceivedChunks = new ConcurrentDictionary<int, byte[]>(),
-                        FilePath = GetUniqueFilePath(Path.Combine(client.FilePath, data.FileName))
+                        ChunkIndex = data.ChunkIndex,
+                        Priority = DataPriority.High // ACK使用最高优先级
                     };
 
-                    Directory.CreateDirectory(Path.GetDirectoryName(transferInfo.FilePath));
-                    _activeTransfers[data.FileId] = transferInfo;
+                    logger.LogInformation($"Client {client.Id} Received chunk {data.ChunkIndex} of {data.TotalChunks} for file {data.FileId}");
+
+                    await SendData(client, ack);
+
+                    // 如果所有块都已接收，组合文件
+                    if (transferInfo.ReceivedChunks.Count == transferInfo.TotalChunks)
+                    {
+                        await CombineFileChunks(transferInfo);
+                    }
+
+                    client.AddFileSentBytes(MemoryCalculator.CalculateObjectSize(ack));
                 }
-
-                // 校验块MD5
-                var chunkMd5 = CalculateChunkHash(data.ChunkData.ToByteArray());
-                if (chunkMd5 != data.ChunkMd5)
-                {
-                    logger.LogWarning($"Client {client.Id} Chunk {data.ChunkIndex} MD5 mismatch for file {data.FileId}");
-                    return;
-                }
-
-                // 存储接收到的块
-                transferInfo.ReceivedChunks[data.ChunkIndex] = data.ChunkData.ToByteArray();
-
-                // 如果所有块都已接收，组合文件
-                if (transferInfo.ReceivedChunks.Count == transferInfo.TotalChunks)
-                {
-                    await CombineFileChunks(transferInfo);
-                }
-
-                // 发送接收确认
-                var ack = new CommunicationData
-                {
-                    InfoType = InfoType.File,
-                    AckNum = data.SeqNum,
-                    Message = "FILE_ACK",
-                    FileId = data.FileId,
-                    ChunkIndex = data.ChunkIndex
-                };
-
-                client.AddFileSentBytes(MemoryCalculator.CalculateObjectSize(ack));
-                await SendData(client, ack);
-
-                logger.LogInformation($"Client {client.Id} Received chunk {data.ChunkIndex} of {data.TotalChunks} for file {data.FileId}");
             }
             catch (Exception ex)
             {
                 logger.LogError($"Client {client.Id} Error processing file transfer: {ex.Message}");
+                _activeTransfers.TryRemove(data.FileId, out _); // 清理无效会话
                 throw;
             }
             finally
@@ -557,24 +570,28 @@ namespace Server
                 _fileLock.Release();
             }
         }
-
         private async Task CombineFileChunks(FileTransferInfo transferInfo)
         {
-            // 按顺序写入所有块
-            using (var fs = new FileStream(transferInfo.FilePath, FileMode.Create, FileAccess.Write))
+            // 使用16MB缓冲区异步写入（提升磁盘写入速度）
+            using var fs = new FileStream(
+                transferInfo.FilePath,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None,
+                bufferSize: 16 * 1024 * 1024,  // 大缓冲区减少磁盘I/O
+                useAsync: true
+            );
+
+            // 按块索引顺序写入（处理乱序块，确保顺序正确）
+            for (int i = 0; i < transferInfo.TotalChunks; i++)
             {
-                for (int i = 0; i < transferInfo.TotalChunks; i++)
+                if (!transferInfo.ReceivedChunks.TryGetValue(i, out var chunkData))
                 {
-                    if (!transferInfo.ReceivedChunks.TryGetValue(i, out var chunkData))
-                    {
-                        throw new InvalidOperationException($"Missing chunk {i} for file {transferInfo.FileId}");
-                    }
-
-                    await fs.WriteAsync(chunkData, 0, chunkData.Length);
+                    throw new InvalidOperationException($"块 {i} 缺失，文件 {transferInfo.FileName} 组装失败");
                 }
+                await fs.WriteAsync(chunkData, 0, chunkData.Length); // 异步写入
             }
-
-            logger.LogInformation($"All chunks received for file {transferInfo.FileId}, combined successfully");
+            logger.LogInformation($"文件 {transferInfo.FileName} 组装完成（{transferInfo.TotalChunks} 块）");
         }
 
         private async Task VerifyFileIntegrity(FileTransferInfo transferInfo, string expectedHash)
@@ -659,7 +676,7 @@ namespace Server
             DataSerializer = new ProtobufSerializerAdapter(),
             ChecksumCalculator = new Crc16Calculator(),
             SupportedVersions = new byte[] { 0x01, 0x02 },
-            MaxPacketSize = 2 * 1024 * 1024 // 与接收方配置一致
+            MaxPacketSize = 128 * 1024 * 1024 // 与接收方配置一致
         };
 
         private async Task<bool> SendData(ClientConfig client, CommunicationData data)
