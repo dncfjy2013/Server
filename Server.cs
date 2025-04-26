@@ -187,21 +187,21 @@ namespace Server
                         // 1. 接收头部
                         if (!await ReadFullAsync(stream, headerBuffer, 8))
                         {
-                            Console.WriteLine("Client disconnected while reading header");
+                            logger.LogWarning($"Client {client.Id} disconnected while reading header");
                             return;
                         }
 
                         // 2. 解析头部
                         if (!ProtocolHeaderExtensions.TryFromBytes(headerBuffer, out var header))
                         {
-                            Console.WriteLine("Invalid header received");
+                            logger.LogWarning($"Client {client.Id} Invalid header received");
                             continue;
                         }
 
                         // 3. 版本检查
                         if (!config.SupportedVersions.Contains((byte)header.Version))
                         {
-                            Console.WriteLine($"Unsupported protocol version: {header.Version}");
+                            logger.LogWarning($"Client {client.Id} Unsupported protocol version: {header.Version}");
                             continue;
                         }
 
@@ -209,7 +209,7 @@ namespace Server
                         byte[] payloadBuffer = new byte[header.MessageLength];
                         if (!await ReadFullAsync(stream, payloadBuffer, (int)header.MessageLength))
                         {
-                            Console.WriteLine("Client disconnected while reading payload");
+                            logger.LogWarning($"Client {client.Id}  disconnected while reading payload");
                             return;
                         }
 
@@ -222,7 +222,7 @@ namespace Server
                         var (success, packet, error) = ProtocolPacketWrapper.TryFromBytes(fullPacket);
                         if (!success)
                         {
-                            Console.WriteLine($"Failed to parse packet: {error}");
+                            logger.LogWarning($"Client {client.Id} Failed to parse packet: {error}");
                             continue;
                         }
 
@@ -289,7 +289,7 @@ namespace Server
                     return false;
                 }
                 offset += read;
-                logger.LogDebug($"Read progress: {offset}/{count} bytes");
+                logger.LogTrace($"Read progress: {offset}/{count} bytes");
             }
             return true;
         }
@@ -484,14 +484,14 @@ namespace Server
 
                         await SendData(client, completionAck);
 
-                        logger.LogInformation($"File {transferInfo.FileName} transfer completed successfully");
+                        logger.LogInformation($"Client {client.Id} File {transferInfo.FileName} transfer completed successfully");
 
                         // 触发文件完成事件
                         OnFileTransferCompleted?.Invoke(transferInfo.FilePath);
                     }
                     else
                     {
-                        logger.LogWarning($"Received FILE_COMPLETE for unknown file ID: {data.FileId}");
+                        logger.LogWarning($"Client {client.Id} Received FILE_COMPLETE for unknown file ID: {data.FileId}");
                     }
                     return;
                 }
@@ -519,7 +519,7 @@ namespace Server
                 var chunkMd5 = CalculateChunkHash(data.ChunkData.ToByteArray());
                 if (chunkMd5 != data.ChunkMd5)
                 {
-                    logger.LogWarning($"Chunk {data.ChunkIndex} MD5 mismatch for file {data.FileId}");
+                    logger.LogWarning($"Client {client.Id} Chunk {data.ChunkIndex} MD5 mismatch for file {data.FileId}");
                     return;
                 }
 
@@ -545,11 +545,11 @@ namespace Server
                 client.AddFileSentBytes(MemoryCalculator.CalculateObjectSize(ack));
                 await SendData(client, ack);
 
-                logger.LogInformation($"Received chunk {data.ChunkIndex} of {data.TotalChunks} for file {data.FileId}");
+                logger.LogInformation($"Client {client.Id} Received chunk {data.ChunkIndex} of {data.TotalChunks} for file {data.FileId}");
             }
             catch (Exception ex)
             {
-                logger.LogError($"Error processing file transfer: {ex.Message}");
+                logger.LogError($"Client {client.Id} Error processing file transfer: {ex.Message}");
                 throw;
             }
             finally
@@ -661,22 +661,7 @@ namespace Server
             SupportedVersions = new byte[] { 0x01, 0x02 },
             MaxPacketSize = 2 * 1024 * 1024 // 与接收方配置一致
         };
-        //private async Task SendData(ClientConfig client, CommunicationData data)
-        //{
-        //    // 创建协议数据包
-        //    var packet = new ProtocolPacketWrapper(new Protocol.ProtocolPacket()
-        //    {
-        //        Header = new ProtocolHeader { Version = 0x01 },
-        //        Data = data
-        //    }, config);
 
-        //    // 生成符合协议的字节数组
-        //    byte[] protocolBytes = packet.ToBytes();
-
-        //    // 发送协议数据
-        //    await client.Socket.SendAsync(protocolBytes, SocketFlags.None);
-        //    client.AddSentBytes(protocolBytes.Length);
-        //}
         private async Task<bool> SendData(ClientConfig client, CommunicationData data)
         {
             try
@@ -684,7 +669,7 @@ namespace Server
                 // 1. 验证参数
                 if (client?.Socket == null || !client.Socket.Connected || data == null)
                 {
-                    logger.LogWarning("Invalid parameters for SendData");
+                    logger.LogWarning($"Client {client.Id} Invalid parameters for SendData");
                     return false;
                 }
 
@@ -708,7 +693,7 @@ namespace Server
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError($"Packet serialization failed: {ex.Message}");
+                    logger.LogError($"Client {client.Id} Packet serialization failed: {ex.Message}");
                     return false;
                 }
 
@@ -722,7 +707,7 @@ namespace Server
 
                     if (sent == 0)
                     {
-                        logger.LogWarning("Connection closed during send");
+                        logger.LogWarning($"Client {client.Id} Connection closed during send");
                         return false;
                     }
 
@@ -735,13 +720,13 @@ namespace Server
             }
             catch (SocketException sex)
             {
-                logger.LogError($"Socket error in SendData: {sex.SocketErrorCode} - {sex.Message}");
+                logger.LogError($"Client {client.Id} Socket error in SendData: {sex.SocketErrorCode} - {sex.Message}");
                 DisconnectClient(client.Id);
                 return false;
             }
             catch (Exception ex)
             {
-                logger.LogError($"Unexpected error in SendData: {ex.Message}");
+                logger.LogError($"Client {client.Id} Unexpected error in SendData: {ex.Message}");
                 return false;
             }
         }
