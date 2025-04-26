@@ -19,8 +19,10 @@ namespace Server.Extend
         private readonly object _lock = new();
         private readonly int _monitorInterval;
         private readonly Stopwatch _totalTrafficWatch = new();
-        private readonly ConcurrentDictionary<int, (long Received, long Sent, long FileReceived, long FileSent, Stopwatch ConnectionWatch)> _clientTrafficStats = new();
-        private readonly ConcurrentDictionary<int, (long Received, long Sent, long FileReceived, long FileSent, Stopwatch ConnectionWatch)> _clientHistoryTrafficStats = new();
+        private readonly ConcurrentDictionary<int, (long Received, long Sent, long FileReceived, long FileSent,
+            long ReceivedCount, long SentCount, long FileReceivedCount, long FileSentCount, Stopwatch ConnectionWatch)> _clientTrafficStats = new();
+        private readonly ConcurrentDictionary<int, (long Received, long Sent, long FileReceived, long FileSent,
+            long ReceivedCount, long SentCount, long FileReceivedCount, long FileSentCount, Stopwatch ConnectionWatch)> _clientHistoryTrafficStats = new();
         private readonly int _samplingRate = 1; // Sample every 10th execution
         private int _sampleCounter;
         private bool _enableTrafficMonitoring = false;
@@ -33,7 +35,7 @@ namespace Server.Extend
             _totalTrafficWatch.Start();
             foreach (var client in _clients.Values)
             {
-                _clientTrafficStats[client.Id] = (client.BytesReceived, client.BytesSent, client.FileBytesReceived, client.FileBytesSent, client.ConnectionWatch);
+                _clientTrafficStats[client.Id] = (client.BytesReceived, client.BytesSent, client.FileBytesReceived, client.FileBytesSent, client.ReceiveCount, client.SendCount, client.ReceiveFileCount, client.SendFileCount, client.ConnectionWatch);
             }
 
         }
@@ -62,6 +64,10 @@ namespace Server.Extend
                             client.BytesSent,
                             client.FileBytesReceived,
                             client.FileBytesSent,
+                            client.ReceiveCount,
+                            client.SendCount,
+                            client.ReceiveFileCount,
+                            client.SendFileCount,
                             client.ConnectionWatch
                         );
                     }
@@ -81,25 +87,37 @@ namespace Server.Extend
                 {
                     if (_clientTrafficStats.TryGetValue(client.Id, out var stats))
                     {
-                        var (received, sent, fileRec, fileSent, connectionWatch) = stats;
+                        var (received, sent, fileRec, fileSent, receivedcount, sentcount, fileReccount, fileSentcount, connectionWatch) = stats;
 
                         var recDiff = client.BytesReceived - received;
                         var sentDiff = client.BytesSent - sent;
                         var fileRecDiff = client.FileBytesReceived - fileRec;
                         var fileSentDiff = client.FileBytesSent - fileSent;
+
+                        var recCDiff = client.ReceiveCount - receivedcount;
+                        var sentCDiff = client.SendCount - sentcount;
+                        var fileRecCDiff = client.ReceiveFileCount - fileReccount;
+                        var fileSentCDiff = client.SendFileCount - fileSentcount;
+
                         TimeSpan time = (client.ConnectionWatch.Elapsed - connectionWatch.Elapsed).Duration();
 
                         var message = $"[Client ID: {client.Id}] " +
                                       $"Normal: Recv {Function.FormatBytes(recDiff)} Send {Function.FormatBytes(sentDiff)} | " +
                                       $"File: Recv {Function.FormatBytes(fileRecDiff)} Send {Function.FormatBytes(fileSentDiff)} | " +
                                       $"Total: Recv {Function.FormatBytes(recDiff + fileRecDiff)} Send {Function.FormatBytes(sentDiff + fileSentDiff)} | " +
+                                      $"Count Normal: Recv {recCDiff} Send {sentCDiff} | " +
+                                      $"Coount File: Recv {fileRecCDiff} Send {fileSentCDiff} | " +
+                                      $"Count Total: Recv {recCDiff + fileRecCDiff} Send {sentCDiff + fileSentCDiff} | " +
                                       $"History Normal: Recv {Function.FormatBytes(client.BytesReceived)} Send {Function.FormatBytes(client.BytesSent)} | " +
                                       $"History File: Recv {Function.FormatBytes(client.FileBytesReceived)} Send {Function.FormatBytes(client.FileBytesSent)} | " +
-                                      $"History Total: Recv {Function.FormatBytes(recDiff + fileRecDiff)} Send {Function.FormatBytes(sentDiff + fileSentDiff)} | " +
+                                      $"History Total: Recv {client.BytesReceived + client.FileBytesReceived} Send {Function.FormatBytes(client.BytesSent + client.FileBytesSent)} | " +
+                                      $"History Count Normal: Recv {client.ReceiveCount} Send {client.SendCount} | " +
+                                      $"History Count File: Recv {client.ReceiveFileCount} Send {client.SendFileCount} | " +
+                                      $"History Count Total: Recv {client.ReceiveCount + client.ReceiveFileCount} Send {client.SendCount + client.SendFileCount} | " +
                                       $"Connect Time: {client.ConnectionWatch.Elapsed:mm\\:ss}";
 
                         // Update stats for next interval
-                        _clientTrafficStats[client.Id] = (client.BytesReceived, client.BytesSent, client.FileBytesReceived, client.FileBytesSent, connectionWatch);
+                        _clientTrafficStats[client.Id] = (client.BytesReceived, client.BytesSent, client.FileBytesReceived, client.FileBytesSent, client.ReceiveCount, client.SendCount, client.ReceiveFileCount, client.SendFileCount, connectionWatch);
                         logger.LogDebug(message);
                     }
                 }
@@ -108,28 +126,21 @@ namespace Server.Extend
                 long filerecv = _clients.Values.Sum(c => c.FileBytesReceived);
                 long filesend = _clients.Values.Sum(c => c.FileBytesSent);
 
+                long recvc = _clients.Values.Sum(c => c.ReceiveCount);
+                long sendc = _clients.Values.Sum(c => c.SendCount);
+                long filerecvc = _clients.Values.Sum(c => c.ReceiveFileCount);
+                long filesendc = _clients.Values.Sum(c => c.SendFileCount);
+
                 if (recv != 0 || send != 0 || filerecv != 0 || filesend != 0)
                 {
                     // Optionally log total traffic if needed
                     var totalMessage = $"Active Total Traffic: " +
                                        $"Nornal Recv {Function.FormatBytes(recv)}, Sent {Function.FormatBytes(send)}" +
                                        $"File Recv {Function.FormatBytes(filerecv)}, Sent {Function.FormatBytes(filesend)}" +
-                                       $"Total: Recv {Function.FormatBytes(recv + filerecv)} Send {Function.FormatBytes(send + filesend)}";
-                    logger.LogDebug(totalMessage);
-                }
-
-                long oldrecv = _clients.Values.Sum(c => c.BytesReceived);
-                long oldsend = _clients.Values.Sum(c => c.BytesSent);
-                long oldfilerecv = _clients.Values.Sum(c => c.FileBytesReceived);
-                long oldfilesend = _clients.Values.Sum(c => c.FileBytesSent);
-
-                if (oldrecv != 0 || oldsend != 0 || oldfilerecv != 0 || oldfilesend != 0)
-                {
-                    // Optionally log total traffic if needed
-                    var totalMessage = $"Total Traffic: " +
-                                       $"Nornal Recv {Function.FormatBytes(oldrecv + recv)}, Sent {Function.FormatBytes(oldsend + send)}" +
-                                       $"File Recv {Function.FormatBytes(oldfilerecv + oldfilerecv)}, Sent {Function.FormatBytes(oldfilesend + filesend)}" +
-                                       $"Total: Recv {Function.FormatBytes(oldrecv + oldfilerecv + recv + filerecv)} Send {Function.FormatBytes(oldsend + oldfilesend + send + filesend)}";
+                                       $"Total: Recv {Function.FormatBytes(recv + filerecv)} Send {Function.FormatBytes(send + filesend)}"+
+                                       $"Count Nornal Recv {recvc}, Sent {sendc}" +
+                                       $"Count File Recv {filerecvc}, Sent {filesendc}" +
+                                       $"Count Total: Recv {recvc + filerecvc} Send {sendc + filesendc}";
                     logger.LogDebug(totalMessage);
                 }
 

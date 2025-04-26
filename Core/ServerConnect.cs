@@ -122,9 +122,9 @@ namespace Server.Core
                                 $"Normal: Recv {Function.FormatBytes(client.BytesReceived)} Send {Function.FormatBytes(client.BytesSent)} | " +
                                 $"File: Recv {Function.FormatBytes(client.FileBytesReceived)} Send {Function.FormatBytes(client.FileBytesSent)} | " +
                                 $"Total: Recv {Function.FormatBytes(totalRec)} Send {Function.FormatBytes(totalSent)} |" +
-                                $"Count Normal: Recv {Function.FormatBytes(client.ReceiveCount)} Send {Function.FormatBytes(client.SendCount)} | " +
-                                $"Count File: Recv {Function.FormatBytes(client.ReceiveFileCount)} Send {Function.FormatBytes(client.SendFileCount)} | " +
-                                $"Count Total: Recv {Function.FormatBytes(totalCountRec)} Send {Function.FormatBytes(totalCountSent)} |";
+                                $"Count Normal: Recv {client.ReceiveCount} Send {client.SendCount} | " +
+                                $"Count File: Recv {client.ReceiveFileCount} Send {client.SendFileCount} | " +
+                                $"Count Total: Recv {totalCountRec} Send {totalCountSent} |";
                 logger.LogWarning(message);
             }
         }
