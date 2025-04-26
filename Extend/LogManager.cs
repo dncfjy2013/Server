@@ -4,7 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Server.Utils
+namespace Server.Extend
 {
     #region Level
     public enum LogLevel

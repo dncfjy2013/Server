@@ -11,13 +11,29 @@ namespace Server
 {
     public class ClientConfig
     {
+        private long _bytesReceived;
+        private long _bytesSent;
+        private long _FileBytesReceived;
+        private long _FileBytesSent;
+        private long _ReceiveCount;
+        private long _SendCount;
+        private long _ReceiveFileCount;
+        private long _SendFileCount;
+        public long FileBytesReceived => _FileBytesReceived;
+        public long FileBytesSent => _FileBytesSent;
+        public long BytesReceived => _bytesReceived;
+        public long BytesSent => _bytesSent;
+        public long ReceiveCount => _ReceiveCount;
+        public long SendCount => _SendCount;
+        public long ReceiveFileCount => _ReceiveFileCount;
+        public long SendFileCount => _SendFileCount;
+
         public int Id { get; }
+        public int UniqueId { get; }
         public Socket Socket { get; }
         public SslStream SslStream { get; }
         public DateTime LastActivity { get; set; }
         public Stopwatch ConnectionWatch { get; } = Stopwatch.StartNew();
-        public int ExpectedAck { get; set; }
-
         public string FilePath { get; set; }
         public bool IsConnect {  get; set; }
         public ClientConfig(int id, Socket socket)
@@ -42,42 +58,29 @@ namespace Server
             IsConnect = true;
         }
 
-        private long _bytesReceived;
-        private long _bytesSent;
-        // 新增大文件流量统计
-        private long _FileBytesReceived;
-        private long _FileBytesSent;
-
-        public long FileBytesReceived
+        public void AddFileReceivedBytes(long bytes)
         {
-            get => _FileBytesReceived;
-            set => Interlocked.Exchange(ref _FileBytesReceived, value);
-        }
-        public long FileBytesSent
-        {
-            get => _FileBytesSent;
-            set => Interlocked.Exchange(ref _FileBytesSent, value);
+            Interlocked.And(ref _ReceiveFileCount, 1);
+            Interlocked.Add(ref _FileBytesReceived, bytes);
         }
 
-        public void AddFileReceivedBytes(long bytes) => Interlocked.Add(ref _FileBytesReceived, bytes);
-        public void AddFileSentBytes(long bytes) => Interlocked.Add(ref _FileBytesSent, bytes);
-        public long BytesReceived
+        public void AddFileSentBytes(long bytes)
         {
-            get => _bytesReceived;
-            set => Interlocked.Exchange(ref _bytesReceived, value);
+            Interlocked.And(ref _ReceiveFileCount, 1);
+            Interlocked.Add(ref _FileBytesSent, bytes);
         }
 
-        public long BytesSent
+        public void AddReceivedBytes(long bytes)
         {
-            get => _bytesSent;
-            set => Interlocked.Exchange(ref _bytesSent, value);
-        }
-
-        public void AddReceivedBytes(long bytes) =>
+            Interlocked.And(ref _ReceiveCount, 1);
             Interlocked.Add(ref _bytesReceived, bytes);
+        }
 
-        public void AddSentBytes(long bytes) =>
+        public void AddSentBytes(long bytes)
+        {
+            Interlocked.Add(ref _SendCount, 1);
             Interlocked.Add(ref _bytesSent, bytes);
+        }
 
         public void UpdateActivity()
         {
