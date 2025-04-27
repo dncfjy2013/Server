@@ -7,15 +7,12 @@ enum InfoType {
 
   CTS_NORMAL = 1;
   CTS_FILE = 2;
-  CTS_ACK = 3;
 
-  STC_NORMAL = 4;
-  STC_FILE = 5;
-  STC_ACK = 6;
+  STC_NORMAL = 3;
+  STC_FILE = 4;
 
-  CTC_NORMAL = 7;
-  CTC_FILE = 8;
-  CTC_ACK = 9;
+  CTC_NORMAL = 5;
+  CTC_FILE = 6;
 }
 
 enum DataPriority {

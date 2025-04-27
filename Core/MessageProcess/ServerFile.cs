@@ -68,14 +68,14 @@ namespace Server.Core
                         // 2. 发送完成确认（高优先级ACK）
                         var completionAck = new CommunicationData
                         {
-                            InfoType = InfoType.StcFile,
+                            InfoType = data.InfoType,
                             AckNum = data.SeqNum,
                             Message = "FILE_COMPLETE_ACK",
                             FileId = data.FileId
                         };
 
                         logger.LogDebug($"Sending file complete ACK for FileId={data.FileId}");
-                        await SendData(client, completionAck);
+                        await SendInfoDate(client, completionAck);
                         logger.LogInformation($"Client {client.Id} sent file complete ACK for {transferInfo.FileName}");
 
                         // 3. 统计发送数据量
@@ -153,7 +153,7 @@ namespace Server.Core
                 // 发送ACK（高优先级，确保客户端及时调整窗口）
                 var ack = new CommunicationData
                 {
-                    InfoType = InfoType.StcAck,
+                    InfoType = data.InfoType,
                     AckNum = data.SeqNum,
                     FileId = data.FileId,
                     ChunkIndex = data.ChunkIndex,
@@ -161,7 +161,7 @@ namespace Server.Core
                 };
 
                 logger.LogInformation($"Client {client.Id} received chunk {data.ChunkIndex}/{transferInfo.TotalChunks} for {transferInfo.FileName}");
-                await SendData(client, ack);
+                await SendInfoDate(client, ack);
                 logger.LogDebug($"Sent chunk ACK for ChunkIndex={data.ChunkIndex}, FileId={data.FileId}");
 
                 // 检查是否所有块已接收

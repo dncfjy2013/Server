@@ -82,7 +82,7 @@ namespace Server.Core
                     if (!_clients.TryGetValue(msg.ClientId, out var client)) continue;
 
                     // 发送消息
-                    bool sent = await SendData(client, msg.Data);
+                    bool sent = await SendInfoDate(client, msg.Data);
                     if (!sent) throw new Exception("Send failed");
 
                     msg.SentTime = DateTime.Now;

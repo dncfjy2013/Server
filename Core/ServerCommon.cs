@@ -47,13 +47,31 @@ namespace Server.Core
             return true;
         }
 
+        private async Task<bool> SendInfoDate(ClientConfig client, CommunicationData data)
+        {
+            bool result = false;
+            switch (data.InfoType)
+            {
+                case InfoType.CtcNormal:
+                case InfoType.CtcFile:
+                    // 处理普通消息和文件消息
+                    await HandleNormalMessage(client, data);
+                    break;
+                default:
+                    result = await SendDate(client, data);
+                    break;
+            }
+
+            return result;
+        }
+
         /// <summary>
         /// 异步向客户端发送数据，确保数据完整发送，并处理可能出现的异常。
         /// </summary>
         /// <param name="client">客户端配置对象，包含客户端的套接字信息。</param>
         /// <param name="data">要发送的通信数据。</param>
         /// <returns>如果数据发送成功，返回 true；否则返回 false。</returns>
-        private async Task<bool> SendData(ClientConfig client, CommunicationData data)
+        private async Task<bool> SendDate(ClientConfig client, CommunicationData data)
         {
             logger.LogTrace($"Starting to send data to client {client.Id}.");
 

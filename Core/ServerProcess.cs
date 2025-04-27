@@ -258,10 +258,6 @@ namespace Server.Core
                         logger.LogDebug($"File transfer completed for client {message.Client.Id}");
                         break;
 
-                    case InfoType.CtsAck:
-                        logger.LogTrace($"Ignoring ACK message (Id={message.Client.Id})");
-                        break;
-
                     case InfoType.CtsNormal:
                         logger.LogDebug($"Handling normal message for client {message.Client.Id} (Content={message.Data.Message})");
                         await HandleNormalMessage(message.Client, message.Data);

@@ -26,7 +26,7 @@ namespace Server.Core
             // 构造确认消息对象，用于向客户端发送确认信息
             var ack = new CommunicationData
             {
-                InfoType = InfoType.Normal,
+                InfoType = data.InfoType,
                 AckNum = data.SeqNum,
                 Message = "ACK"
             };
@@ -34,7 +34,7 @@ namespace Server.Core
             try
             {
                 // 异步发送确认消息给客户端
-                await SendData(client, ack);
+                await SendInfoDate(client, ack);
                 // 记录确认消息发送成功，使用Trace级别日志
                 logger.LogTrace($"Successfully sent ACK to client {client.Id} for SeqNum: {data.SeqNum}");
             }

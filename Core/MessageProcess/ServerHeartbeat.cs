@@ -28,7 +28,7 @@ namespace Server.Core
             // 构造心跳响应
             var ack = new CommunicationData
             {
-                InfoType = InfoType.HeartBeat,
+                InfoType = data.InfoType,
                 Message = "ACK",
                 AckNum = data.SeqNum
             };
@@ -42,7 +42,7 @@ namespace Server.Core
             logger.LogDebug($"Client {client.Id} sent heartbeat ACK (Size={sentSize} bytes)");
 
             // 发送心跳响应
-            await SendData(client, ack);
+            await SendInfoDate(client, ack);
             logger.LogTrace($"Client {client.Id} heartbeat ACK sent successfully");
         }
 
