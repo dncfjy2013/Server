@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace Server.Core
 {
-    partial class Server
+    partial class ServerInstance
     {
         // 文件传输处理优化相关代码
 
@@ -180,7 +180,7 @@ namespace Server.Core
             catch (Exception ex)
             {
                 // 致命错误：文件传输处理失败（清理会话并记录完整堆栈）
-                logger.LogCritical($"Client {client.Id} file transfer failed: {ex.Message} {ex}");
+                logger.LogCritical($"Client {client.Id} file transfer failed: {ex.Message}");
                 _activeTransfers.TryRemove(data.FileId, out _); // 清理无效会话
                 throw;
             }
@@ -235,13 +235,13 @@ namespace Server.Core
             catch (IOException ex)
             {
                 // 文件写入异常（磁盘故障、权限问题等）
-                logger.LogCritical($"File write failed for {transferInfo.FileName}: {ex.Message} {ex}");
+                logger.LogCritical($"File write failed for {transferInfo.FileName}: {ex.Message}");
                 throw;
             }
             catch (InvalidOperationException ex)
             {
                 // 块缺失异常（业务逻辑错误）
-                logger.LogError($"File combination failed: {ex.Message} {ex}");
+                logger.LogError($"File combination failed: {ex.Message}");
                 throw;
             }
         }
@@ -280,7 +280,7 @@ namespace Server.Core
                 catch (IOException ex)
                 {
                     // 文件读取异常（如文件被占用、磁盘错误）
-                    logger.LogCritical($"Failed to read file {transferInfo.FileName} for verification: {ex.Message} {ex}");
+                    logger.LogCritical($"Failed to read file {transferInfo.FileName} for verification: {ex.Message}");
                     throw;
                 }
             }
@@ -338,7 +338,7 @@ namespace Server.Core
             }
             catch (Exception ex)
             {
-                logger.LogError($"Failed to calculate chunk hash: {ex.Message} {ex}");
+                logger.LogError($"Failed to calculate chunk hash: {ex.Message}");
                 throw;
             }
         }

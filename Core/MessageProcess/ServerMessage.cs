@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace Server.Core
 {
-    partial class Server
+    partial class ServerInstance
     {
 
         // 普通消息处理方法，用于处理客户端发送的普通消息，并返回确认消息
@@ -52,8 +52,7 @@ namespace Server.Core
             logger.LogDebug($"Client {client.Id} sent an ACK message of size {sentSize} bytes, SeqNum: {data.SeqNum}");
 
             // 记录普通消息处理完成，使用Info级别日志，用于正常业务流程记录
-            logger.LogInformation($"Client {client.Id} ACK: {data.SeqNum} Message: {data.Message}");
-            logger.LogInformation($"Client {client.Id} ACK: {data.SeqNum} Message: {data.Message} (English: Client {client.Id} ACK: {data.SeqNum} Message: {data.Message})");
+            logger.LogInformation($"Client {client.Id} {data.InfoType} ACK: {data.SeqNum} Message: {data.Message}");
 
             // 记录方法处理结束，使用Trace级别日志
             logger.LogTrace($"Finished handling normal message from client {client.Id}, SeqNum: {data.SeqNum}");

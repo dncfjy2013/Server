@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace Server.Core
 {
-    partial class Server
+    partial class ServerInstance
     {
         // 心跳超时时间（秒），超过此时间未收到客户端活动则视为断开
         private readonly int TimeoutSeconds = 45; 
