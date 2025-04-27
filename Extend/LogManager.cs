@@ -49,22 +49,18 @@ namespace Server.Extend
         }
     }
     #endregion
-    public class Logger : IDisposable
+    public class Logger : AbstractLogger, ILogger
     {
         private static readonly Lazy<Logger> _instance = new Lazy<Logger>(() => new Logger());
         public static Logger Instance => _instance.Value;
 
         private readonly BlockingCollection<LogMessage> _logQueue = new BlockingCollection<LogMessage>(1000);
-        private readonly CancellationTokenSource _cts = new CancellationTokenSource();
-        private readonly LoggerConfig _config;
         private readonly Task _logWriterTask;
 
         public Logger() : this(new LoggerConfig()) { }
 
-        public Logger(LoggerConfig config)
+        public Logger(LoggerConfig config) : base(config)
         {
-            _config = config ?? throw new ArgumentNullException(nameof(config));
-
             if (_config.EnableAsyncWriting)
             {
                 _logWriterTask = Task.Factory.StartNew(
@@ -76,12 +72,12 @@ namespace Server.Extend
         }
 
         #region Public Logging Methods
-        public void LogTrace(string message) => Log(LogLevel.Trace, message);
-        public void LogDebug(string message) => Log(LogLevel.Debug, message);
-        public void LogInformation(string message) => Log(LogLevel.Information, message);
-        public void LogWarning(string message) => Log(LogLevel.Warning, message);
-        public void LogError(string message) => Log(LogLevel.Error, message);
-        public void LogCritical(string message) => Log(LogLevel.Critical, message);
+        public override void LogTrace(string message) => Log(LogLevel.Trace, message);
+        public override void LogDebug(string message) => Log(LogLevel.Debug, message);
+        public override void LogInformation(string message) => Log(LogLevel.Information, message);
+        public override void LogWarning(string message) => Log(LogLevel.Warning, message);
+        public override void LogError(string message) => Log(LogLevel.Error, message);
+        public override void LogCritical(string message) => Log(LogLevel.Critical, message);
 
         private void Log(LogLevel level, string message)
         {
