@@ -35,9 +35,9 @@ namespace Server.Core
 
         // 在Server类中新增字段
         private readonly Dictionary<DataPriority, (int MaxRetries, TimeSpan Interval)> _retryPolicies = new() {
-                { DataPriority.High, (MaxRetries: 3, Interval: TimeSpan.FromSeconds(1)) }, // 高优先级：3次重试，间隔1秒
-                { DataPriority.Medium, (MaxRetries: 2, Interval: TimeSpan.FromSeconds(3)) }, // 中优先级：2次重试，间隔3秒
-                { DataPriority.Low, (MaxRetries: 1, Interval: TimeSpan.FromSeconds(5)) } }; // 低优先级：1次重试，间隔5秒
+                { DataPriority.High, (MaxRetries: 5, Interval: TimeSpan.FromSeconds(5)) }, // 高优先级：3次重试，间隔10秒
+                { DataPriority.Medium, (MaxRetries: 3, Interval: TimeSpan.FromSeconds(10)) }, // 中优先级：2次重试，间隔20秒
+                { DataPriority.Low, (MaxRetries: 1, Interval: TimeSpan.FromSeconds(15)) } }; // 低优先级：1次重试，间隔30秒
 
         private OutgoingMessageThreadManager _highPriorityManager;
         private OutgoingMessageThreadManager _mediumPriorityManager;
