@@ -1,10 +1,12 @@
 ﻿using Protocol;
 using Server.Client;
+using Server.Extend;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
@@ -12,252 +14,428 @@ namespace Server.Core
 {
     partial class Server
     {
+        // 定义消息队列的最大容量，这里设置为 int 类型的最大值，表示队列理论上可以无限扩展
         private readonly int MaxQueueSize = int.MaxValue;
 
+        // 创建一个无界的通道用于存储高优先级的客户端消息
+        // 通道是一种用于在不同线程或任务之间安全传递数据的机制
         private Channel<ClientMessage> _messageHighQueue = Channel.CreateUnbounded<ClientMessage>();
+
+        // 创建一个无界的通道用于存储中优先级的客户端消息
         private Channel<ClientMessage> _messageMediumQueue = Channel.CreateUnbounded<ClientMessage>();
+
+        // 创建一个无界的通道用于存储低优先级的客户端消息
         private Channel<ClientMessage> _messagelowQueue = Channel.CreateUnbounded<ClientMessage>();
 
+        // 定义一个字典，用于存储不同优先级对应的信号量
+        // 信号量用于控制并发访问的数量，确保系统资源不会被过度占用
         private readonly Dictionary<DataPriority, SemaphoreSlim> _prioritySemaphores = new()
         {
+            // 为高优先级消息设置信号量，允许的并发数量为处理器核心数的两倍
             [DataPriority.High] = new SemaphoreSlim(Environment.ProcessorCount * 2, Environment.ProcessorCount * 2),
+            // 为中优先级消息设置信号量，允许的并发数量等于处理器核心数
             [DataPriority.Medium] = new SemaphoreSlim(Environment.ProcessorCount, Environment.ProcessorCount),
+            // 为低优先级消息设置信号量，允许的并发数量为处理器核心数的一半
             [DataPriority.Low] = new SemaphoreSlim(Environment.ProcessorCount / 2, Environment.ProcessorCount / 2)
         };
 
+        // 创建一个用于取消消息处理任务的 CancellationTokenSource
+        // 当需要停止消息处理时，可以调用该对象的 Cancel 方法来取消相关任务
         private readonly CancellationTokenSource _processingCts = new();
 
-        // 启动消费者（在适当位置调用，如服务启动时）
+        // 一个布尔类型的标志，用于控制是否继续接收新的数据
+        // 当设置为 true 时，服务器会继续接收新的客户端消息；设置为 false 时，停止接收新消息
+        private bool _isReceiving = true;
+
+        /// <summary>
+        /// 启动消息处理消费者。此方法应在服务启动时调用，根据 CPU 核心数为不同优先级的消息队列启动相应数量的消费者任务。
+        /// </summary>
         public void StartProcessing()
         {
-            // 根据CPU核心数设置消费者数量
-            // Start high priority processors
-            for (int i = 0; i < Environment.ProcessorCount; i++)
-            {
-                logger.LogInformation($"Start high priority processors Seq {i}");
-                _ = Task.Run(() => ProcessMessages(DataPriority.High));
-            }
+            logger.LogInformation("Starting message processing consumers.");
 
-            // Start medium priority processors
-            for (int i = 0; i < Environment.ProcessorCount / 2; i++)
+            try
             {
-                logger.LogInformation($"Start medium priority processors Seq {i}");
-                _ = Task.Run(() => ProcessMessages(DataPriority.Medium));
-            }
+                // 获取当前系统的 CPU 核心数，用于动态确定不同优先级消息队列的消费者数量
+                int processorCount = Environment.ProcessorCount;
 
-            // Start low priority processor
-            logger.LogInformation($"Start low priority processors");
-            _ = Task.Run(() => ProcessMessages(DataPriority.Low));
+                // 启动高优先级消息的处理任务
+                // 根据 CPU 核心数，为高优先级消息队列启动相应数量的处理任务，以确保高优先级消息能被快速处理
+                for (int i = 0; i < processorCount; i++)
+                {
+                    logger.LogInformation($"Starting high priority processor with sequence number {i}.");
+                    // 异步启动一个处理高优先级消息的任务
+                    _ = Task.Run(() => ProcessMessages(DataPriority.High));
+                    logger.LogDebug($"High priority processor with sequence number {i} has been started.");
+                }
+
+                // 启动中优先级消息的处理任务
+                // 中优先级消息队列启动的处理任务数量为 CPU 核心数的一半，以平衡资源分配
+                for (int i = 0; i < processorCount / 2; i++)
+                {
+                    logger.LogInformation($"Starting medium priority processor with sequence number {i}.");
+                    // 异步启动一个处理中优先级消息的任务
+                    _ = Task.Run(() => ProcessMessages(DataPriority.Medium));
+                    logger.LogDebug($"Medium priority processor with sequence number {i} has been started.");
+                }
+
+                // 启动低优先级消息的处理任务
+                // 低优先级消息队列只启动一个处理任务，因为低优先级消息对处理及时性要求较低
+                logger.LogInformation("Starting low priority processor.");
+                // 异步启动一个处理低优先级消息的任务
+                _ = Task.Run(() => ProcessMessages(DataPriority.Low));
+                logger.LogDebug("Low priority processor has been started.");
+
+                logger.LogInformation("All message processing consumers have been successfully started.");
+            }
+            catch (Exception ex)
+            {
+                // 若在启动处理任务过程中出现异常，记录错误日志
+                logger.LogError($"An error occurred while starting message processing consumers: {ex.Message} {ex}");
+            }
         }
 
-        // 新增消费者处理方法
+        /// <summary>
+        /// 处理不同优先级的客户端消息（消费者核心逻辑）
+        /// </summary>
+        /// <param name="priority">消息优先级</param>
         private async Task ProcessMessages(DataPriority priority)
         {
+            // 获取对应优先级的信号量（控制并发处理数量）
             var semaphore = _prioritySemaphores[priority];
+            logger.LogDebug($"Acquired semaphore for {priority} priority (CurrentCount={semaphore.CurrentCount})");
 
-            switch (priority)
+            try
             {
-                case DataPriority.High:
-                    await foreach (var message in _messageHighQueue.Reader.ReadAllAsync(_processingCts.Token))
-                    {
-                        if (message.Data.Priority != priority) continue;
-
-                        await semaphore.WaitAsync(_processingCts.Token);
-                        try
-                        {
-                            await ProcessMessageWithPriority(message, priority);
-                        }
-                        catch (Exception ex)
-                        {
-                            logger.LogError($"Error processing {priority} priority message: {ex.Message}");
-                        }
-                        finally
-                        {
-                            semaphore.Release();
-                        }
-                    }
-                    break;
-                case DataPriority.Medium:
-                    await foreach (var message in _messageMediumQueue.Reader.ReadAllAsync(_processingCts.Token))
-                    {
-                        if (message.Data.Priority != priority) continue;
-
-                        await semaphore.WaitAsync(_processingCts.Token);
-                        try
-                        {
-                            await ProcessMessageWithPriority(message, priority);
-                        }
-                        catch (Exception ex)
-                        {
-                            logger.LogError($"Error processing {priority} priority message: {ex.Message}");
-                        }
-                        finally
-                        {
-                            semaphore.Release();
-                        }
-                    }
-                    break;
-                case DataPriority.Low:
-                    await foreach (var message in _messagelowQueue.Reader.ReadAllAsync(_processingCts.Token))
-                    {
-                        if (message.Data.Priority != priority) continue;
-
-                        await semaphore.WaitAsync(_processingCts.Token);
-                        try
-                        {
-                            await ProcessMessageWithPriority(message, priority);
-                        }
-                        catch (Exception ex)
-                        {
-                            logger.LogError($"Error processing {priority} priority message: {ex.Message}");
-                        }
-                        finally
-                        {
-                            semaphore.Release();
-                        }
-                    }
-                    break;
+                switch (priority)
+                {
+                    case DataPriority.High:
+                        logger.LogInformation($"High priority message processor started (ThreadId={Environment.CurrentManagedThreadId})");
+                        await ProcessPriorityMessages(priority, _messageHighQueue.Reader, semaphore);
+                        break;
+                    case DataPriority.Medium:
+                        logger.LogInformation($"Medium priority message processor started (ThreadId={Environment.CurrentManagedThreadId})");
+                        await ProcessPriorityMessages(priority, _messageMediumQueue.Reader, semaphore);
+                        break;
+                    case DataPriority.Low:
+                        logger.LogInformation($"Low priority message processor started (ThreadId={Environment.CurrentManagedThreadId})");
+                        await ProcessPriorityMessages(priority, _messagelowQueue.Reader, semaphore);
+                        break;
+                    default:
+                        logger.LogWarning($"Unknown priority {priority} received, skipping processor");
+                        return;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                logger.LogDebug($"{priority} priority processor was canceled");
+            }
+            catch (Exception ex)
+            {
+                logger.LogCritical($"Unhandled exception in {priority} processor: {ex.Message} {ex}");
+            }
+            finally
+            {
+                logger.LogInformation($"{priority} priority processor stopped");
             }
         }
+
+        /// <summary>
+        /// 处理特定优先级消息的通用逻辑
+        /// </summary>
+        /// <param name="priority">消息优先级</param>
+        /// <param name="reader">通道读取器</param>
+        private async Task ProcessPriorityMessages(DataPriority priority, ChannelReader<ClientMessage> reader, SemaphoreSlim semaphore)
+        {
+            // 异步遍历通道中的所有消息（支持取消令牌）
+            await foreach (var message in reader.ReadAllAsync(_processingCts.Token))
+            {
+                // 验证消息优先级与处理器匹配（防御性编程）
+                if (message.Data.Priority != priority)
+                {
+                    logger.LogTrace($"Dropping message with mismatched priority: expected {priority}, actual {message.Data.Priority}");
+                    continue;
+                }
+
+                logger.LogDebug($"Received {priority} priority message: Id={message.Client.Id}, Size={MemoryCalculator.CalculateObjectSize(message.Data)} bytes");
+
+                // 等待信号量（控制并发数）
+                await semaphore.WaitAsync(_processingCts.Token);
+                logger.LogTrace($"{priority} semaphore acquired (current count={semaphore.CurrentCount})");
+
+                try
+                {
+                    // 处理消息核心逻辑（假设包含业务处理和耗时操作）
+                    await ProcessMessageWithPriority(message, priority);
+                    logger.LogInformation($"{priority} message processed successfully: Id={message.Client.Id}");
+                }
+                catch (TimeoutException tex)
+                {
+                    logger.LogError($"Timeout processing {priority} message {message.Client.Id}: {tex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError($"Error processing {priority} message {message.Client.Id}: {ex.Message} {ex}");
+                    if (priority == DataPriority.High)
+                    {
+                        logger.LogWarning($"High-priority message failed: {message.Client.Id}, will retry later");
+                    }
+                }
+                finally
+                {
+                    semaphore.Release();
+                    logger.LogTrace($"{priority} semaphore released (current count={semaphore.CurrentCount})");
+                }
+            }
+        }
+
+        /// <summary>
+        /// 按优先级处理客户端消息（核心业务逻辑）
+        /// </summary>
+        /// <param name="message">待处理的客户端消息</param>
+        /// <param name="priority">消息优先级</param>
         private async Task ProcessMessageWithPriority(ClientMessage message, DataPriority priority)
         {
+            // 根据优先级设置不同的处理超时时间
             var timeout = priority switch
             {
-                DataPriority.High => TimeSpan.FromMilliseconds(100),
-                DataPriority.Medium => TimeSpan.FromMilliseconds(500),
-                _ => TimeSpan.FromSeconds(1)
+                DataPriority.High => TimeSpan.FromMilliseconds(100),  // 高优先级消息要求快速响应
+                DataPriority.Medium => TimeSpan.FromMilliseconds(500), // 中等优先级允许稍长处理时间
+                _ => TimeSpan.FromSeconds(1)                           // 低优先级默认1秒超时
             };
+            logger.LogDebug($"Set {priority} priority message timeout to {timeout.TotalMilliseconds}ms");
 
+            // 使用CancellationTokenSource实现处理超时控制
             using var cts = new CancellationTokenSource(timeout);
 
             try
             {
+                logger.LogTrace($"Start processing {priority} message (Id={message.Client.Id}, Type={message.Data.InfoType})");
+
+                // 根据消息类型分发不同的处理逻辑
                 switch (message.Data.InfoType)
                 {
                     case InfoType.HeartBeat:
+                        logger.LogInformation($"Handling heartbeat from client {message.Client.Id}");
                         await HandleHeartbeat(message.Client, message.Data);
+                        logger.LogDebug($"Heartbeat handled successfully for client {message.Client.Id}");
                         break;
+
                     case InfoType.File:
+                        logger.LogInformation($"Handling file transfer for client {message.Client.Id} (Size={MemoryCalculator.CalculateObjectSize(message.Data)} bytes)");
                         await HandleFileTransfer(message.Client, message.Data);
+                        logger.LogDebug($"File transfer completed for client {message.Client.Id}");
                         break;
+
                     case InfoType.Ack:
+                        logger.LogTrace($"Ignoring ACK message (Id={message.Client.Id})");
                         break;
+
                     default:
+                        logger.LogInformation($"Handling normal message for client {message.Client.Id} (Content={message.Data.Message})");
                         await HandleNormalMessage(message.Client, message.Data);
+                        logger.LogDebug($"Normal message processed for client {message.Client.Id}");
                         break;
                 }
+
+                logger.LogTrace($"Completed processing {priority} message (Id={message.Client.Id})");
             }
             catch (OperationCanceledException) when (cts.IsCancellationRequested)
             {
-                logger.LogError($"{priority} priority message processing timeout");
+                // 处理超时异常（优先级相关）
+                logger.LogError($"{priority} priority message processing timed out (Id={message.Client.Id})");
+                logger.LogWarning($"Client {message.Client.Id} may experience delay due to timeout");
+            }
+            catch (Exception ex)
+            {
+                // 处理其他异常（非超时原因）
+                logger.LogError($"Unhandled error processing {priority} message (Id={message.Client.Id}): {ex.Message} {ex}");
+                if (priority == DataPriority.High)
+                {
+                    logger.LogCritical($"High-priority message failure requires immediate attention: {message.Client.Id}");
+                }
             }
         }
 
-        // 修改后的HandleClient方法（生产者）
+        /// <summary>
+        /// 处理客户端连接（生产者逻辑：接收消息并按优先级入队）
+        /// </summary>
+        /// <param name="client">客户端配置对象</param>
         private async Task HandleClient(ClientConfig client)
         {
+            logger.LogTrace($"Client {client.Id} connection started (RemoteEndPoint={client.Socket?.RemoteEndPoint})");
+
             try
             {
+                // 初始化数据流（普通Socket或SSL流）
                 Stream stream = client.Socket != null
                     ? new NetworkStream(client.Socket)
                     : client.SslStream;
+                logger.LogDebug($"Client {client.Id} using {stream.GetType().Name} for communication");
 
-                while (_isRunning)
+                while (_isRunning && _isReceiving)
                 {
                     try
                     {
+                        // 1. 接收消息头部（固定8字节）
                         byte[] headerBuffer = new byte[8];
-                        // 1. 接收头部
+                        logger.LogTrace($"Client {client.Id} reading header (8 bytes)");
                         if (!await ReadFullAsync(stream, headerBuffer, 8))
                         {
                             logger.LogWarning($"Client {client.Id} disconnected while reading header");
                             return;
                         }
+                        logger.LogDebug($"Client {client.Id} header received successfully");
 
-                        // 2. 解析头部
+                        // 2. 解析协议头部
+                        logger.LogTrace($"Client {client.Id} parsing header bytes");
                         if (!ProtocolHeaderExtensions.TryFromBytes(headerBuffer, out var header))
                         {
-                            logger.LogWarning($"Client {client.Id} Invalid header received");
+                            logger.LogWarning($"Client {client.Id} invalid header format: {BitConverter.ToString(headerBuffer)}");
                             continue;
                         }
+                        logger.LogDebug($"Client {client.Id} header parsed: Version={header.Version}, Length={header.MessageLength}");
 
-                        // 3. 版本检查
+                        // 3. 校验协议版本
                         if (!config.SupportedVersions.Contains((byte)header.Version))
                         {
-                            logger.LogWarning($"Client {client.Id} Unsupported protocol version: {header.Version}");
+                            logger.LogWarning($"Client {client.Id} unsupported version {header.Version} (supported: {string.Join(",", config.SupportedVersions)})");
                             continue;
                         }
+                        logger.LogInformation($"Client {client.Id} protocol version {header.Version} verified");
 
-                        // 4. 接收数据体
+                        // 4. 接收消息体
                         byte[] payloadBuffer = new byte[header.MessageLength];
+                        logger.LogTrace($"Client {client.Id} reading payload ({header.MessageLength} bytes)");
                         if (!await ReadFullAsync(stream, payloadBuffer, (int)header.MessageLength))
                         {
-                            logger.LogWarning($"Client {client.Id}  disconnected while reading payload");
+                            logger.LogWarning($"Client {client.Id} disconnected while reading payload");
                             return;
                         }
+                        logger.LogDebug($"Client {client.Id} payload received ({header.MessageLength} bytes)");
 
-                        // 5. 组合完整数据包
+                        // 5. 组装完整数据包
                         byte[] fullPacket = new byte[8 + header.MessageLength];
                         Buffer.BlockCopy(headerBuffer, 0, fullPacket, 0, 8);
                         Buffer.BlockCopy(payloadBuffer, 0, fullPacket, 8, (int)header.MessageLength);
+                        logger.LogTrace($"Client {client.Id} assembled full packet (size={fullPacket.Length} bytes)");
 
                         // 6. 解析数据包
+                        logger.LogTrace($"Client {client.Id} trying to parse packet");
                         var (success, packet, error) = ProtocolPacketWrapper.TryFromBytes(fullPacket);
                         if (!success)
                         {
-                            logger.LogWarning($"Client {client.Id} Failed to parse packet: {error}");
-                            continue;
+                            logger.LogWarning($"Client {client.Id} packet parsing failed: {error}");
+                            return;
                         }
+                        logger.LogDebug($"Client {client.Id} packet parsed successfully (Priority={packet.Data.Priority})");
 
+                        // 更新客户端活动时间
                         client.UpdateActivity();
-                        // 处理有效数据包
+                        logger.LogTrace($"Client {client.Id} activity time updated");
+
+                        // 创建消息对象
                         var message = new ClientMessage
                         {
                             Client = client,
                             Data = packet.Data,
                             ReceivedTime = DateTime.Now
                         };
+
+                        // 背压策略：丢弃低优先级消息（队列积压时）
+                        bool isQueueFull = _messageHighQueue.Reader.Count > MaxQueueSize ||
+                                           _messageMediumQueue.Reader.Count > MaxQueueSize ||
+                                           _messagelowQueue.Reader.Count > MaxQueueSize;
+
+                        if (isQueueFull && message.Data.Priority == DataPriority.Low)
+                        {
+                            logger.LogCritical($"Client {client.Id} discarded low-priority message (queue full: High={_messageHighQueue.Reader.Count}, Medium={_messageMediumQueue.Reader.Count}, Low={_messagelowQueue.Reader.Count})");
+                            return;
+                        }
+
+                        // 按优先级入队
                         switch (packet.Data.Priority)
                         {
                             case DataPriority.Low:
                                 await _messagelowQueue.Writer.WriteAsync(message);
+                                logger.LogInformation($"Client {client.Id} low-priority message enqueued (Id={message.Client.Id})");
                                 break;
                             case DataPriority.High:
                                 await _messageHighQueue.Writer.WriteAsync(message);
+                                logger.LogInformation($"Client {client.Id} high-priority message enqueued (Id={message.Client.Id})");
                                 break;
                             case DataPriority.Medium:
                                 await _messageMediumQueue.Writer.WriteAsync(message);
+                                logger.LogInformation($"Client {client.Id} medium-priority message enqueued (Id={message.Client.Id})");
                                 break;
                         }
 
-                        // 控制队列积压（可选）
-                        if (_messagelowQueue.Reader.Count > MaxQueueSize)
-                        {
-                            logger.LogWarning($"Client {client.Id} message low queue growing");
-                            // 可在此处实施背压策略，如暂停接收等
-                        }
-                        if (_messageMediumQueue.Reader.Count > MaxQueueSize)
-                        {
-                            logger.LogWarning($"Client {client.Id} message medium queue growing");
-                            // 可在此处实施背压策略，如暂停接收等
-                        }
-                        if (_messageHighQueue.Reader.Count > MaxQueueSize)
-                        {
-                            logger.LogWarning($"Client {client.Id} message high queue growing");
-                            // 可在此处实施背压策略，如暂停接收等
-                        }
+                        // 队列积压监控与背压（按优先级分级处理）
+                        await MonitorQueueBackpressure(client, packet.Data.Priority, (int)header.MessageLength);
                     }
                     catch (Exception ex)
                     {
-                        logger.LogError($"Client {client.Id} error: {ex.Message}");
-                        break; // 发生异常时退出循环
+                        logger.LogCritical($"Client {client.Id} unexpected error: {ex.Message} {ex}");
+                        break; // 终止当前客户端处理循环
                     }
                 }
             }
             finally
             {
                 DisconnectClient(client.Id);
+                logger.LogInformation($"Client {client.Id} connection terminated");
             }
+        }
+
+        /// <summary>
+        /// 监控队列积压并执行背压策略
+        /// </summary>
+        private async Task MonitorQueueBackpressure(ClientConfig client, DataPriority priority, int messageSize)
+        {
+            switch (priority)
+            {
+                case DataPriority.Low:
+                    if (_messagelowQueue.Reader.Count > MaxQueueSize)
+                    {
+                        logger.LogCritical($"Client {client.Id} LOW QUEUE BACKPRESSURE: {_messagelowQueue.Reader.Count} messages积压");
+                        await ImplementBackpressure(client, TimeSpan.FromSeconds(1)); // 低优先级暂停1秒
+                    }
+                    break;
+                case DataPriority.Medium:
+                    if (_messageMediumQueue.Reader.Count > MaxQueueSize * 0.8) // 80%阈值预警
+                    {
+                        logger.LogWarning($"Client {client.Id} MEDIUM QUEUE NEAR BACKPRESSURE: {_messageMediumQueue.Reader.Count}/{MaxQueueSize}");
+                    }
+                    if (_messageMediumQueue.Reader.Count > MaxQueueSize)
+                    {
+                        logger.LogCritical($"Client {client.Id} MEDIUM QUEUE BACKPRESSURE: {_messageMediumQueue.Reader.Count} messages积压");
+                        await ImplementBackpressure(client, TimeSpan.FromMilliseconds(600)); // 中等优先级暂停600ms
+                    }
+                    break;
+                case DataPriority.High:
+                    if (_messageHighQueue.Reader.Count > MaxQueueSize * 0.5) // 50%阈值预警
+                    {
+                        logger.LogWarning($"Client {client.Id} HIGH QUEUE NEAR BACKPRESSURE: {_messageHighQueue.Reader.Count}/{MaxQueueSize}");
+                    }
+                    if (_messageHighQueue.Reader.Count > MaxQueueSize)
+                    {
+                        logger.LogCritical($"Client {client.Id} HIGH QUEUE BACKPRESSURE: {_messageHighQueue.Reader.Count} messages积压");
+                        await ImplementBackpressure(client, TimeSpan.FromMilliseconds(200)); // 高优先级暂停200ms
+                    }
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// 执行背压策略（暂停接收新消息）
+        /// </summary>
+        private async Task ImplementBackpressure(ClientConfig client, TimeSpan delay)
+        {
+            logger.LogCritical($"Client {client.Id} applying backpressure: pausing receive for {delay.TotalMilliseconds}ms");
+            _isReceiving = false; // 暂停接收新消息
+            await Task.Delay(delay);
+            _isReceiving = true;
+            logger.LogCritical($"Client {client.Id} backpressure released: resume receiving");
         }
     }
 }

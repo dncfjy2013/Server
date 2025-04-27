@@ -10,36 +10,80 @@ namespace Server.Core
 {
     partial class Server
     {
-        private readonly int TimeoutSeconds = 45;
-        // 心跳处理优化
+        // 心跳超时时间（秒），超过此时间未收到客户端活动则视为断开
+        private readonly int TimeoutSeconds = 45; 
+
+        /// <summary>
+        /// 处理客户端心跳消息（接收并返回ACK）
+        /// </summary>
+        /// <param name="client">客户端配置对象</param>
+        /// <param name="data">心跳消息数据</param>
         private async Task HandleHeartbeat(ClientConfig client, CommunicationData data)
         {
-            client.AddReceivedBytes(MemoryCalculator.CalculateObjectSize(data));
+            // 统计接收数据量
+            long receivedSize = MemoryCalculator.CalculateObjectSize(data);
+            client.AddReceivedBytes(receivedSize);
+            logger.LogDebug($"Client {client.Id} received heartbeat (Size={receivedSize} bytes)");
+
+            // 构造心跳响应
             var ack = new CommunicationData
             {
                 InfoType = InfoType.HeartBeat,
                 Message = "ACK",
                 AckNum = data.SeqNum
             };
-            logger.LogInformation($"Client {client.Id} heartbeat");
-            client.AddSentBytes(MemoryCalculator.CalculateObjectSize(ack));
+
+            // 记录正常心跳日志（Info级别）
+            logger.LogInformation($"Client {client.Id} heartbeat received, sending ACK");
+
+            // 统计发送数据量
+            long sentSize = MemoryCalculator.CalculateObjectSize(ack);
+            client.AddSentBytes(sentSize);
+            logger.LogDebug($"Client {client.Id} sent heartbeat ACK (Size={sentSize} bytes)");
+
+            // 发送心跳响应
             await SendData(client, ack);
+            logger.LogTrace($"Client {client.Id} heartbeat ACK sent successfully");
         }
 
+        /// <summary>
+        /// 定期检查客户端心跳状态（超时断开无效连接）
+        /// </summary>
         private void CheckHeartbeats()
         {
             var now = DateTime.Now;
             var timeout = TimeSpan.FromSeconds(TimeoutSeconds);
+            logger.LogTrace($"Heartbeat check started (Timeout={TimeoutSeconds}s)");
 
-            foreach (var client in _clients)
+            // 遍历所有客户端连接
+            foreach (var client in _clients.ToList()) // 复制列表避免迭代时修改集合
             {
-                if (now - client.Value.LastActivity > timeout)
+                var clientId = client.Key;
+                var clientConfig = client.Value;
+
+                // 计算客户端最后活动时间差
+                var elapsed = now - clientConfig.LastActivity;
+                logger.LogDebug($"Client {clientId} last activity: {clientConfig.LastActivity} ({elapsed.TotalSeconds:F1}s ago)");
+
+                if (elapsed > timeout)
                 {
-                    logger.LogWarning($"Client {client.Key} heartbeat timeout");
-                    DisconnectClient(client.Key);
-                    _clients.TryRemove(client.Key, out _);
+                    // 心跳超时，断开客户端连接
+                    logger.LogWarning($"Client {clientId} heartbeat timeout ({elapsed.TotalSeconds:F1}s > {TimeoutSeconds}s)");
+                    DisconnectClient(clientId);
+
+                    // 从客户端列表移除
+                    if (_clients.TryRemove(clientId, out _))
+                    {
+                        logger.LogInformation($"Client {clientId} removed due to heartbeat timeout");
+                    }
+                    else
+                    {
+                        logger.LogError($"Failed to remove client {clientId} after timeout");
+                    }
                 }
             }
+
+            logger.LogTrace("Heartbeat check completed");
         }
     }
 }
