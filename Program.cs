@@ -1,4 +1,4 @@
-﻿Server.Core.Server server = new Server.Core.Server(12345, 8888);
+﻿Server.Core.ServerInstance server = new Server.Core.ServerInstance(12345, 8888);
 server.Start(false);
 
 Console.WriteLine("Press Enter to stop the server...");

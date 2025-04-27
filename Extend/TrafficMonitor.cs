@@ -422,7 +422,7 @@ namespace Server.Extend
                 }
 
                 // 记录 Info 日志：返回计算结果
-                Logger.Instance.LogInformation($"Calculated memory size for {type.FullName}: {size} bytes");
+                Logger.Instance.LogDebug($"Calculated memory size for {type.FullName}: {size} bytes");
                 return size;
             }
             catch (Exception ex)

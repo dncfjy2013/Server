@@ -5,7 +5,7 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace Server.Core
 {
-    partial class Server
+    public partial class ServerInstance
     {
         // 服务器监听的普通端口号，在构造函数中初始化，一旦初始化后不可更改
         private readonly int _port;
@@ -16,7 +16,7 @@ namespace Server.Core
         // 流量监控器实例，用于监控服务器与客户端之间的流量情况，在构造函数中初始化
         private readonly TrafficMonitor _trafficMonitor;
         // 日志记录器实例，用于记录服务器运行过程中的各类信息，如错误、警告、信息等
-        Logger logger = new Logger();
+        public Logger logger = new Logger();
         // 心跳定时器，用于定期检查客户端的心跳情况，确保客户端连接正常
         private readonly Timer _heartbeatTimer;
         // 流量监控定时器，用于定期触发流量监控器进行流量数据的收集和分析
@@ -34,11 +34,11 @@ namespace Server.Core
         // 用于 SSL 加密连接的 TCP 监听器，负责监听 SSL 端口的客户端连接请求
         private TcpListener _sslListener;
         // 用于取消异步操作的取消令牌源，可在需要停止服务器时取消正在进行的异步任务
-        private readonly CancellationTokenSource _cts = new();
+        public readonly CancellationTokenSource _cts = new();
         // 用于线程安全的日志记录操作的锁对象，确保在多线程环境下日志记录操作的线程安全性
         private readonly object _lock = new();
 
-        public Server(int port, int sslPort, string certPath = null)
+        public ServerInstance(int port, int sslPort, string certPath = null)
         {
             logger.LogTrace($"Server constructor called with port: {port}, sslPort: {sslPort}, certPath: {certPath}");
 
@@ -65,7 +65,7 @@ namespace Server.Core
                     catch (Exception ex)
                     {
                         // Error 等级：记录加载 SSL 证书时出现的异常
-                        logger.LogError($"An error occurred while loading the SSL certificate from {certPath}: {ex.Message} {ex}");
+                        logger.LogError($"An error occurred while loading the SSL certificate from {certPath}: {ex.Message}  ");
                     }
                 }
                 else
@@ -85,7 +85,7 @@ namespace Server.Core
                 catch (Exception ex)
                 {
                     // Error 等级：记录初始化流量监控器时出现的异常
-                    logger.LogError($"Failed to initialize the traffic monitor: {ex.Message} {ex}");
+                    logger.LogError($"Failed to initialize the traffic monitor: {ex.Message}");
                 }
 
                 // Debug 等级：记录创建心跳定时器的操作
@@ -107,7 +107,7 @@ namespace Server.Core
             catch (Exception ex)
             {
                 // Critical 等级：记录服务器初始化过程中出现的严重异常
-                logger.LogCritical($"A critical error occurred during server initialization: {ex.Message} {ex}");
+                logger.LogCritical($"A critical error occurred during server initialization: {ex.Message}  ");
             }
         }
 
@@ -145,7 +145,7 @@ namespace Server.Core
             catch (Exception ex)
             {
                 // Error：可恢复的异常（如无效的时间间隔）
-                logger.LogError($"Failed to set monitor interval: {ex.Message} {ex}");
+                logger.LogError($"Failed to set monitor interval: {ex.Message}");
             }
         }
 
@@ -220,7 +220,7 @@ namespace Server.Core
             catch (Exception ex)
             {
                 // 启动过程中出现异常，使用Critical记录
-                logger.LogCritical($"A critical error occurred while starting the server: {ex.Message} {ex}");
+                logger.LogCritical($"A critical error occurred while starting the server: {ex.Message} ");
             }
         }
 
@@ -280,7 +280,7 @@ namespace Server.Core
                     catch (Exception ex)
                     {
                         // 断开客户端连接时出现异常，使用Error记录
-                        logger.LogError($"An error occurred while disconnecting client {client.Id}: {ex.Message} {ex}");
+                        logger.LogError($"An error occurred while disconnecting client {client.Id}: {ex.Message}");
                     }
                 }
                 logger.LogInformation("All connected clients have been disconnected.");
@@ -288,7 +288,7 @@ namespace Server.Core
             catch (Exception ex)
             {
                 // 整个停止过程中出现异常，使用Critical记录
-                logger.LogCritical($"A critical error occurred during server shutdown: {ex.Message} {ex}");
+                logger.LogCritical($"A critical error occurred during server shutdown: {ex.Message}");
             }
 
             // 服务器停止，是重要的系统状态变更，使用Critical记录
@@ -304,7 +304,7 @@ namespace Server.Core
             catch (Exception ex)
             {
                 // 释放日志记录器时出现异常，使用Error记录
-                logger.LogError($"An error occurred while disposing of the logger: {ex.Message} {ex}");
+                logger.LogError($"An error occurred while disposing of the logger: {ex.Message}");
             }
         }
     }

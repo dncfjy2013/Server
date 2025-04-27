@@ -1,5 +1,6 @@
 ﻿using Protocol;
 using Server.Client;
+using Server.Common;
 using Server.Extend;
 using System;
 using System.Collections.Generic;
@@ -12,7 +13,7 @@ using System.Threading.Tasks;
 
 namespace Server.Core
 {
-    partial class Server
+    partial class ServerInstance
     {
         // 定义消息队列的最大容量，这里设置为 int 类型的最大值，表示队列理论上可以无限扩展
         private readonly int MaxQueueSize = int.MaxValue;
@@ -26,6 +27,27 @@ namespace Server.Core
 
         // 创建一个无界的通道用于存储低优先级的客户端消息
         private Channel<ClientMessage> _messagelowQueue = Channel.CreateUnbounded<ClientMessage>();
+
+        /// <summary>
+        /// 高优先级消息的线程管理器实例。负责管理和处理高优先级的客户端消息队列。
+        /// 该管理器会根据系统的 CPU 核心数动态调整线程数量，以确保高优先级消息能够被快速处理。
+        /// 其最小线程数设置为当前系统的 CPU 核心数，最大线程数为 CPU 核心数的两倍。
+        /// </summary>
+        private IncomingMessageThreadManager _incomingHighManager;
+
+        /// <summary>
+        /// 中优先级消息的线程管理器实例。用于管理和处理中优先级的客户端消息队列。
+        /// 为了平衡系统资源分配，该管理器启动的线程数量为 CPU 核心数的一半，
+        /// 最小线程数是 CPU 核心数的一半，最大线程数为 CPU 核心数。
+        /// </summary>
+        private IncomingMessageThreadManager _incomingMediumManager;
+
+        /// <summary>
+        /// 低优先级消息的线程管理器实例。主要负责处理低优先级的客户端消息队列。
+        /// 由于低优先级消息对处理及时性要求较低，所以该管理器只启动较少的线程，
+        /// 最小线程数为 1，最大线程数为 2。
+        /// </summary>
+        private IncomingMessageThreadManager _incomingLowManager;
 
         // 定义一个字典，用于存储不同优先级对应的信号量
         // 信号量用于控制并发访问的数量，确保系统资源不会被过度占用
@@ -52,46 +74,55 @@ namespace Server.Core
         /// </summary>
         public void StartProcessing()
         {
-            logger.LogInformation("Starting message processing consumers.");
-
             try
             {
+                logger.LogTrace("Entering StartProcessing method.");
+                logger.LogDebug("Initiating the initialization of message thread managers for different priorities.");
+
                 // 获取当前系统的 CPU 核心数，用于动态确定不同优先级消息队列的消费者数量
                 int processorCount = Environment.ProcessorCount;
+                logger.LogDebug($"Current system CPU core count obtained: {processorCount}."); // 改为Debug级别（Critical通常用于致命错误）
 
                 // 启动高优先级消息的处理任务
-                // 根据 CPU 核心数，为高优先级消息队列启动相应数量的处理任务，以确保高优先级消息能被快速处理
-                for (int i = 0; i < processorCount; i++)
-                {
-                    logger.LogInformation($"Starting high priority processor with sequence number {i}.");
-                    // 异步启动一个处理高优先级消息的任务
-                    _ = Task.Run(() => ProcessMessages(DataPriority.High));
-                    logger.LogDebug($"High priority processor with sequence number {i} has been started.");
-                }
+                logger.LogInformation("Starting the initialization of the high-priority message thread manager.");
+                _incomingHighManager = new IncomingMessageThreadManager(
+                    this,
+                    _messageHighQueue,
+                    logger,
+                    DataPriority.High,
+                    minThreads: processorCount / 2,
+                    maxThreads: processorCount * 2);
+                logger.LogInformation("High-priority message thread manager initialization completed.");
 
                 // 启动中优先级消息的处理任务
-                // 中优先级消息队列启动的处理任务数量为 CPU 核心数的一半，以平衡资源分配
-                for (int i = 0; i < processorCount / 2; i++)
-                {
-                    logger.LogInformation($"Starting medium priority processor with sequence number {i}.");
-                    // 异步启动一个处理中优先级消息的任务
-                    _ = Task.Run(() => ProcessMessages(DataPriority.Medium));
-                    logger.LogDebug($"Medium priority processor with sequence number {i} has been started.");
-                }
+                logger.LogInformation("Starting the initialization of the medium-priority message thread manager.");
+                _incomingMediumManager = new IncomingMessageThreadManager(
+                    this,
+                    _messageMediumQueue,
+                    logger,
+                    DataPriority.Medium,
+                    minThreads: processorCount / 4,
+                    maxThreads: processorCount);
+                logger.LogInformation("Medium-priority message thread manager initialization completed.");
 
                 // 启动低优先级消息的处理任务
-                // 低优先级消息队列只启动一个处理任务，因为低优先级消息对处理及时性要求较低
-                logger.LogInformation("Starting low priority processor.");
-                // 异步启动一个处理低优先级消息的任务
-                _ = Task.Run(() => ProcessMessages(DataPriority.Low));
-                logger.LogDebug("Low priority processor has been started.");
+                logger.LogInformation("Starting the initialization of the low-priority message thread manager.");
+                _incomingLowManager = new IncomingMessageThreadManager(
+                    this,
+                    _messagelowQueue,
+                    logger,
+                    DataPriority.Low,
+                    minThreads: 1,
+                    maxThreads: processorCount / 4);
+                logger.LogInformation("Low-priority message thread manager initialization completed.");
 
-                logger.LogInformation("All message processing consumers have been successfully started.");
+                logger.LogDebug("Initialization of all priority message thread managers completed.");
+                logger.LogTrace("Exiting StartProcessing method.");
             }
             catch (Exception ex)
             {
-                // 若在启动处理任务过程中出现异常，记录错误日志
-                logger.LogError($"An error occurred while starting message processing consumers: {ex.Message} {ex}");
+                logger.LogError($"An error occurred while starting message processing consumers: {ex.Message}");
+                logger.LogWarning("Due to the error, some or all message thread managers may not have been initialized successfully.");
             }
         }
 
@@ -99,7 +130,7 @@ namespace Server.Core
         /// 处理不同优先级的客户端消息（消费者核心逻辑）
         /// </summary>
         /// <param name="priority">消息优先级</param>
-        private async Task ProcessMessages(DataPriority priority)
+        public async Task ProcessMessages(DataPriority priority)
         {
             // 获取对应优先级的信号量（控制并发处理数量）
             var semaphore = _prioritySemaphores[priority];
@@ -132,7 +163,7 @@ namespace Server.Core
             }
             catch (Exception ex)
             {
-                logger.LogCritical($"Unhandled exception in {priority} processor: {ex.Message} {ex}");
+                logger.LogCritical($"Unhandled exception in {priority} processor: {ex.Message}  ");
             }
             finally
             {
@@ -167,7 +198,7 @@ namespace Server.Core
                 {
                     // 处理消息核心逻辑（假设包含业务处理和耗时操作）
                     await ProcessMessageWithPriority(message, priority);
-                    logger.LogInformation($"{priority} message processed successfully: Id={message.Client.Id}");
+                    logger.LogDebug($"{priority} message processed successfully: Id={message.Client.Id}");
                 }
                 catch (TimeoutException tex)
                 {
@@ -175,7 +206,7 @@ namespace Server.Core
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError($"Error processing {priority} message {message.Client.Id}: {ex.Message} {ex}");
+                    logger.LogError($"Error processing {priority} message {message.Client.Id}: {ex.Message}  ");
                     if (priority == DataPriority.High)
                     {
                         logger.LogWarning($"High-priority message failed: {message.Client.Id}, will retry later");
@@ -216,13 +247,13 @@ namespace Server.Core
                 switch (message.Data.InfoType)
                 {
                     case InfoType.HeartBeat:
-                        logger.LogInformation($"Handling heartbeat from client {message.Client.Id}");
+                        logger.LogDebug($"Handling heartbeat from client {message.Client.Id}");
                         await HandleHeartbeat(message.Client, message.Data);
                         logger.LogDebug($"Heartbeat handled successfully for client {message.Client.Id}");
                         break;
 
                     case InfoType.File:
-                        logger.LogInformation($"Handling file transfer for client {message.Client.Id} (Size={MemoryCalculator.CalculateObjectSize(message.Data)} bytes)");
+                        logger.LogDebug($"Handling file transfer for client {message.Client.Id} (Size={MemoryCalculator.CalculateObjectSize(message.Data)} bytes)");
                         await HandleFileTransfer(message.Client, message.Data);
                         logger.LogDebug($"File transfer completed for client {message.Client.Id}");
                         break;
@@ -232,7 +263,7 @@ namespace Server.Core
                         break;
 
                     default:
-                        logger.LogInformation($"Handling normal message for client {message.Client.Id} (Content={message.Data.Message})");
+                        logger.LogDebug($"Handling normal message for client {message.Client.Id} (Content={message.Data.Message})");
                         await HandleNormalMessage(message.Client, message.Data);
                         logger.LogDebug($"Normal message processed for client {message.Client.Id}");
                         break;
@@ -249,7 +280,7 @@ namespace Server.Core
             catch (Exception ex)
             {
                 // 处理其他异常（非超时原因）
-                logger.LogError($"Unhandled error processing {priority} message (Id={message.Client.Id}): {ex.Message} {ex}");
+                logger.LogError($"Unhandled error processing {priority} message (Id={message.Client.Id}): {ex.Message}  ");
                 if (priority == DataPriority.High)
                 {
                     logger.LogCritical($"High-priority message failure requires immediate attention: {message.Client.Id}");
@@ -302,7 +333,7 @@ namespace Server.Core
                             logger.LogWarning($"Client {client.Id} unsupported version {header.Version} (supported: {string.Join(",", config.SupportedVersions)})");
                             continue;
                         }
-                        logger.LogInformation($"Client {client.Id} protocol version {header.Version} verified");
+                        logger.LogDebug($"Client {client.Id} protocol version {header.Version} verified");
 
                         // 4. 接收消息体
                         byte[] payloadBuffer = new byte[header.MessageLength];
@@ -358,15 +389,15 @@ namespace Server.Core
                         {
                             case DataPriority.Low:
                                 await _messagelowQueue.Writer.WriteAsync(message);
-                                logger.LogInformation($"Client {client.Id} low-priority message enqueued (Id={message.Client.Id})");
+                                logger.LogDebug($"Client {client.Id} low-priority message enqueued (Id={message.Client.Id})");
                                 break;
                             case DataPriority.High:
                                 await _messageHighQueue.Writer.WriteAsync(message);
-                                logger.LogInformation($"Client {client.Id} high-priority message enqueued (Id={message.Client.Id})");
+                                logger.LogDebug($"Client {client.Id} high-priority message enqueued (Id={message.Client.Id})");
                                 break;
                             case DataPriority.Medium:
                                 await _messageMediumQueue.Writer.WriteAsync(message);
-                                logger.LogInformation($"Client {client.Id} medium-priority message enqueued (Id={message.Client.Id})");
+                                logger.LogDebug($"Client {client.Id} medium-priority message enqueued (Id={message.Client.Id})");
                                 break;
                         }
 
@@ -375,7 +406,7 @@ namespace Server.Core
                     }
                     catch (Exception ex)
                     {
-                        logger.LogCritical($"Client {client.Id} unexpected error: {ex.Message} {ex}");
+                        logger.LogCritical($"Client {client.Id} unexpected error: {ex.Message}  ");
                         break; // 终止当前客户端处理循环
                     }
                 }

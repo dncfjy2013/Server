@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace Server.Core
 {
-    partial class Server
+    partial class ServerInstance
     {
         /// <summary>
         /// 异步读取指定数量的字节到缓冲区中，确保读取的字节数达到指定的数量。

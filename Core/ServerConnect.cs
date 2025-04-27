@@ -14,7 +14,7 @@ using Server.Common;
 
 namespace Server.Core
 {
-    partial class Server
+    partial class ServerInstance
     { 
         /// <summary>
         /// 客户端连接字典（线程安全），键为客户端ID，值为客户端配置对象
