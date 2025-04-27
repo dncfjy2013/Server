@@ -4,9 +4,18 @@ package Protocol;
 
 enum InfoType {
   HEART_BEAT = 0;
-  NORMAL = 1;
-  FILE = 2;
-  ACK = 3;
+
+  CTS_NORMAL = 1;
+  CTS_FILE = 2;
+  CTS_ACK = 3;
+
+  STC_NORMAL = 4;
+  STC_FILE = 5;
+  STC_ACK = 6;
+
+  CTC_NORMAL = 7;
+  CTC_FILE = 8;
+  CTC_ACK = 9;
 }
 
 enum DataPriority {

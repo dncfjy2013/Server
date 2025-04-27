@@ -46,35 +46,31 @@ namespace Server.Core
         // 启动不同优先级消息处理任务
         public void StartOutgoingMessageProcessing()
         {
-            int highPriorityMinThreads = Environment.ProcessorCount;
-            int highPriorityMaxThreads = highPriorityMinThreads * 2;
+            int Threads = Environment.ProcessorCount;
+
             _highPriorityManager = new OutgoingMessageThreadManager(
                 this,
                 _outgoingHighMessages,
                 logger,
                 DataPriority.High,
-                highPriorityMinThreads,
-                highPriorityMaxThreads);
+                0,
+                Threads * 2);
 
-            int mediumPriorityMinThreads = highPriorityMinThreads / 2;
-            int mediumPriorityMaxThreads = mediumPriorityMinThreads * 2;
             _mediumPriorityManager = new OutgoingMessageThreadManager(
                 this,
                 _outgoingMedumMessages,
                 logger,
                 DataPriority.Medium,
-                mediumPriorityMinThreads,
-                mediumPriorityMaxThreads);
+                0,
+                Threads);
 
-            int lowPriorityMinThreads = 1;
-            int lowPriorityMaxThreads = 2;
             _lowPriorityManager = new OutgoingMessageThreadManager(
                 this,
                 _outgoingLowMessages,
                 logger,
                 DataPriority.Low,
-                lowPriorityMinThreads,
-                lowPriorityMaxThreads);
+                0,
+                Threads / 2);
         }
 
         public async Task ProcessOutgoingMessages(Channel<ServerOutgoingMessage> messageChannel, DataPriority priority)
@@ -93,7 +89,7 @@ namespace Server.Core
                     logger.LogInformation($"Sent {msg.Data.InfoType} to {client.Id} (Priority: {priority})");
 
                     // 记录发送成功，无需重传
-                    if (msg.Data.InfoType == InfoType.File && msg.Data.Message == "FILE_COMPLETE")
+                    if (msg.Data.InfoType == InfoType.StcFile && msg.Data.Message == "FILE_COMPLETE")
                     {
                         // 文件完成消息无需重传
                         continue;
@@ -192,7 +188,7 @@ namespace Server.Core
 
                 var data = new CommunicationData
                 {
-                    InfoType = InfoType.File,
+                    InfoType = InfoType.StcFile,
                     FileId = fileId,
                     FileSize = fileInfo.Length,
                     TotalChunks = totalChunks,
@@ -209,7 +205,7 @@ namespace Server.Core
             // 发送文件完成标记（高优先级）
             SendToClient(clientId, new CommunicationData
             {
-                InfoType = InfoType.File,
+                InfoType = InfoType.StcFile,
                 FileId = fileId,
                 Message = "FILE_COMPLETE",
                 Priority = priority

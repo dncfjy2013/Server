@@ -252,17 +252,17 @@ namespace Server.Core
                         logger.LogDebug($"Heartbeat handled successfully for client {message.Client.Id}");
                         break;
 
-                    case InfoType.File:
+                    case InfoType.CtsFile:
                         logger.LogDebug($"Handling file transfer for client {message.Client.Id} (Size={MemoryCalculator.CalculateObjectSize(message.Data)} bytes)");
                         await HandleFileTransfer(message.Client, message.Data);
                         logger.LogDebug($"File transfer completed for client {message.Client.Id}");
                         break;
 
-                    case InfoType.Ack:
+                    case InfoType.CtsAck:
                         logger.LogTrace($"Ignoring ACK message (Id={message.Client.Id})");
                         break;
 
-                    default:
+                    case InfoType.CtsNormal:
                         logger.LogDebug($"Handling normal message for client {message.Client.Id} (Content={message.Data.Message})");
                         await HandleNormalMessage(message.Client, message.Data);
                         logger.LogDebug($"Normal message processed for client {message.Client.Id}");

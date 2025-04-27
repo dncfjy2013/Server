@@ -68,7 +68,7 @@ namespace Server.Core
                         // 2. 发送完成确认（高优先级ACK）
                         var completionAck = new CommunicationData
                         {
-                            InfoType = InfoType.File,
+                            InfoType = InfoType.StcFile,
                             AckNum = data.SeqNum,
                             Message = "FILE_COMPLETE_ACK",
                             FileId = data.FileId
@@ -153,7 +153,7 @@ namespace Server.Core
                 // 发送ACK（高优先级，确保客户端及时调整窗口）
                 var ack = new CommunicationData
                 {
-                    InfoType = InfoType.Ack,
+                    InfoType = InfoType.StcAck,
                     AckNum = data.SeqNum,
                     FileId = data.FileId,
                     ChunkIndex = data.ChunkIndex,

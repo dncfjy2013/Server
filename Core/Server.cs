@@ -97,12 +97,6 @@ namespace Server.Core
 
                 // Information 等级：记录服务器开始运行的信息
                 logger.LogInformation("Server is starting.");
-
-                // Trace 等级：记录开始消息处理的详细信息
-                logger.LogTrace("Commencing message processing.");
-                StartProcessing();
-                // Trace 等级：记录消息处理已成功开始的详细信息
-                logger.LogTrace("Message processing has been successfully started.");
             }
             catch (Exception ex)
             {
@@ -216,6 +210,18 @@ namespace Server.Core
                 logger.LogDebug($"Starting to accept socket clients on port {_port}.");
                 AcceptSocketClients();
                 logger.LogDebug("Accepting socket clients process has been initiated.");
+
+                // Trace 等级：记录开始消息处理的详细信息
+                logger.LogTrace("Commencing Incoming message processing.");
+                StartProcessing();
+                // Trace 等级：记录消息处理已成功开始的详细信息
+                logger.LogTrace("Incoming Message processing has been successfully started.");
+
+                // Trace 等级：记录开始消息处理的详细信息
+                logger.LogTrace("Commencing Outcoming message processing.");
+                StartOutgoingMessageProcessing();
+                // Trace 等级：记录消息处理已成功开始的详细信息
+                logger.LogTrace("Outcoming Message processing has been successfully started.");
             }
             catch (Exception ex)
             {
