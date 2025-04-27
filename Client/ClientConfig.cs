@@ -19,6 +19,7 @@ namespace Server
         private long _SendCount;
         private long _ReceiveFileCount;
         private long _SendFileCount;
+        private int _Seq;
         public long FileBytesReceived => _FileBytesReceived;
         public long FileBytesSent => _FileBytesSent;
         public long BytesReceived => _bytesReceived;
@@ -27,6 +28,7 @@ namespace Server
         public long SendCount => _SendCount;
         public long ReceiveFileCount => _ReceiveFileCount;
         public long SendFileCount => _SendFileCount;
+        public int Seq => _Seq;
 
         public int Id { get; }
         public int UniqueId { get; }
@@ -85,6 +87,11 @@ namespace Server
         public void UpdateActivity()
         {
             LastActivity = DateTime.Now;
+        }
+
+        public void UpdateSeq()
+        {
+            Interlocked.Increment(ref _Seq);
         }
     }
 
