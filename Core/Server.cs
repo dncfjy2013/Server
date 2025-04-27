@@ -284,6 +284,23 @@ namespace Server.Core
                     }
                 }
                 logger.LogInformation("All connected clients have been disconnected.");
+
+
+                _incomingLowManager.Shutdown();
+                logger.LogDebug("All incoming low-priority message processing threads have been shut down.");
+                _incomingMediumManager.Shutdown();
+                logger.LogDebug("All incoming medium-priority message processing threads have been shut down.");
+                _incomingHighManager.Shutdown();
+                logger.LogDebug("All incoming high-priority message processing threads have been shut down.");
+                logger.LogInformation("All incoming message processing threads have been shut down.");
+
+                _highPriorityManager.Shutdown();
+                logger.LogDebug("All outgoing high-priority message processing threads have been shut down.");
+                _mediumPriorityManager.Shutdown();
+                logger.LogDebug("All outgoing medium-priority message processing threads have been shut down.");
+                _lowPriorityManager.Shutdown();
+                logger.LogDebug("All outgoing low-priority message processing threads have been shut down.");
+                logger.LogInformation("All outgoing message processing threads have been shut down.");
             }
             catch (Exception ex)
             {
