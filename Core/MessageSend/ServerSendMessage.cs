@@ -73,34 +73,56 @@ namespace Server.Core
                 Threads / 2);
         }
 
-        public async Task ProcessOutgoingMessages(Channel<ServerOutgoingMessage> messageChannel, DataPriority priority)
+        public async Task ProcessOutgoingMessages(ServerOutgoingMessage msg, CancellationToken ct)
         {
-            await foreach (var msg in messageChannel.Reader.ReadAllAsync(_cts.Token))
+            try
             {
-                try
+                // 检查取消令牌状态
+                ct.ThrowIfCancellationRequested();
+
+                if (!_clients.TryGetValue(msg.ClientId, out var client))
                 {
-                    if (!_clients.TryGetValue(msg.ClientId, out var client)) continue;
-
-                    // 发送消息
-                    bool sent = await SendInfoDate(client, msg.Data);
-                    if (!sent) throw new Exception("Send failed");
-
-                    msg.SentTime = DateTime.Now;
-                    logger.LogInformation($"Sent {msg.Data.InfoType} to {client.Id} (Priority: {priority})");
-
-                    // 记录发送成功，无需重传
-                    if (msg.Data.InfoType == InfoType.StcFile && msg.Data.Message == "FILE_COMPLETE")
-                    {
-                        // 文件完成消息无需重传
-                        continue;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // 触发重传逻辑
                     await HandleRetry(msg);
+                    return;
                 }
+
+                // 检查取消令牌状态
+                ct.ThrowIfCancellationRequested();
+
+                // 发送消息
+                bool sent = await SendDate(client, msg.Data);
+                if (!sent) throw new Exception("Send failed");
+
+                msg.SentTime = DateTime.Now;
+                logger.LogInformation($"Sent {msg.Data.InfoType} to {client.Id} (Priority: {msg.Data.Priority})");
+
+                // 记录发送成功，无需重传
+                if (msg.Data.InfoType == InfoType.StcFile && msg.Data.Message == "FILE_COMPLETE")
+                {
+                    // 文件完成消息无需重传
+                    return;
+                }
+
+                msg.RetryCount++;
+
+                // 检查取消令牌状态
+                ct.ThrowIfCancellationRequested();
+
+                await HandleRetry(msg);
             }
+            catch (OperationCanceledException)
+            {
+                logger.LogInformation($"Message processing for client {msg.ClientId} was cancelled.");
+                await HandleRetry(msg);
+                return;
+            }
+            catch (Exception ex)
+            {
+                // 触发重传逻辑
+                logger.LogWarning($"Retrying message to {msg.ClientId} Because Send failed");
+                await HandleRetry(msg);
+            }
+
         }
 
         private async Task HandleRetry(ServerOutgoingMessage msg)
@@ -112,7 +134,6 @@ namespace Server.Core
                 return;
             }
 
-            msg.RetryCount++;
             await Task.Delay(policy.Interval, _cts.Token); // 按优先级等待间隔
 
             // 根据优先级重新入队
@@ -128,7 +149,7 @@ namespace Server.Core
                     _outgoingLowMessages.Writer.TryWrite(msg);
                     break;
             }
-            logger.LogWarning($"Retrying message to {msg.ClientId} (Retry {msg.RetryCount}/{policy.MaxRetries})");
+            logger.LogInformation($"Retrying message to {msg.ClientId}");
         }
 
         // 主动发送消息（支持指定优先级）

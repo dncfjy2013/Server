@@ -11,6 +11,30 @@ namespace Server.Core
 {
     partial class ServerInstance
     {
+        private async Task<bool> SendInfoDate(ClientConfig client, CommunicationData data)
+        {
+            bool result = false;
+            switch (data.InfoType)
+            {
+                case InfoType.CtcNormal:
+                case InfoType.CtcFile:
+                    foreach (var item in _clients)
+                    {
+                        if (item.Value.UniqueId == data.Targetid)
+                        {
+                            // 发送信息
+                            SendToClient(client.Id, data, data.Priority);
+                        }
+                    }
+                    break;
+                default:
+                    result = await SendDate(client, data);
+                    break;
+            }
+
+            return result;
+        }
+
         /// <summary>
         /// 异步读取指定数量的字节到缓冲区中，确保读取的字节数达到指定的数量。
         /// </summary>
@@ -45,24 +69,6 @@ namespace Server.Core
 
             logger.LogTrace($"Successfully read {count} bytes from the stream.");
             return true;
-        }
-
-        private async Task<bool> SendInfoDate(ClientConfig client, CommunicationData data)
-        {
-            bool result = false;
-            switch (data.InfoType)
-            {
-                case InfoType.CtcNormal:
-                case InfoType.CtcFile:
-                    // 处理普通消息和文件消息
-                    await HandleNormalMessage(client, data);
-                    break;
-                default:
-                    result = await SendDate(client, data);
-                    break;
-            }
-
-            return result;
         }
 
         /// <summary>

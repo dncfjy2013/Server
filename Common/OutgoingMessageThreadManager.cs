@@ -33,7 +33,7 @@ namespace Server.Common
 
         protected override Task ProcessMessageAsync(ServerOutgoingMessage msg, CancellationToken ct)
         {
-            return _server.ProcessOutgoingMessages(_channel, _priority);
+            return _server.ProcessOutgoingMessages(msg, ct);
         }
     }
 }

@@ -353,12 +353,13 @@ namespace Server.Core
                         if (!success)
                         {
                             logger.LogWarning($"Client {client.Id} packet parsing failed: {error}");
-                            return;
+                            continue;
                         }
                         logger.LogDebug($"Client {client.Id} packet parsed successfully (Priority={packet.Data.Priority})");
 
                         // 更新客户端活动时间
                         client.UpdateActivity();
+                        client.SetValue(packet.Data.Sourceid);
                         logger.LogTrace($"Client {client.Id} activity time updated");
 
                         // 创建消息对象
@@ -377,7 +378,7 @@ namespace Server.Core
                         if (isQueueFull && message.Data.Priority == DataPriority.Low)
                         {
                             logger.LogCritical($"Client {client.Id} discarded low-priority message (queue full: High={_messageHighQueue.Reader.Count}, Medium={_messageMediumQueue.Reader.Count}, Low={_messagelowQueue.Reader.Count})");
-                            return;
+                            continue;
                         }
 
                         // 按优先级入队
@@ -429,7 +430,7 @@ namespace Server.Core
                     }
                     break;
                 case DataPriority.Medium:
-                    if (_messageMediumQueue.Reader.Count > MaxQueueSize * 0.8) // 80%阈值预警
+                    if (_messageMediumQueue.Reader.Count > MaxQueueSize * 0.9) // 90%阈值预警
                     {
                         logger.LogWarning($"Client {client.Id} MEDIUM QUEUE NEAR BACKPRESSURE: {_messageMediumQueue.Reader.Count}/{MaxQueueSize}");
                     }
@@ -440,7 +441,7 @@ namespace Server.Core
                     }
                     break;
                 case DataPriority.High:
-                    if (_messageHighQueue.Reader.Count > MaxQueueSize * 0.5) // 50%阈值预警
+                    if (_messageHighQueue.Reader.Count > MaxQueueSize * 0.9) // 90%阈值预警
                     {
                         logger.LogWarning($"Client {client.Id} HIGH QUEUE NEAR BACKPRESSURE: {_messageHighQueue.Reader.Count}/{MaxQueueSize}");
                     }

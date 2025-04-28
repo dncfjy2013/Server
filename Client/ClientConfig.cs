@@ -20,6 +20,8 @@ namespace Server
         private long _ReceiveFileCount;
         private long _SendFileCount;
         private int _Seq;
+        private int _UniqueId;
+        private bool _isValueSet = false;
         public long FileBytesReceived => _FileBytesReceived;
         public long FileBytesSent => _FileBytesSent;
         public long BytesReceived => _bytesReceived;
@@ -29,9 +31,8 @@ namespace Server
         public long ReceiveFileCount => _ReceiveFileCount;
         public long SendFileCount => _SendFileCount;
         public int Seq => _Seq;
-
+        public int UniqueId => _UniqueId;
         public int Id { get; }
-        public int UniqueId { get; }
         public Socket Socket { get; }
         public SslStream SslStream { get; }
         public DateTime LastActivity { get; set; }
@@ -92,6 +93,15 @@ namespace Server
         public void UpdateSeq()
         {
             Interlocked.Increment(ref _Seq);
+        }
+
+        public void SetValue(int value)
+        {
+            if (!_isValueSet)
+            {
+                _UniqueId = value;
+                _isValueSet = true;
+            }
         }
     }
 

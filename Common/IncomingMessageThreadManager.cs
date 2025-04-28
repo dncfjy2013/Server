@@ -34,13 +34,7 @@ namespace Server.Common
 
         protected override Task ProcessMessageAsync(ClientMessage message, CancellationToken ct)
         {
-            return _priority switch
-            {
-                DataPriority.High => _server.ProcessMessages(DataPriority.High),
-                DataPriority.Medium => _server.ProcessMessages(DataPriority.Medium),
-                DataPriority.Low => _server.ProcessMessages(DataPriority.Low),
-                _ => Task.CompletedTask,
-            };
+            return _server.ProcessMessages(message.Data.Priority);
         }
     }
 }
