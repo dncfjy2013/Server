@@ -76,21 +76,25 @@ namespace Server.Extend
         }
 
         #region Public Logging Methods
-#if !DISABLE_TRACE_LOGGING
+
+        #if !DISABLE_TRACE_LOGGING
         public override void LogTrace(string message) => Log(LogLevel.Trace, message);
-#else
+        #else
         public override void LogTrace(string message) { }
-#endif
-#if !DISABLE_DEBUG_LOGGING
+        #endif
+
+        #if !DISABLE_DEBUG_LOGGING
         public override void LogDebug(string message) => Log(LogLevel.Debug, message);
-#else
+        #else
         public override void LogDebug(string message) { }
-#endif
-#if !DISABLE_INFORMATION_LOGGING
+        #endif
+
+        #if !DISABLE_INFORMATION_LOGGING
         public override void LogInformation(string message) => Log(LogLevel.Information, message);
-#else
+        #else
         public override void LogInformation(string message) { }
-#endif
+        #endif
+        
         public override void LogWarning(string message) => Log(LogLevel.Warning, message);
         public override void LogError(string message) => Log(LogLevel.Error, message);
         public override void LogCritical(string message) => Log(LogLevel.Critical, message);
@@ -128,7 +132,7 @@ namespace Server.Extend
                 }
             }
         }
-#endregion
+        #endregion
 
         #region Log Processing
         private void ProcessLogQueue()
