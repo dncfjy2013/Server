@@ -16,7 +16,7 @@ namespace Server.Core
         // 流量监控器实例，用于监控服务器与客户端之间的流量情况，在构造函数中初始化
         private readonly TrafficMonitor _trafficMonitor;
         // 日志记录器实例，用于记录服务器运行过程中的各类信息，如错误、警告、信息等
-        public Logger logger = new Logger();
+        private ILogger _logger;
         // 心跳定时器，用于定期检查客户端的心跳情况，确保客户端连接正常
         private readonly Timer _heartbeatTimer;
         // 流量监控定时器，用于定期触发流量监控器进行流量数据的收集和分析
@@ -40,7 +40,9 @@ namespace Server.Core
 
         public ServerInstance(int port, int sslPort, string certPath = null)
         {
-            logger.LogTrace($"Server constructor called with port: {port}, sslPort: {sslPort}, certPath: {certPath}");
+            _logger = new Logger();
+
+            _logger.LogTrace($"Server constructor called with port: {port}, sslPort: {sslPort}, certPath: {certPath}");
 
             try
             {
@@ -48,286 +50,286 @@ namespace Server.Core
                 _sslPort = sslPort;
 
                 // Information 等级：记录服务器初始化开始这一重要信息
-                logger.LogInformation("Server initialization process has begun.");
+                _logger.LogInformation("Server initialization process has begun.");
 
                 // Information 等级：记录开始加载 SSL 证书的操作
-                logger.LogInformation("Initiating the loading of SSL certification.");
+                _logger.LogInformation("Initiating the loading of SSL certification.");
                 if (!string.IsNullOrEmpty(certPath))
                 {
                     try
                     {
                         _serverCert = new X509Certificate2(certPath);
                         // Information 等级：记录 SSL 证书验证通过的信息
-                        logger.LogInformation("SSL certificate has been successfully verified.");
+                        _logger.LogInformation("SSL certificate has been successfully verified.");
                         // Information 等级：记录已加载的 SSL 证书路径
-                        logger.LogInformation($"SSL certificate loaded from path: {certPath}");
+                        _logger.LogInformation($"SSL certificate loaded from path: {certPath}");
                     }
                     catch (Exception ex)
                     {
                         // Error 等级：记录加载 SSL 证书时出现的异常
-                        logger.LogError($"An error occurred while loading the SSL certificate from {certPath}: {ex.Message}  ");
+                        _logger.LogError($"An error occurred while loading the SSL certificate from {certPath}: {ex.Message}  ");
                     }
                 }
                 else
                 {
                     // Critical 等级：记录没有提供 SSL 证书路径的严重情况
-                    logger.LogCritical("No SSL certification path was provided. Skipping SSL certificate loading.");
+                    _logger.LogCritical("No SSL certification path was provided. Skipping SSL certificate loading.");
                 }
 
                 // Information 等级：记录开始初始化流量监控器的操作
-                logger.LogInformation("Starting the initialization of the traffic monitor.");
+                _logger.LogInformation("Starting the initialization of the traffic monitor.");
                 try
                 {
-                    _trafficMonitor = new TrafficMonitor(_clients, _monitorInterval);
+                    _trafficMonitor = new TrafficMonitor(_clients, _monitorInterval, _logger);
                     // Information 等级：记录流量监控器初始化成功及使用的监控间隔
-                    logger.LogInformation($"Traffic monitor has been initialized with an interval of {_monitorInterval} ms.");
+                    _logger.LogInformation($"Traffic monitor has been initialized with an interval of {_monitorInterval} ms.");
                 }
                 catch (Exception ex)
                 {
                     // Error 等级：记录初始化流量监控器时出现的异常
-                    logger.LogError($"Failed to initialize the traffic monitor: {ex.Message}");
+                    _logger.LogError($"Failed to initialize the traffic monitor: {ex.Message}");
                 }
 
                 // Debug 等级：记录创建心跳定时器的操作
-                logger.LogDebug("Creating the heartbeat timer.");
+                _logger.LogDebug("Creating the heartbeat timer.");
                 _heartbeatTimer = new Timer(_ => CheckHeartbeats(), null, Timeout.Infinite, Timeout.Infinite);
                 // Debug 等级：记录创建流量监控定时器的操作
-                logger.LogDebug("Creating the traffic monitor timer.");
+                _logger.LogDebug("Creating the traffic monitor timer.");
                 _trafficMonitorTimer = new Timer(_ => _trafficMonitor.Monitor(), null, Timeout.Infinite, Timeout.Infinite);
 
                 // Information 等级：记录服务器开始运行的信息
-                logger.LogInformation("Server is starting.");
+                _logger.LogInformation("Server is starting.");
             }
             catch (Exception ex)
             {
                 // Critical 等级：记录服务器初始化过程中出现的严重异常
-                logger.LogCritical($"A critical error occurred during server initialization: {ex.Message}  ");
+                _logger.LogCritical($"A critical error occurred during server initialization: {ex.Message}  ");
             }
         }
 
         public void SetMonitorInterval(int interval)
         {
             // Trace：方法调用细节（仅开发环境有用）
-            logger.LogTrace($"Enter SetMonitorInterval, new interval: {interval} ms");
+            _logger.LogTrace($"Enter SetMonitorInterval, new interval: {interval} ms");
 
             try
             {
                 // Debug：关键操作开始（获取锁）
-                logger.LogDebug("Acquiring lock for thread-safe interval modification");
+                _logger.LogDebug("Acquiring lock for thread-safe interval modification");
                 lock (_lock)
                 {
                     // Trace：锁内变量检查（细粒度调试）
-                    logger.LogTrace($"Current interval before update: {_monitorInterval} ms");
+                    _logger.LogTrace($"Current interval before update: {_monitorInterval} ms");
 
                     // Information：配置变更通知（影响系统行为的操作）
-                    logger.LogInformation($"Updating traffic monitor interval from {_monitorInterval} ms to {interval} ms");
+                    _logger.LogInformation($"Updating traffic monitor interval from {_monitorInterval} ms to {interval} ms");
                     _monitorInterval = interval;
 
                     // Critical：强制保留的核心变更日志（如配置持久化失败时需审计）
-                    logger.LogCritical($"Traffic monitor interval changed to {interval} ms");
+                    _logger.LogCritical($"Traffic monitor interval changed to {interval} ms");
 
                     // Debug：定时器操作（关键功能调整）
-                    logger.LogDebug($"Updating traffic monitor timer to interval: {interval} ms");
+                    _logger.LogDebug($"Updating traffic monitor timer to interval: {interval} ms");
                     _trafficMonitorTimer.Change(interval, interval);
 
                     // Trace：操作完成确认（细粒度调试）
-                    logger.LogTrace("Traffic monitor timer interval updated successfully");
+                    _logger.LogTrace("Traffic monitor timer interval updated successfully");
                 }
                 // Debug：锁释放（线程安全相关）
-                logger.LogDebug("Lock released after interval modification");
+                _logger.LogDebug("Lock released after interval modification");
             }
             catch (Exception ex)
             {
                 // Error：可恢复的异常（如无效的时间间隔）
-                logger.LogError($"Failed to set monitor interval: {ex.Message}");
+                _logger.LogError($"Failed to set monitor interval: {ex.Message}");
             }
         }
 
         public void Start(bool enableMonitoring = false)
         {
-            logger.LogTrace($"Start method invoked with enableMonitoring set to {enableMonitoring}");
+            _logger.LogTrace($"Start method invoked with enableMonitoring set to {enableMonitoring}");
 
             try
             {
                 // 设置服务器运行状态为开启，属于重要状态变更，使用Information记录
-                logger.LogInformation("Setting _isRunning to true, server is now accepting connections.");
+                _logger.LogInformation("Setting _isRunning to true, server is now accepting connections.");
                 _isRunning = true;
 
                 // 启动心跳定时器，属于关键操作步骤，使用Debug记录
-                logger.LogDebug($"Starting the heartbeat timer with an immediate start and interval of {HeartbeatInterval} ms.");
+                _logger.LogDebug($"Starting the heartbeat timer with an immediate start and interval of {HeartbeatInterval} ms.");
                 _heartbeatTimer.Change(0, HeartbeatInterval);
-                logger.LogDebug("Heartbeat timer has been successfully started.");
+                _logger.LogDebug("Heartbeat timer has been successfully started.");
 
                 if (enableMonitoring)
                 {
                     // 启用流量监控，属于功能开启操作，使用Debug记录
-                    logger.LogDebug("Enabling traffic monitoring.");
+                    _logger.LogDebug("Enabling traffic monitoring.");
                     _trafficMonitor.ModifyEnable(true);
-                    logger.LogDebug("Traffic monitoring has been enabled.");
+                    _logger.LogDebug("Traffic monitoring has been enabled.");
 
                     // 启动流量监控定时器，属于关键操作步骤，使用Debug记录
-                    logger.LogDebug($"Starting the traffic monitor timer with an immediate start and interval of {_monitorInterval} ms.");
+                    _logger.LogDebug($"Starting the traffic monitor timer with an immediate start and interval of {_monitorInterval} ms.");
                     _trafficMonitorTimer.Change(0, _monitorInterval);
-                    logger.LogDebug("Traffic monitor timer has been successfully started.");
+                    _logger.LogDebug("Traffic monitor timer has been successfully started.");
                 }
 
                 // 启动普通端口监听
-                logger.LogDebug($"Initiating the creation of a socket for port {_port}.");
+                _logger.LogDebug($"Initiating the creation of a socket for port {_port}.");
                 _listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                logger.LogDebug($"Socket for port {_port} has been created.");
+                _logger.LogDebug($"Socket for port {_port} has been created.");
 
-                logger.LogDebug($"Binding the socket to port {_port}.");
+                _logger.LogDebug($"Binding the socket to port {_port}.");
                 _listener.Bind(new IPEndPoint(IPAddress.Any, _port));
-                logger.LogDebug($"Socket has been successfully bound to port {_port}.");
+                _logger.LogDebug($"Socket has been successfully bound to port {_port}.");
 
-                logger.LogDebug($"Starting to listen on port {_port} with a backlog of {ListenMax}.");
+                _logger.LogDebug($"Starting to listen on port {_port} with a backlog of {ListenMax}.");
                 _listener.Listen(ListenMax);
-                logger.LogInformation($"Socket server has started listening on port {_port} with monitoring {(enableMonitoring ? "enabled" : "disabled")}.");
+                _logger.LogInformation($"Socket server has started listening on port {_port} with monitoring {(enableMonitoring ? "enabled" : "disabled")}.");
 
                 // 启动SSL端口监听
                 if (_serverCert != null)
                 {
-                    logger.LogDebug($"Starting to create an SSL listener for port {_sslPort}.");
+                    _logger.LogDebug($"Starting to create an SSL listener for port {_sslPort}.");
                     _sslListener = new TcpListener(IPAddress.Any, _sslPort);
-                    logger.LogDebug($"SSL listener for port {_sslPort} has been created.");
+                    _logger.LogDebug($"SSL listener for port {_sslPort} has been created.");
 
-                    logger.LogDebug($"Starting the SSL listener on port {_sslPort}.");
+                    _logger.LogDebug($"Starting the SSL listener on port {_sslPort}.");
                     _sslListener.Start();
-                    logger.LogInformation($"SSL server has started listening on port {_sslPort} with monitoring {(enableMonitoring ? "enabled" : "disabled")}.");
+                    _logger.LogInformation($"SSL server has started listening on port {_sslPort} with monitoring {(enableMonitoring ? "enabled" : "disabled")}.");
 
                     // 开始接受SSL客户端连接，属于关键操作步骤，使用Debug记录
-                    logger.LogDebug($"Starting to accept SSL clients on port {_sslPort}.");
+                    _logger.LogDebug($"Starting to accept SSL clients on port {_sslPort}.");
                     _ = AcceptSslClients();
-                    logger.LogDebug("Accepting SSL clients process has been initiated.");
+                    _logger.LogDebug("Accepting SSL clients process has been initiated.");
                 }
                 else
                 {
                     // 没有SSL证书，无法启动SSL监听，使用Warning记录
-                    logger.LogWarning("No SSL certificate provided. SSL listener will not be started.");
+                    _logger.LogWarning("No SSL certificate provided. SSL listener will not be started.");
                 }
 
                 // 开始接受普通套接字客户端连接，属于关键操作步骤，使用Debug记录
-                logger.LogDebug($"Starting to accept socket clients on port {_port}.");
+                _logger.LogDebug($"Starting to accept socket clients on port {_port}.");
                 AcceptSocketClients();
-                logger.LogDebug("Accepting socket clients process has been initiated.");
+                _logger.LogDebug("Accepting socket clients process has been initiated.");
 
                 // Trace 等级：记录开始消息处理的详细信息
-                logger.LogTrace("Commencing Incoming message processing.");
+                _logger.LogTrace("Commencing Incoming message processing.");
                 StartProcessing();
                 // Trace 等级：记录消息处理已成功开始的详细信息
-                logger.LogTrace("Incoming Message processing has been successfully started.");
+                _logger.LogTrace("Incoming Message processing has been successfully started.");
 
                 // Trace 等级：记录开始消息处理的详细信息
-                logger.LogTrace("Commencing Outcoming message processing.");
+                _logger.LogTrace("Commencing Outcoming message processing.");
                 StartOutgoingMessageProcessing();
                 // Trace 等级：记录消息处理已成功开始的详细信息
-                logger.LogTrace("Outcoming Message processing has been successfully started.");
+                _logger.LogTrace("Outcoming Message processing has been successfully started.");
             }
             catch (Exception ex)
             {
                 // 启动过程中出现异常，使用Critical记录
-                logger.LogCritical($"A critical error occurred while starting the server: {ex.Message} ");
+                _logger.LogCritical($"A critical error occurred while starting the server: {ex.Message} ");
             }
         }
 
         public void Stop()
         {
-            logger.LogTrace("Stop method has been invoked. Initiating the server shutdown sequence.");
+            _logger.LogTrace("Stop method has been invoked. Initiating the server shutdown sequence.");
 
             try
             {
                 // 取消主取消令牌源，属于关键操作的开始步骤，使用Debug记录
-                logger.LogDebug("Canceling the primary cancellation token source _cts.");
+                _logger.LogDebug("Canceling the primary cancellation token source _cts.");
                 _cts.Cancel();
-                logger.LogDebug("Successfully canceled the primary cancellation token source _cts.");
+                _logger.LogDebug("Successfully canceled the primary cancellation token source _cts.");
 
                 // 取消消息处理取消令牌源，同样是关键操作步骤，使用Debug记录
-                logger.LogDebug("Canceling the message - processing cancellation token source _processingCts.");
+                _logger.LogDebug("Canceling the message - processing cancellation token source _processingCts.");
                 _processingCts.Cancel();
-                logger.LogDebug("Successfully canceled the message - processing cancellation token source _processingCts.");
+                _logger.LogDebug("Successfully canceled the message - processing cancellation token source _processingCts.");
 
                 // 设置服务器运行状态为停止，是重要的状态变更，使用Information记录
-                logger.LogInformation("Setting _isRunning to false to halt the acceptance of new connections.");
+                _logger.LogInformation("Setting _isRunning to false to halt the acceptance of new connections.");
                 _isRunning = false;
-                logger.LogInformation("_isRunning has been set to false, new connections are no longer accepted.");
+                _logger.LogInformation("_isRunning has been set to false, new connections are no longer accepted.");
 
                 // 停止心跳定时器，属于系统定时任务的操作，使用Debug记录
-                logger.LogDebug("Halting the heartbeat timer by setting its interval to infinite.");
+                _logger.LogDebug("Halting the heartbeat timer by setting its interval to infinite.");
                 _heartbeatTimer.Change(Timeout.Infinite, Timeout.Infinite);
-                logger.LogDebug("The heartbeat timer has been successfully stopped.");
+                _logger.LogDebug("The heartbeat timer has been successfully stopped.");
 
                 // 停止流量监控定时器，也是系统定时任务的操作，使用Debug记录
-                logger.LogDebug("Stopping the traffic monitor timer by setting its interval to infinite.");
+                _logger.LogDebug("Stopping the traffic monitor timer by setting its interval to infinite.");
                 _trafficMonitorTimer.Change(Timeout.Infinite, Timeout.Infinite);
-                logger.LogDebug("The traffic monitor timer has been successfully stopped.");
+                _logger.LogDebug("The traffic monitor timer has been successfully stopped.");
 
                 // 处理套接字监听器的释放，根据是否存在监听器使用不同日志记录
                 if (_listener != null)
                 {
-                    logger.LogDebug("Disposing of the socket listener.");
+                    _logger.LogDebug("Disposing of the socket listener.");
                     _listener.Dispose();
-                    logger.LogDebug("The socket listener has been disposed of.");
+                    _logger.LogDebug("The socket listener has been disposed of.");
                 }
                 else
                 {
-                    logger.LogTrace("The socket listener is null, no disposal operation is required.");
+                    _logger.LogTrace("The socket listener is null, no disposal operation is required.");
                 }
 
                 // 断开所有客户端连接，属于重要的资源清理操作，使用Information记录
-                logger.LogInformation("Initiating the disconnection process for all connected clients.");
+                _logger.LogInformation("Initiating the disconnection process for all connected clients.");
                 foreach (var client in _clients.Values)
                 {
-                    logger.LogDebug($"Disconnecting client with ID {client.Id}.");
+                    _logger.LogDebug($"Disconnecting client with ID {client.Id}.");
                     try
                     {
                         DisconnectClient(client.Id);
-                        logger.LogDebug($"Client with ID {client.Id} has been successfully disconnected.");
+                        _logger.LogDebug($"Client with ID {client.Id} has been successfully disconnected.");
                     }
                     catch (Exception ex)
                     {
                         // 断开客户端连接时出现异常，使用Error记录
-                        logger.LogError($"An error occurred while disconnecting client {client.Id}: {ex.Message}");
+                        _logger.LogError($"An error occurred while disconnecting client {client.Id}: {ex.Message}");
                     }
                 }
-                logger.LogInformation("All connected clients have been disconnected.");
+                _logger.LogInformation("All connected clients have been disconnected.");
 
 
                 _incomingLowManager.Shutdown();
-                logger.LogDebug("All incoming low-priority message processing threads have been shut down.");
+                _logger.LogDebug("All incoming low-priority message processing threads have been shut down.");
                 _incomingMediumManager.Shutdown();
-                logger.LogDebug("All incoming medium-priority message processing threads have been shut down.");
+                _logger.LogDebug("All incoming medium-priority message processing threads have been shut down.");
                 _incomingHighManager.Shutdown();
-                logger.LogDebug("All incoming high-priority message processing threads have been shut down.");
-                logger.LogInformation("All incoming message processing threads have been shut down.");
+                _logger.LogDebug("All incoming high-priority message processing threads have been shut down.");
+                _logger.LogInformation("All incoming message processing threads have been shut down.");
 
                 _highPriorityManager.Shutdown();
-                logger.LogDebug("All outgoing high-priority message processing threads have been shut down.");
+                _logger.LogDebug("All outgoing high-priority message processing threads have been shut down.");
                 _mediumPriorityManager.Shutdown();
-                logger.LogDebug("All outgoing medium-priority message processing threads have been shut down.");
+                _logger.LogDebug("All outgoing medium-priority message processing threads have been shut down.");
                 _lowPriorityManager.Shutdown();
-                logger.LogDebug("All outgoing low-priority message processing threads have been shut down.");
-                logger.LogInformation("All outgoing message processing threads have been shut down.");
+                _logger.LogDebug("All outgoing low-priority message processing threads have been shut down.");
+                _logger.LogInformation("All outgoing message processing threads have been shut down.");
             }
             catch (Exception ex)
             {
                 // 整个停止过程中出现异常，使用Critical记录
-                logger.LogCritical($"A critical error occurred during server shutdown: {ex.Message}");
+                _logger.LogCritical($"A critical error occurred during server shutdown: {ex.Message}");
             }
 
             // 服务器停止，是重要的系统状态变更，使用Critical记录
-            logger.LogCritical("Server has been stopped.");
+            _logger.LogCritical("Server has been stopped.");
 
             try
             {
                 // 释放日志记录器，属于资源清理操作，使用Debug记录
-                logger.LogDebug("Disposing of the logger.");
-                logger.Dispose();
-                logger.LogDebug("The logger has been disposed of.");
+                _logger.LogDebug("Disposing of the _logger.");
+                _logger.Dispose();
+                _logger.LogDebug("The _logger has been disposed of.");
             }
             catch (Exception ex)
             {
                 // 释放日志记录器时出现异常，使用Error记录
-                logger.LogError($"An error occurred while disposing of the logger: {ex.Message}");
+                _logger.LogError($"An error occurred while disposing of the _logger: {ex.Message}");
             }
         }
     }

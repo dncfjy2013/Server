@@ -51,7 +51,7 @@ namespace Server.Core
             _highPriorityManager = new OutgoingMessageThreadManager(
                 this,
                 _outgoingHighMessages,
-                logger,
+                _logger,
                 DataPriority.High,
                 0,
                 Threads * 2);
@@ -59,7 +59,7 @@ namespace Server.Core
             _mediumPriorityManager = new OutgoingMessageThreadManager(
                 this,
                 _outgoingMedumMessages,
-                logger,
+                _logger,
                 DataPriority.Medium,
                 0,
                 Threads);
@@ -67,7 +67,7 @@ namespace Server.Core
             _lowPriorityManager = new OutgoingMessageThreadManager(
                 this,
                 _outgoingLowMessages,
-                logger,
+                _logger,
                 DataPriority.Low,
                 0,
                 Threads / 2);
@@ -94,7 +94,7 @@ namespace Server.Core
                 if (!sent) throw new Exception("Send failed");
 
                 msg.SentTime = DateTime.Now;
-                logger.LogInformation($"Sent {msg.Data.InfoType} to {client.Id} (Priority: {msg.Data.Priority})");
+                _logger.LogInformation($"Sent {msg.Data.InfoType} to {client.Id} (Priority: {msg.Data.Priority})");
 
                 // 记录发送成功，无需重传
                 if (msg.Data.InfoType == InfoType.StcFile && msg.Data.Message == "FILE_COMPLETE")
@@ -112,14 +112,14 @@ namespace Server.Core
             }
             catch (OperationCanceledException)
             {
-                logger.LogInformation($"Message processing for client {msg.ClientId} was cancelled.");
+                _logger.LogInformation($"Message processing for client {msg.ClientId} was cancelled.");
                 await HandleRetry(msg);
                 return;
             }
             catch (Exception ex)
             {
                 // 触发重传逻辑
-                logger.LogWarning($"Retrying message to {msg.ClientId} Because Send failed");
+                _logger.LogWarning($"Retrying message to {msg.ClientId} Because Send failed");
                 await HandleRetry(msg);
             }
 
@@ -130,7 +130,7 @@ namespace Server.Core
             var policy = _retryPolicies[msg.Priority];
             if (msg.RetryCount >= policy.MaxRetries)
             {
-                logger.LogError($"Max retries exceeded for message to {msg.ClientId}. Dropping.");
+                _logger.LogError($"Max retries exceeded for message to {msg.ClientId}. Dropping.");
                 return;
             }
 
@@ -149,7 +149,7 @@ namespace Server.Core
                     _outgoingLowMessages.Writer.TryWrite(msg);
                     break;
             }
-            logger.LogInformation($"Retrying message to {msg.ClientId}");
+            _logger.LogInformation($"Retrying message to {msg.ClientId}");
         }
 
         // 主动发送消息（支持指定优先级）

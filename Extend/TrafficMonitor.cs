@@ -65,15 +65,17 @@ namespace Server.Extend
 
         // 日志记录器实例，用于记录程序运行过程中的各种信息，如错误信息、调试信息等
         // 可帮助开发者进行程序调试和问题排查
-        private Logger logger = new Logger();
+        private ILogger _logger;
 
         /// <summary>
         /// 流量监控器的构造函数，用于初始化监控器并启动流量监控
         /// </summary>
         /// <param name="clients">存储客户端配置的并发字典</param>
         /// <param name="monitorInterval">监控的时间间隔</param>
-        public TrafficMonitor(ConcurrentDictionary<int, ClientConfig> clients, int monitorInterval)
+        public TrafficMonitor(ConcurrentDictionary<int, ClientConfig> clients, int monitorInterval, ILogger logger)
         {
+            _logger = logger;
+
             // 记录 Trace 日志，表明开始执行构造函数
             logger.LogTrace("Starting the constructor of TrafficMonitor.");
 
@@ -123,7 +125,7 @@ namespace Server.Extend
         public void ModifyEnable(bool enable)
         {
             // 记录 Trace 日志，表明进入 ModifyEnable 方法
-            logger.LogTrace($"Entering ModifyEnable method with enable value: {enable}");
+            _logger.LogTrace($"Entering ModifyEnable method with enable value: {enable}");
 
             try
             {
@@ -131,19 +133,19 @@ namespace Server.Extend
                 _enableTrafficMonitoring = enable;
 
                 // 记录 Debug 日志，显示流量监控功能的新启用状态
-                logger.LogDebug($"Traffic monitoring is now set to {(_enableTrafficMonitoring ? "enabled" : "disabled")}");
+                _logger.LogDebug($"Traffic monitoring is now set to {(_enableTrafficMonitoring ? "enabled" : "disabled")}");
 
                 // 记录 Info 日志，表明流量监控功能的启用状态已成功修改
-                logger.LogInformation($"Traffic monitoring enable status has been modified to {(_enableTrafficMonitoring ? "enabled" : "disabled")}");
+                _logger.LogInformation($"Traffic monitoring enable status has been modified to {(_enableTrafficMonitoring ? "enabled" : "disabled")}");
             }
             catch (Exception ex)
             {
                 // 若在修改启用状态过程中出现异常，记录 Error 日志，显示异常信息
-                logger.LogError($"An error occurred while modifying the traffic monitoring enable status: {ex.Message} {ex}");
+                _logger.LogError($"An error occurred while modifying the traffic monitoring enable status: {ex.Message} {ex}");
             }
 
             // 记录 Trace 日志，表明 ModifyEnable 方法执行结束
-            logger.LogTrace("Exiting ModifyEnable method");
+            _logger.LogTrace("Exiting ModifyEnable method");
         }
 
         /// <summary>
@@ -154,7 +156,7 @@ namespace Server.Extend
             // 若未启用流量监控，直接返回
             if (!_enableTrafficMonitoring)
             {
-                logger.LogTrace("Traffic monitoring is disabled, skipping monitor");
+                _logger.LogTrace("Traffic monitoring is disabled, skipping monitor");
                 return;
             }
 
@@ -163,11 +165,11 @@ namespace Server.Extend
             // 采样机制：仅当计数器是采样率的整数倍时执行统计
             if (_sampleCounter % _samplingRate != 0)
             {
-                logger.LogTrace($"Sampling counter {_sampleCounter} not reached threshold {_samplingRate}, skipping");
+                _logger.LogTrace($"Sampling counter {_sampleCounter} not reached threshold {_samplingRate}, skipping");
                 return;
             }
 
-            logger.LogDebug($"Entering monitor with sample counter {_sampleCounter}");
+            _logger.LogDebug($"Entering monitor with sample counter {_sampleCounter}");
 
             // 加锁确保线程安全（操作共享的客户端统计数据）
             lock (_lock)
@@ -175,7 +177,7 @@ namespace Server.Extend
                 try
                 {
                     #region 同步新增客户端流量统计
-                    logger.LogTrace("Syncing new client entries");
+                    _logger.LogTrace("Syncing new client entries");
                     foreach (var client in _clients.Values)
                     {
                         if (!_clientTrafficStats.ContainsKey(client.Id))
@@ -192,13 +194,13 @@ namespace Server.Extend
                                 client.SendFileCount,
                                 client.ConnectionWatch
                             );
-                            logger.LogInformation($"New client {client.Id} traffic stats initialized");
+                            _logger.LogInformation($"New client {client.Id} traffic stats initialized");
                         }
                     }
                     #endregion
 
                     #region 清理已断开客户端的过时数据
-                    logger.LogTrace("Cleaning up stale client entries");
+                    _logger.LogTrace("Cleaning up stale client entries");
                     var activeClientIds = _clients.Keys;
                     var staleEntries = _clientTrafficStats.Keys.Where(k => !activeClientIds.Contains(k)).ToList();
 
@@ -208,13 +210,13 @@ namespace Server.Extend
                         {
                             // 移动旧数据到历史统计
                             _clientHistoryTrafficStats.TryAdd(id, oldStats);
-                            logger.LogWarning($"Client {id} disconnected, moved stats to history");
+                            _logger.LogWarning($"Client {id} disconnected, moved stats to history");
                         }
                     }
                     #endregion
 
                     #region 计算单个客户端流量差异
-                    logger.LogTrace("Calculating per-client traffic deltas");
+                    _logger.LogTrace("Calculating per-client traffic deltas");
                     foreach (var client in _clients.Values)
                     {
                         if (_clientTrafficStats.TryGetValue(client.Id, out var stats))
@@ -247,7 +249,7 @@ namespace Server.Extend
                                             History Total: Recv {Function.FormatBytes(client.BytesReceived)} | Sent {Function.FormatBytes(client.BytesSent + client.FileBytesSent)}";
 
                             // 记录 Debug 日志（详细流量数据）
-                            logger.LogDebug(message);
+                            _logger.LogDebug(message);
 
                             // 更新为当前统计值（供下次计算差值）
                             _clientTrafficStats[client.Id] = (
@@ -266,7 +268,7 @@ namespace Server.Extend
                     #endregion
 
                     #region 计算全局流量统计
-                    logger.LogTrace("Calculating global traffic statistics");
+                    _logger.LogTrace("Calculating global traffic statistics");
                     var globalRecv = _clients.Values.Sum(c => c.BytesReceived);
                     var globalSent = _clients.Values.Sum(c => c.BytesSent);
                     var globalFileRecv = _clients.Values.Sum(c => c.FileBytesReceived);
@@ -285,24 +287,24 @@ namespace Server.Extend
                                             Total: Recv {Function.FormatBytes(globalRecv + globalFileRecv)} | Sent {Function.FormatBytes(globalSent + globalFileSent)}";
 
                         // 记录 Info 日志（全局流量概览）
-                        logger.LogInformation(totalMessage);
+                        _logger.LogInformation(totalMessage);
                     }
                     #endregion
 
                     #region 每日历史数据清理
-                    logger.LogTrace("Checking for daily history cleanup");
+                    _logger.LogTrace("Checking for daily history cleanup");
                     var currentTime = DateTime.Now;
                     if (currentTime.Date > DateTime.Today) // 跨天后执行清理
                     {
                         _clientHistoryTrafficStats.Clear();
-                        logger.LogInformation("Daily traffic history cleared");
+                        _logger.LogInformation("Daily traffic history cleared");
                     }
                     #endregion
                 }
                 catch (Exception ex)
                 {
                     // 记录致命错误（如锁竞争、数据解析异常）
-                    logger.LogError($"Critical error in traffic monitor: {ex.Message} {ex}");
+                    _logger.LogError($"Critical error in traffic monitor: {ex.Message} {ex}");
                 }
             }
         }
