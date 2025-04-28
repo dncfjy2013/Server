@@ -174,15 +174,30 @@ namespace Server.Extend
 
         private void WriteToFile(LogMessage message)
         {
-            try
+            while (true)
             {
-                File.AppendAllText(_config.LogFilePath,
-                    FormatMessage(message, "FILE") + Environment.NewLine);
-            }
-            catch (Exception ex)
-            {
-                // 文件写入失败处理
-                Console.WriteLine($"Failed to write log to file: {ex.Message}");
+                try
+                {
+                    using (FileStream fileStream = new FileStream(_config.LogFilePath, FileMode.Append, FileAccess.Write, FileShare.None))
+                    {
+                        using (StreamWriter writer = new StreamWriter(fileStream))
+                        {
+                            writer.WriteLine(FormatMessage(message, "FILE"));
+                        }
+                    }
+                    break;
+                }
+                catch (IOException ex) when (ex.HResult == -2147024864) // 表示文件被占用
+                {
+                    // 等待一段时间后重试
+                    System.Threading.Thread.Sleep(1000);
+                }
+                catch (Exception ex)
+                {
+                    // 文件写入失败处理
+                    Console.WriteLine($"Failed to write log to file: {ex.Message}");
+                    break;
+                }
             }
         }
         #endregion
