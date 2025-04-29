@@ -13,6 +13,8 @@ enum InfoType {
 
   CTC_NORMAL = 5;
   CTC_FILE = 6;
+  CTC_VIDEO = 7;
+  CTC_VOICE = 8;
 }
 
 enum DataPriority {

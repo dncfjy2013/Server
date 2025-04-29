@@ -69,6 +69,9 @@ namespace Server.Core
         // 当设置为 true 时，服务器会继续接收新的客户端消息；设置为 false 时，停止接收新消息
         private bool _isReceiving = true;
 
+        // 一个布尔类型的标志，用于控制是否允许实时数据功能
+        private bool _isRealTimeTransferAllowed = false;
+
         /// <summary>
         /// 启动消息处理消费者。此方法应在服务启动时调用，根据 CPU 核心数为不同优先级的消息队列启动相应数量的消费者任务。
         /// </summary>
@@ -362,6 +365,23 @@ namespace Server.Core
                         client.SetValue(packet.Data.Sourceid);
                         _logger.LogTrace($"Client {client.Id} activity time updated");
 
+                        // 判断是否为视频或语音通信请求
+                        if (IsVideoOrVoiceRequest(packet.Data))
+                        {
+                            // 查找目标客户端
+                            if (_clients.TryGetValue(packet.Data.Targetid, out var targetClient))
+                            {
+                                // 建立直接连接
+                                await EstablishDirectConnection(client, targetClient);
+                                continue;
+                            }
+                            else
+                            {
+                                _logger.LogWarning($"Client {client.Id} target client {packet.Data.Targetid} not found");
+                                continue;
+                            }
+                        }
+
                         // 创建消息对象
                         var message = new ClientMessage
                         {
@@ -464,6 +484,93 @@ namespace Server.Core
             await Task.Delay(delay);
             _isReceiving = true;
             _logger.LogCritical($"Client {client.Id} backpressure released: resume receiving");
+        }
+
+        // 判断是否为视频或语音通信请求
+        private bool IsVideoOrVoiceRequest(CommunicationData data)
+        {
+            // 这里需要根据实际的协议定义来判断
+            // 假设存在一个字段来标识视频或语音通信请求
+            return data.InfoType == InfoType.CtcVideo || data.InfoType == InfoType.CtcVoice;
+        }
+
+        // 建立直接连接
+        private async Task EstablishDirectConnection(ClientConfig client1, ClientConfig client2)
+        {
+            _logger.LogTrace($"Starting to establish direct connection between client {client1.Id} and client {client2.Id}.");
+
+            try
+            {
+                _logger.LogDebug($"Opening network streams for client {client1.Id} and client {client2.Id}.");
+                using var stream1 = new NetworkStream(client1.Socket);
+                using var stream2 = new NetworkStream(client2.Socket);
+
+                _logger.LogInformation($"Successfully opened network streams for client {client1.Id} and client {client2.Id}. Establishing bidirectional data transfer.");
+
+                var task1 = CopyStreamAsync(stream1, stream2);
+                var task2 = CopyStreamAsync(stream2, stream1);
+
+                await Task.WhenAll(task1, task2);
+
+                _logger.LogInformation($"Direct connection between client {client1.Id} and client {client2.Id} has been successfully established and data transfer completed.");
+            }
+            catch (ObjectDisposedException ex)
+            {
+                _logger.LogWarning($"One of the sockets for client {client1.Id} or client {client2.Id} is disposed. Error: {ex.Message}");
+            }
+            catch (IOException ex)
+            {
+                _logger.LogError($"An I/O error occurred while establishing direct connection between client {client1.Id} and client {client2.Id}. Error: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogCritical($"Unexpected error while establishing direct connection between client {client1.Id} and client {client2.Id}. Error: {ex.Message}");
+            }
+            finally
+            {
+                _logger.LogTrace($"Ending the process of establishing direct connection between client {client1.Id} and client {client2.Id}.");
+            }
+        }
+
+        // 异步复制流
+        private async Task CopyStreamAsync(Stream source, Stream destination)
+        {
+            _logger.LogTrace($"Starting to copy data from source stream to destination stream.");
+            try
+            {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = await source.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                {
+                    // 添加监测功能
+                    while (!_isRealTimeTransferAllowed)
+                    {
+                        _logger.LogDebug("Data transfer is paused. Waiting for permission...");
+                        await Task.Delay(100); // 每隔100ms检查一次
+                    }
+
+                    _logger.LogDebug($"Read {bytesRead} bytes from source stream. Writing to destination stream.");
+                    await destination.WriteAsync(buffer, 0, bytesRead);
+                    _logger.LogDebug($"Successfully wrote {bytesRead} bytes to destination stream.");
+                }
+                _logger.LogInformation($"Data copying from source stream to destination stream completed.");
+            }
+            catch (ObjectDisposedException ex)
+            {
+                _logger.LogWarning($"One of the streams is disposed during data copying. Error: {ex.Message}");
+            }
+            catch (IOException ex)
+            {
+                _logger.LogError($"An I/O error occurred during data copying. Error: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogCritical($"Unexpected error during data copying. Error: {ex.Message}");
+            }
+            finally
+            {
+                _logger.LogTrace($"Ending the data copying process from source stream to destination stream.");
+            }
         }
     }
 }
