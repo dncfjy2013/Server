@@ -19,12 +19,14 @@ namespace Server.Core
         /// <summary>
         /// 客户端连接字典（线程安全），键为客户端ID，值为客户端配置对象
         /// </summary>
-        private readonly ConcurrentDictionary<int, ClientConfig> _clients = new();
+        private readonly ConcurrentDictionary<uint, ClientConfig> _clients = new();
+
+        private readonly ConcurrentDictionary<uint  , ClientConfig> _historyclients = new();
 
         /// <summary>
         /// 客户端ID生成器（原子递增）
         /// </summary>
-        private int _nextClientId;
+        private uint _nextClientId;
 
         /// <summary>
         /// 协议全局配置（序列化、校验和、版本支持等）
@@ -141,7 +143,7 @@ namespace Server.Core
         /// 断开客户端连接并清理资源
         /// </summary>
         /// <param name="clientId">客户端ID</param>
-        private void DisconnectClient(int clientId)
+        private void DisconnectClient(uint clientId)
         {
             _logger.LogTrace($"Disconnecting client {clientId}...");
 
@@ -192,6 +194,11 @@ namespace Server.Core
 
                 _logger.LogWarning(message); // 警告级别日志（连接断开属于异常但非错误）
                 _logger.LogTrace($"Client {clientId} removed from _clients (current count={_clients.Count})");
+
+                if(_historyclients.TryAdd(clientId, client))
+                {
+                    _logger.LogDebug($"Client {clientId} added from _clients (current count={_historyclients.Count})");
+                }
             }
             else
             {

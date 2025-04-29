@@ -32,14 +32,15 @@ namespace Server
         public long SendFileCount => _SendFileCount;
         public int Seq => _Seq;
         public int UniqueId => _UniqueId;
-        public int Id { get; }
+        public uint Id { get; }
         public Socket Socket { get; }
         public SslStream SslStream { get; }
         public DateTime LastActivity { get; set; }
+        public DateTime StartActivity { get; set; }
         public Stopwatch ConnectionWatch { get; } = Stopwatch.StartNew();
         public string FilePath { get; set; }
         public bool IsConnect {  get; set; }
-        public ClientConfig(int id, Socket socket)
+        public ClientConfig(uint id, Socket socket)
         {
             Id = id;
             Socket = socket;
@@ -48,8 +49,10 @@ namespace Server
             FilePath = "Client" + id.ToString();
 
             IsConnect = true;
+
+            StartActivity = DateTime.Now;
         }
-        public ClientConfig(int id, SslStream sslStream)
+        public ClientConfig(uint id, SslStream sslStream)
         {
             Id = id;
             SslStream = sslStream;
@@ -59,6 +62,8 @@ namespace Server
             FilePath = "Client" + id.ToString();
 
             IsConnect = true;
+
+            StartActivity = DateTime.Now;
         }
 
         public void AddFileReceivedBytes(long bytes)

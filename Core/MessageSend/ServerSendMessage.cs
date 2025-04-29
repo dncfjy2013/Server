@@ -151,7 +151,7 @@ namespace Server.Core
         }
 
         // 主动发送消息（支持指定优先级）
-        public void SendToClient(int clientId, CommunicationData data, DataPriority priority = DataPriority.Medium)
+        public void SendToClient(uint clientId, CommunicationData data, DataPriority priority = DataPriority.Medium)
         {
             if (!_clients.TryGetValue(clientId, out var client)) return;
             switch (priority)
@@ -182,7 +182,7 @@ namespace Server.Core
         }
 
         // 主动发送文件（拆分文件块并指定高优先级）
-        public async Task SendFileAsync(int clientId, string filePath, DataPriority priority = DataPriority.High)
+        public async Task SendFileAsync(uint clientId, string filePath, DataPriority priority = DataPriority.High)
         {
             if (!_clients.TryGetValue(clientId, out var client)) return;
             var fileInfo = new FileInfo(filePath);

@@ -17,7 +17,7 @@ namespace Server.Extend
     {
         // 用于存储客户端配置的并发字典，键为客户端的唯一标识（整数类型），值为客户端配置对象
         // 并发字典支持多线程安全访问，适合在高并发场景下存储和管理客户端信息
-        private readonly ConcurrentDictionary<int, ClientConfig> _clients;
+        private readonly ConcurrentDictionary<uint, ClientConfig> _clients;
 
         // 用于线程同步的锁对象，在需要对共享资源进行线程安全操作时使用
         // 通过使用锁，可以确保同一时间只有一个线程能够访问被保护的代码块
@@ -43,12 +43,12 @@ namespace Server.Extend
         // - FileReceivedCount: 文件数据接收次数
         // - FileSentCount: 文件数据发送次数
         // - ConnectionWatch: 用于记录客户端连接时长的秒表
-        private readonly ConcurrentDictionary<int, (long Received, long Sent, long FileReceived, long FileSent,
+        private readonly ConcurrentDictionary<uint, (long Received, long Sent, long FileReceived, long FileSent,
             long ReceivedCount, long SentCount, long FileReceivedCount, long FileSentCount, Stopwatch ConnectionWatch)> _clientTrafficStats = new();
 
         // 用于存储每个客户端的历史流量统计信息的并发字典
         // 结构与 _clientTrafficStats 类似，但存储的是历史数据，可用于后续的数据分析和报告
-        private readonly ConcurrentDictionary<int, (long Received, long Sent, long FileReceived, long FileSent,
+        private readonly ConcurrentDictionary<uint, (long Received, long Sent, long FileReceived, long FileSent,
             long ReceivedCount, long SentCount, long FileReceivedCount, long FileSentCount, Stopwatch ConnectionWatch)> _clientHistoryTrafficStats = new();
 
         // 采样率，用于控制数据采样的频率
@@ -72,7 +72,7 @@ namespace Server.Extend
         /// </summary>
         /// <param name="clients">存储客户端配置的并发字典</param>
         /// <param name="monitorInterval">监控的时间间隔</param>
-        public TrafficMonitor(ConcurrentDictionary<int, ClientConfig> clients, int monitorInterval, ILogger logger)
+        public TrafficMonitor(ConcurrentDictionary<uint, ClientConfig> clients, int monitorInterval, ILogger logger)
         {
             _logger = logger;
 
