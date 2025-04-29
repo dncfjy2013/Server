@@ -1,6 +1,7 @@
 ﻿using Google.Protobuf;
 using Protocol;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
@@ -11,6 +12,7 @@ namespace Server.Core
 {
     partial class ServerInstance
     {
+        private readonly ConcurrentDictionary<int, ConcurrentQueue<CommunicationData>> _ResumeMessages = new ConcurrentDictionary<int, ConcurrentQueue<CommunicationData>>();
         private async Task<bool> SendInfoDate(ClientConfig client, CommunicationData data)
         {
             bool result = false;
@@ -18,13 +20,23 @@ namespace Server.Core
             {
                 case InfoType.CtcNormal:
                 case InfoType.CtcFile:
+                    bool _isSend = false;
                     foreach (var item in _clients)
                     {
                         if (item.Value.UniqueId == data.Targetid)
                         {
                             // 发送信息
                             SendToClient(client.Id, data, data.Priority);
+                            _isSend = true;
+                            result = true;
                         }
+                    }
+                    if (!_isSend)
+                    {
+                        // 客户端不在线，将消息添加到待发送队列
+                        var queue = _ResumeMessages.GetOrAdd(data.Targetid, new ConcurrentQueue<CommunicationData>());
+                        queue.Enqueue(data);
+                        result = true; // 消息入队视为操作成功
                     }
                     break;
                 default:
@@ -33,6 +45,31 @@ namespace Server.Core
             }
 
             return result;
+        }
+
+        private async Task SendPendingMessages(ClientConfig client, ConcurrentQueue<CommunicationData> queue)
+        {
+            _logger.LogTrace($"Starting to send pending messages for client {client.UniqueId}.");
+            if (queue.IsEmpty)
+            {
+                _logger.LogDebug($"No pending messages found for client {client.UniqueId}.");
+                return;
+            }
+
+            while (queue.TryDequeue(out var data))
+            {
+                try
+                {
+                    _logger.LogDebug($"Attempting to send message of type {data.InfoType} with priority {data.Priority} to client {client.UniqueId}.");
+                     SendToClient(client.Id, data, data.Priority);
+                    _logger.LogDebug($"Successfully sent message of type {data.InfoType} with priority {data.Priority} to client {client.UniqueId}.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Failed to send message of type {data.InfoType} with priority {data.Priority} to client {client.UniqueId}. Error: {ex.Message}");
+                }
+            }
+            _logger.LogTrace($"Finished sending all pending messages for client {client.UniqueId}.");
         }
 
         /// <summary>

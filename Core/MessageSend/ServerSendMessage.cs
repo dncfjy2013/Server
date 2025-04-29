@@ -16,7 +16,6 @@ namespace Server.Core
     // 定义主动消息结构体
     public class ServerOutgoingMessage
     {
-        public int ClientId { get; set; }
         public CommunicationData Data { get; set; }
         public int RetryCount { get; set; } = 0; // 重传次数
         public DateTime SentTime { get; set; } // 发送时间
@@ -77,17 +76,13 @@ namespace Server.Core
         {
             try
             {
-                // 检查取消令牌状态
-                ct.ThrowIfCancellationRequested();
-
-                if (!_clients.TryGetValue(msg.ClientId, out var client))
+                var client = _clients.Values.FirstOrDefault(c => c.UniqueId == msg.Data.Targetid);
+                if (client == null)
                 {
                     await HandleRetry(msg);
+                    _logger.LogWarning($"Could not find client with UniqueId {msg.Data.Targetid} for message.");
                     return;
                 }
-
-                // 检查取消令牌状态
-                ct.ThrowIfCancellationRequested();
 
                 // 发送消息
                 bool sent = await SendDate(client, msg.Data);
@@ -105,21 +100,21 @@ namespace Server.Core
 
                 msg.RetryCount++;
 
+                await HandleRetry(msg);
+
                 // 检查取消令牌状态
                 ct.ThrowIfCancellationRequested();
-
-                await HandleRetry(msg);
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInformation($"Message processing for client {msg.ClientId} was cancelled.");
+                _logger.LogInformation($"Message processing for client {msg.Data.Targetid} was cancelled.");
                 await HandleRetry(msg);
                 return;
             }
             catch (Exception ex)
             {
                 // 触发重传逻辑
-                _logger.LogWarning($"Retrying message to {msg.ClientId} Because Send failed");
+                _logger.LogWarning($"Retrying message to {msg.Data.Targetid} Because Send failed");
                 await HandleRetry(msg);
             }
 
@@ -130,7 +125,10 @@ namespace Server.Core
             var policy = _retryPolicies[msg.Priority];
             if (msg.RetryCount >= policy.MaxRetries)
             {
-                _logger.LogError($"Max retries exceeded for message to {msg.ClientId}. Dropping.");
+                _logger.LogWarning($"Max retries exceeded for message to {msg.Data.Targetid}. Dropping.");
+
+                var queue = _ResumeMessages.GetOrAdd(msg.Data.Targetid, new ConcurrentQueue<CommunicationData>());
+                queue.Enqueue(msg.Data);
                 return;
             }
 
@@ -149,7 +147,7 @@ namespace Server.Core
                     _outgoingLowMessages.Writer.TryWrite(msg);
                     break;
             }
-            _logger.LogInformation($"Retrying message to {msg.ClientId}");
+            _logger.LogInformation($"Retrying message to {msg.Data.Targetid}");
         }
 
         // 主动发送消息（支持指定优先级）
@@ -161,7 +159,6 @@ namespace Server.Core
                 case DataPriority.High:
                     _outgoingHighMessages.Writer.TryWrite(new ServerOutgoingMessage
                     {
-                        ClientId = clientId,
                         Data = data,
                         SentTime = DateTime.Now
                     });
@@ -169,7 +166,6 @@ namespace Server.Core
                 case DataPriority.Medium:
                     _outgoingMedumMessages.Writer.TryWrite(new ServerOutgoingMessage
                     {
-                        ClientId = clientId,
                         Data = data,
                         SentTime = DateTime.Now
                     });
@@ -177,7 +173,6 @@ namespace Server.Core
                 case DataPriority.Low:
                     _outgoingLowMessages.Writer.TryWrite(new ServerOutgoingMessage
                     {
-                        ClientId = clientId,
                         Data = data,
                         SentTime = DateTime.Now
                     });
