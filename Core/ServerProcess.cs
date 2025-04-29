@@ -572,5 +572,10 @@ namespace Server.Core
                 _logger.LogTrace($"Ending the data copying process from source stream to destination stream.");
             }
         }
+
+        public void ModifyRealTimeTransfer(bool value)
+        {
+            _isRealTimeTransferAllowed = value;
+        }
     }
 }
