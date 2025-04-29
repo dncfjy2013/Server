@@ -11,6 +11,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 using Server.Common;
+using System.Net.Http;
 
 namespace Server.Core
 {
@@ -138,6 +139,39 @@ namespace Server.Core
             _logger.LogTrace("Exited AcceptSocketClients loop (server stopped)");
         }
 
+        private async Task AcceptHttpClients()
+        {
+            _logger.LogTrace("Enter AcceptHttpClients loop");
+
+            while (_isRunning)
+            {
+                try
+                {
+                    // 接受 HTTP 请求
+                    var context = await _httpListener.GetContextAsync();
+                    _logger.LogDebug($"Accepted new HTTP client: {context.Request.RemoteEndPoint}");
+
+                    _logger.LogInformation($"HTTP client connected: {context.Request.RemoteEndPoint}");
+
+                    // 启动客户端消息处理任务
+                    _ = HandleHttpClient(context);
+                    _logger.LogDebug($"Started HandleHttpClient task for HTTP client");
+                }
+                catch (HttpListenerException ex) when (ex.ErrorCode == 995)
+                {
+                    // 正常关闭时忽略（如服务器 Stop 调用）
+                    _logger.LogTrace("HTTP listener interrupted (expected shutdown)");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogCritical($"HTTP Accept error: {ex.Message}, {ex}");
+                    _logger.LogWarning($"Retrying HTTP accept in 100ms...");
+                    await Task.Delay(100);
+                }
+            }
+
+            _logger.LogTrace("Exited AcceptHttpClients loop (server stopped)");
+        }
 
         /// <summary>
         /// 断开客户端连接并清理资源

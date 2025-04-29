@@ -5,6 +5,7 @@ using Server.Extend;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -580,6 +581,72 @@ namespace Server.Core
         public void ModifyRealTimeTransfer(bool value)
         {
             _isRealTimeTransferAllowed = value;
+        }
+
+        private async Task HandleHttpClient(HttpListenerContext context)
+        {
+            if (context == null)
+            {
+                _logger.LogError($"HTTP context is null. Unable to handle the request.");
+                return;
+            }
+
+            _logger.LogTrace($"Handling HTTP client with request: {context.Request.Url}");
+
+            try
+            {
+                using (var response = context.Response)
+                {
+                    // 设置响应的内容类型
+                    response.ContentType = "text/html; charset=utf-8";
+
+                    // 读取请求内容
+                    string requestContent = await ReadRequestContentAsync(context.Request);
+                    _logger.LogDebug($"Received request content: {requestContent}");
+
+                    // 根据请求内容生成响应
+                    string responseString = GenerateResponse(requestContent);
+                    byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+
+                    response.ContentLength64 = buffer.Length;
+                    using (var output = response.OutputStream)
+                    {
+                        await output.WriteAsync(buffer, 0, buffer.Length);
+                        _logger.LogInformation($"Sent response to HTTP");
+                    }
+                }
+            }
+            catch (HttpListenerException httpEx)
+            {
+                _logger.LogError($"HTTP listener error while handling: {httpEx.Message}");
+            }
+            catch (IOException ioEx)
+            {
+                _logger.LogError($"I/O error while handling: {ioEx.Message}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogCritical($"Unexpected error while handling: {ex.Message}");
+            }
+            finally
+            {
+                _logger.LogInformation($"HTTP disconnected");
+            }
+        }
+
+        private async Task<string> ReadRequestContentAsync(HttpListenerRequest request)
+        {
+            using (var reader = new System.IO.StreamReader(request.InputStream, request.ContentEncoding))
+            {
+                return await reader.ReadToEndAsync();
+            }
+        }
+
+        private string GenerateResponse(string requestContent)
+        {
+            // 这里可以根据请求内容生成不同的响应
+            // 目前简单返回固定的欢迎信息
+            return "<html><body><h1>Hello, HTTP Client!</h1></body></html>";
         }
     }
 }

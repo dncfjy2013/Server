@@ -33,6 +33,8 @@ namespace Server.Core
         private readonly int ListenMax = 100;
         // 用于 SSL 加密连接的 TCP 监听器，负责监听 SSL 端口的客户端连接请求
         private TcpListener _sslListener;
+        // 用于 HttpListener 连接的监听器，负责监听 Http 端口的客户端连接请求
+        private HttpListener _httpListener;
         // 用于取消异步操作的取消令牌源，可在需要停止服务器时取消正在进行的异步任务
         public readonly CancellationTokenSource _cts = new();
         // 用于线程安全的日志记录操作的锁对象，确保在多线程环境下日志记录操作的线程安全性
@@ -263,18 +265,7 @@ namespace Server.Core
                 _trafficMonitorTimer.Change(Timeout.Infinite, Timeout.Infinite);
                 _logger.LogDebug("The traffic monitor timer has been successfully stopped.");
 
-                // 处理套接字监听器的释放，根据是否存在监听器使用不同日志记录
-                if (_listener != null)
-                {
-                    _logger.LogDebug("Disposing of the socket listener.");
-                    _listener.Dispose();
-                    _logger.LogDebug("The socket listener has been disposed of.");
-                }
-                else
-                {
-                    _logger.LogTrace("The socket listener is null, no disposal operation is required.");
-                }
-
+                
                 // 断开所有客户端连接，属于重要的资源清理操作，使用Information记录
                 _logger.LogInformation("Initiating the disconnection process for all connected clients.");
                 foreach (var client in _clients.Values)
@@ -292,6 +283,40 @@ namespace Server.Core
                     }
                 }
                 _logger.LogInformation("All connected clients have been disconnected.");
+
+                // 处理套接字监听器的释放，根据是否存在监听器使用不同日志记录
+                if (_listener != null)
+                {
+                    _logger.LogDebug("Disposing of the socket listener.");
+                    _listener.Dispose();
+                    _logger.LogDebug("The socket listener has been disposed of.");
+                }
+                else
+                {
+                    _logger.LogTrace("The socket listener is null, no disposal operation is required.");
+                }
+
+                if (_httpListener != null)
+                {
+                    _httpListener.Stop();
+                    _httpListener.Close();
+                    //_httpListener.Dispose();
+                    _logger.LogDebug("HttpListener has been stopped and disposed.");
+                }
+                else
+                {
+                    _logger.LogTrace("The _httpListener listener is null, no disposal operation is required.");
+                }
+
+                if (_sslListener != null)
+                {
+                    _sslListener.Stop();
+                    _logger.LogDebug("HttpListener has been stopped and disposed.");
+                }
+                else
+                {
+                    _logger.LogTrace("The _sslListener listener is null, no disposal operation is required.");
+                }
 
 
                 _incomingLowManager.Shutdown();
