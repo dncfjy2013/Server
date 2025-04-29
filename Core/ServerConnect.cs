@@ -139,7 +139,7 @@ namespace Server.Core
             _logger.LogTrace("Exited AcceptSocketClients loop (server stopped)");
         }
 
-        private async Task AcceptHttpClients()
+        private async void AcceptHttpClients()
         {
             _logger.LogTrace("Enter AcceptHttpClients loop");
 
