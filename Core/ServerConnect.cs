@@ -173,6 +173,35 @@ namespace Server.Core
             _logger.LogTrace("Exited AcceptHttpClients loop (server stopped)");
         }
 
+        private async void AcceptUdpClients()
+        {
+            _logger.LogTrace("Enter AcceptUdpClients loop");
+
+            while (_isRunning)
+            {
+                try
+                {
+                    var result = await _udpListener.ReceiveAsync();
+                    var remoteEndPoint = result.RemoteEndPoint;
+                    var data = result.Buffer;
+
+                    _logger.LogDebug($"Received UDP data from: {remoteEndPoint}");
+
+                    // 处理 UDP 数据
+                    _ = HandleUdpData(remoteEndPoint, data);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogCritical($"UDP receive error: {ex.Message}, {ex}");
+                    _logger.LogWarning($"Retrying UDP receive in 100ms...");
+                    await Task.Delay(100);
+                }
+            }
+
+            _logger.LogTrace("Exited AcceptUdpClients loop (server stopped)");
+        }
+
+
         /// <summary>
         /// 断开客户端连接并清理资源
         /// </summary>

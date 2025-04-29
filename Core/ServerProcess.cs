@@ -648,5 +648,22 @@ namespace Server.Core
             // 目前简单返回固定的欢迎信息
             return "<html><body><h1>Hello, HTTP Client!</h1></body></html>";
         }
+
+        private async Task HandleUdpData(IPEndPoint remoteEndPoint, byte[] data)
+        {
+            try
+            {
+                // 这里可以实现具体的 UDP 数据处理逻辑
+                string message = System.Text.Encoding.UTF8.GetString(data);
+                _logger.LogInformation($"Received UDP message from {remoteEndPoint}: {message}");
+
+                // 示例：回显消息给客户端
+                await _udpListener.SendAsync(data, data.Length, remoteEndPoint);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogCritical($"Error handling UDP data: {ex.Message}, {ex}");
+            }
+        }
     }
 }

@@ -11,6 +11,7 @@ namespace Server.Core
         private readonly int _port;
         // 服务器监听的 SSL 加密端口号，在构造函数中初始化，一旦初始化后不可更改
         private readonly int _sslPort;
+        private readonly int _udpport;
         // 用于 SSL 连接的服务器证书对象，可通过构造函数传入的证书路径加载
         private X509Certificate2 _serverCert;
         // 流量监控器实例，用于监控服务器与客户端之间的流量情况，在构造函数中初始化
@@ -35,12 +36,14 @@ namespace Server.Core
         private TcpListener _sslListener;
         // 用于 HttpListener 连接的监听器，负责监听 Http 端口的客户端连接请求
         private HttpListener _httpListener;
+        // 用于 UdpClient 连接的监听器，负责监听 UDP 端口的客户端连接请求
+        private UdpClient _udpListener;
         // 用于取消异步操作的取消令牌源，可在需要停止服务器时取消正在进行的异步任务
         public readonly CancellationTokenSource _cts = new();
         // 用于线程安全的日志记录操作的锁对象，确保在多线程环境下日志记录操作的线程安全性
         private readonly object _lock = new();
 
-        public ServerInstance(int port, int sslPort, string certPath = null)
+        public ServerInstance(int port, int sslPort, int udpport, string certPath = null)
         {
             _logger = new Logger();
 
@@ -50,7 +53,7 @@ namespace Server.Core
             {
                 _port = port;
                 _sslPort = sslPort;
-
+                _udpport = udpport;
                 // Information 等级：记录服务器初始化开始这一重要信息
                 _logger.LogInformation("Server initialization process has begun.");
 
@@ -215,6 +218,10 @@ namespace Server.Core
                 AcceptSocketClients();
                 _logger.LogDebug("Accepting socket clients process has been initiated.");
 
+                _logger.LogDebug($"Starting to accept udpclient clients on port {_udpport}.");
+                _udpListener = new UdpClient(_udpport);
+                _logger.LogDebug("Accepting udpclient clients process has been initiated.");
+
                 // Trace 等级：记录开始消息处理的详细信息
                 _logger.LogTrace("Commencing Incoming message processing.");
                 StartProcessing();
@@ -311,13 +318,22 @@ namespace Server.Core
                 if (_sslListener != null)
                 {
                     _sslListener.Stop();
-                    _logger.LogDebug("HttpListener has been stopped and disposed.");
+                    _logger.LogDebug("_sslListener has been stopped and disposed.");
                 }
                 else
                 {
                     _logger.LogTrace("The _sslListener listener is null, no disposal operation is required.");
                 }
 
+                if (_udpListener != null)
+                {
+                    _udpListener.Close();
+                    _logger.LogDebug("_udpListener has been stopped and disposed.");
+                }
+                else
+                {
+                    _logger.LogTrace("The _udpListener listener is null, no disposal operation is required.");
+                }
 
                 _incomingLowManager.Shutdown();
                 _logger.LogDebug("All incoming low-priority message processing threads have been shut down.");
