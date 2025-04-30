@@ -1,13 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
+﻿using System.Diagnostics;
 using System.Net.Security;
 using System.Net.Sockets;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace Server
+namespace Server.Core.Config
 {
     public class ClientConfig
     {
@@ -39,7 +34,7 @@ namespace Server
         public DateTime StartActivity { get; set; }
         public Stopwatch ConnectionWatch { get; } = Stopwatch.StartNew();
         public string FilePath { get; set; }
-        public bool IsConnect {  get; set; }
+        public bool IsConnect { get; set; }
         public ClientConfig(uint id, Socket socket)
         {
             Id = id;

@@ -1,16 +1,7 @@
-﻿using Protocol;
-using Server.Client;
-using Server.Core;
-using Server.Logger;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using Server.Logger;
 using System.Threading.Channels;
-using System.Threading.Tasks;
-using static Server.Core.ServerInstance;
 
-namespace Server.Common
+namespace Server.Core.ThreadManager
 {
     /// <summary>
     /// 动态线程管理器抽象基类，用于管理不同优先级的消息处理线程

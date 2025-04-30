@@ -1,5 +1,4 @@
 ﻿using Server.Logger.Common;
-using System;
 
 namespace Server.Logger
 {

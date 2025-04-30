@@ -1,14 +1,8 @@
 ﻿using Protocol;
-using Server.Core;
 using Server.Logger;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Channels;
-using System.Threading.Tasks;
 
-namespace Server.Common
+namespace Server.Core.ThreadManager
 {
     // 处理服务器主动消息的线程管理器（适配ProcessOutgoingMessages）
     public class OutgoingMessageThreadManager : DynamicThreadManagerBase<ServerOutgoingMessage>

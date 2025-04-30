@@ -3,11 +3,7 @@
 #define DISABLE_INFORMATION_LOGGING 
 
 using Server.Logger.Common;
-using System;
 using System.Collections.Concurrent;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace Server.Logger
 {

@@ -1,6 +1,4 @@
 ﻿using Server.Logger.Common;
-using System;
-using System.Threading;
 
 namespace Server.Logger
 {
