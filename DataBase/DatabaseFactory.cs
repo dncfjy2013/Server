@@ -21,6 +21,8 @@ namespace Server.DataBase
                     return new MySqlDatabaseConnection(config);
                 case DatabaseType.PostgreSQL:
                     return new PostgreSQLDatabaseConnection(config);
+                case DatabaseType.Oracle:
+                    return new OracleDatabaseConnection(config);
                 default:
                     throw new NotSupportedException($"Database type {config.DatabaseType} is not supported.");
             }

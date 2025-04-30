@@ -2,13 +2,15 @@
 using System.Collections.Generic;
 using Microsoft.Data.SqlClient;
 using System.Text;
+using Oracle.ManagedDataAccess.Client;
 
 // 定义支持的数据库类型
 public enum DatabaseType
 {
     SqlServer,
     MySql,
-    PostgreSQL
+    PostgreSQL,
+    Oracle
     // 可以按需添加更多数据库类型
 }
 
@@ -75,6 +77,8 @@ public class DatabaseConfig
                 return BuildMySqlConnectionString();
             case DatabaseType.PostgreSQL:
                 return BuildPostgreSQLConnectionString();
+            case DatabaseType.Oracle: // 添加 Oracle 数据库类型的处理
+                return BuildOracleConnectionString();
             default:
                 throw new NotSupportedException($"Database type {DatabaseType} is not supported.");
         }
@@ -159,6 +163,28 @@ public class DatabaseConfig
         foreach (var kvp in ExtendedProperties)
         {
             builder.Append($"{kvp.Key}={kvp.Value};");
+        }
+
+        return builder.ToString();
+    }
+
+    // 构建 Oracle 连接字符串
+    private string BuildOracleConnectionString()
+    {
+        var builder = new OracleConnectionStringBuilder
+        {
+            DataSource = $"{Host}:{Port}/{DatabaseName}",
+            UserID = UserId,
+            Password = Password,
+            ConnectionTimeout = ConnectionTimeout,
+            MinPoolSize = MinPoolSize,
+            MaxPoolSize = MaxPoolSize
+        };
+
+        // 合并扩展属性
+        foreach (var kvp in ExtendedProperties)
+        {
+            builder.Add(kvp.Key, kvp.Value);
         }
 
         return builder.ToString();
