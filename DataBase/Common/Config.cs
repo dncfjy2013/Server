@@ -1,0 +1,166 @@
+﻿using System;
+using System.Collections.Generic;
+using Microsoft.Data.SqlClient;
+using System.Text;
+
+// 定义支持的数据库类型
+public enum DatabaseType
+{
+    SqlServer,
+    MySql,
+    PostgreSQL
+    // 可以按需添加更多数据库类型
+}
+
+// 通用数据库配置类
+public class DatabaseConfig
+{
+    // 数据库类型
+    public DatabaseType DatabaseType { get; set; } = DatabaseType.SqlServer;
+
+    // 基础配置
+    public string Host { get; set; } = "localhost";
+    public int Port { get; set; }
+    public string DatabaseName { get; set; } = "master";
+
+    // 认证配置
+    public string UserId { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+    public bool IntegratedSecurity { get; set; }
+
+    // 安全配置
+    public bool Encrypt { get; set; }
+    public bool TrustServerCertificate { get; set; }
+
+    // 连接配置
+    public int ConnectionTimeout { get; set; } = 15;
+    public int MaxPoolSize { get; set; } = 100;
+    public int MinPoolSize { get; set; } = 0;
+    public int ConnectRetryCount { get; set; } = 3;
+    public int ConnectRetryInterval { get; set; } = 10;
+
+    // 应用配置
+    public string ApplicationName { get; set; } = "MyApp";
+    public bool ReadOnly { get; set; }
+    public string Schema { get; set; } = "dbo";
+
+    // 高级配置
+    public int CommandTimeout { get; set; } = 30;
+    public bool MultipleActiveResultSets { get; set; }
+    public bool PersistSecurityInfo { get; set; }
+
+    // 扩展配置
+    public Dictionary<string, string> ExtendedProperties { get; set; } = new Dictionary<string, string>
+    {
+        {"ColumnEncryptionSetting", "Disabled"},
+        {"AttachDBFilename", ""}
+    };
+
+    // 连接字符串缓存
+    private string? _connectionString;
+    public string ConnectionString
+    {
+        get => _connectionString ?? BuildConnectionString();
+        set => _connectionString = value;
+    }
+
+    // 构建连接字符串的方法
+    private string BuildConnectionString()
+    {
+        switch (DatabaseType)
+        {
+            case DatabaseType.SqlServer:
+                return BuildSqlServerConnectionString();
+            case DatabaseType.MySql:
+                return BuildMySqlConnectionString();
+            case DatabaseType.PostgreSQL:
+                return BuildPostgreSQLConnectionString();
+            default:
+                throw new NotSupportedException($"Database type {DatabaseType} is not supported.");
+        }
+    }
+
+    // 构建 SQL Server 连接字符串
+    private string BuildSqlServerConnectionString()
+    {
+        var builder = new SqlConnectionStringBuilder
+        {
+            DataSource = $"{Host},{Port}",
+            InitialCatalog = DatabaseName,
+            UserID = UserId,
+            Password = Password,
+            IntegratedSecurity = IntegratedSecurity,
+            Encrypt = Encrypt,
+            TrustServerCertificate = TrustServerCertificate,
+            ConnectTimeout = ConnectionTimeout,
+            MaxPoolSize = MaxPoolSize,
+            MinPoolSize = MinPoolSize,
+            ConnectRetryCount = ConnectRetryCount,
+            ConnectRetryInterval = ConnectRetryInterval,
+            ApplicationName = ApplicationName,
+            ApplicationIntent = ReadOnly ? Microsoft.Data.SqlClient.ApplicationIntent.ReadOnly : Microsoft.Data.SqlClient.ApplicationIntent.ReadWrite,
+            MultipleActiveResultSets = MultipleActiveResultSets,
+            PersistSecurityInfo = PersistSecurityInfo
+        };
+
+        // 合并扩展属性
+        foreach (var kvp in ExtendedProperties)
+        {
+            builder[kvp.Key] = kvp.Value;
+        }
+
+        return builder.ToString();
+    }
+
+    // 构建 MySQL 连接字符串
+    private string BuildMySqlConnectionString()
+    {
+        var builder = new StringBuilder();
+        builder.Append($"Server={Host};Port={Port};Database={DatabaseName};");
+        if (!string.IsNullOrEmpty(UserId))
+        {
+            builder.Append($"Uid={UserId};");
+        }
+        if (!string.IsNullOrEmpty(Password))
+        {
+            builder.Append($"Pwd={Password};");
+        }
+        builder.Append($"ConnectionTimeout={ConnectionTimeout};");
+        builder.Append($"MinPoolSize={MinPoolSize};");
+        builder.Append($"MaxPoolSize={MaxPoolSize};");
+        // 可以按需添加更多 MySQL 特定配置
+
+        // 合并扩展属性
+        foreach (var kvp in ExtendedProperties)
+        {
+            builder.Append($"{kvp.Key}={kvp.Value};");
+        }
+
+        return builder.ToString();
+    }
+
+    // 构建 PostgreSQL 连接字符串
+    private string BuildPostgreSQLConnectionString()
+    {
+        var builder = new StringBuilder();
+        builder.Append($"Host={Host};Port={Port};Database={DatabaseName};");
+        if (!string.IsNullOrEmpty(UserId))
+        {
+            builder.Append($"Username={UserId};");
+        }
+        if (!string.IsNullOrEmpty(Password))
+        {
+            builder.Append($"Password={Password};");
+        }
+        builder.Append($"Timeout={ConnectionTimeout};");
+        // 可以按需添加更多 PostgreSQL 特定配置
+
+        // 合并扩展属性
+        foreach (var kvp in ExtendedProperties)
+        {
+            builder.Append($"{kvp.Key}={kvp.Value};");
+        }
+
+        return builder.ToString();
+    }
+}
