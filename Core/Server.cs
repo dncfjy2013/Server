@@ -218,14 +218,25 @@ namespace Server.Core
                 AcceptSocketClients();
                 _logger.LogDebug("Accepting socket clients process has been initiated.");
 
-                _logger.LogDebug($"Starting to accept udp clients on port {_udpport}.");
+                _logger.LogDebug($"Starting to create an UDP listener for port {_udpport}.");
                 _udpListener = new UdpClient(_udpport);
+                _logger.LogDebug($"UDP listener for port {_udpport} has been created.");
+
+                _logger.LogDebug($"Starting to accept udp clients on port {_udpport}.");
                 AcceptUdpClients();
                 _logger.LogDebug("Accepting udp clients process has been initiated.");
 
-                _logger.LogDebug($"Starting to accept http clients on port {_udpport}.");
+                _logger.LogDebug($"Starting to create an HTTP listener.");
+                _httpListener = new HttpListener();
+                _logger.LogDebug($"HTTP listener has been created.");
+
+                _logger.LogDebug($"Starting the HTTP listener.");
+                _httpListener.Start();
+                _logger.LogInformation($"HTTP server has started listening with monitoring {(enableMonitoring ? "enabled" : "disabled")}.");
+               
+                _logger.LogDebug($"Starting to accept HTTP clients.");
                 AcceptHttpClients();
-                _logger.LogDebug("Accepting http clients process has been initiated.");
+                _logger.LogDebug("Accepting HTTP clients process has been initiated.");
 
                 // Trace 等级：记录开始消息处理的详细信息
                 _logger.LogTrace("Commencing Incoming message processing.");
