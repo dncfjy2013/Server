@@ -1,14 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Server.DataBase.RelateSQL;
+using System;
 
 namespace Server.DataBase
 {
-    using System;
-
     public class DatabaseFactory
     {
         // 创建数据库连接的方法
