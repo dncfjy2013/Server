@@ -2,68 +2,26 @@
 #define DISABLE_DEBUG_LOGGING 
 #define DISABLE_INFORMATION_LOGGING 
 
+using Server.Logger.Common;
 using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Server.Extend
+namespace Server.Logger
 {
-    #region Level
-    public enum LogLevel
+    public class LoggerInstance : AbstractLogger, ILogger
     {
-        Trace = 0,
-        Debug = 1,
-        Information = 2,
-        Warning = 3,
-        Error = 4,
-        Critical = 5,
-        None = 6
-    }
-    #endregion
-
-    #region Configuration
-    public class LoggerConfig
-    {
-        public LogLevel ConsoleLogLevel { get; set; } = LogLevel.Trace;
-        public LogLevel FileLogLevel { get; set; } = LogLevel.Information;
-        public string LogFilePath { get; set; } = "application.log";
-        public bool EnableAsyncWriting { get; set; } = true;
-    }
-    #endregion
-
-    #region Log Message Structure
-    public struct LogMessage
-    {
-        public DateTime Timestamp { get; }
-        public LogLevel Level { get; }
-        public string Message { get; }
-        public int ThreadId { get; }
-        public string ThreadName { get; }
-
-        public LogMessage(DateTime timestamp, LogLevel level, string message,
-            int threadId, string threadName)
-        {
-            Timestamp = timestamp;
-            Level = level;
-            Message = message;
-            ThreadId = threadId;
-            ThreadName = threadName;
-        }
-    }
-    #endregion
-    public class Logger : AbstractLogger, ILogger
-    {
-        private static readonly Lazy<Logger> _instance = new Lazy<Logger>(() => new Logger());
-        public static Logger Instance => _instance.Value;
+        private static readonly Lazy<LoggerInstance> _instance = new Lazy<LoggerInstance>(() => new LoggerInstance());
+        public static LoggerInstance Instance => _instance.Value;
 
         private readonly BlockingCollection<LogMessage> _logQueue = new BlockingCollection<LogMessage>(1000);
         private readonly Task _logWriterTask;
 
-        public Logger() : this(new LoggerConfig()) { }
+        public LoggerInstance() : this(new LoggerConfig()) { }
 
-        public Logger(LoggerConfig config) : base(config)
+        public LoggerInstance(LoggerConfig config) : base(config)
         {
             if (_config.EnableAsyncWriting)
             {
@@ -77,24 +35,24 @@ namespace Server.Extend
 
         #region Public Logging Methods
 
-        #if !DISABLE_TRACE_LOGGING
+#if !DISABLE_TRACE_LOGGING
         public override void LogTrace(string message) => Log(LogLevel.Trace, message);
-        #else
+#else
         public override void LogTrace(string message) { }
-        #endif
+#endif
 
-        #if !DISABLE_DEBUG_LOGGING
+#if !DISABLE_DEBUG_LOGGING
         public override void LogDebug(string message) => Log(LogLevel.Debug, message);
-        #else
+#else
         public override void LogDebug(string message) { }
-        #endif
+#endif
 
-        #if !DISABLE_INFORMATION_LOGGING
+#if !DISABLE_INFORMATION_LOGGING
         public override void LogInformation(string message) => Log(LogLevel.Information, message);
-        #else
+#else
         public override void LogInformation(string message) { }
-        #endif
-        
+#endif
+
         public override void LogWarning(string message) => Log(LogLevel.Warning, message);
         public override void LogError(string message) => Log(LogLevel.Error, message);
         public override void LogCritical(string message) => Log(LogLevel.Critical, message);
@@ -190,7 +148,7 @@ namespace Server.Extend
                 catch (IOException ex) when (ex.HResult == -2147024864) // 表示文件被占用
                 {
                     // 等待一段时间后重试
-                    System.Threading.Thread.Sleep(1000);
+                    Thread.Sleep(1000);
                 }
                 catch (Exception ex)
                 {

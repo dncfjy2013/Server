@@ -1,6 +1,7 @@
-﻿using System;
+﻿using Server.Logger.Common;
+using System;
 
-namespace Server.Extend
+namespace Server.Logger
 {
     public interface ILogger : IDisposable
     {

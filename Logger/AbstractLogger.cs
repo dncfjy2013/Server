@@ -1,7 +1,8 @@
-﻿using System;
+﻿using Server.Logger.Common;
+using System;
 using System.Threading;
 
-namespace Server.Extend
+namespace Server.Logger
 {
     public abstract class AbstractLogger : ILogger
     {

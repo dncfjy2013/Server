@@ -1,4 +1,5 @@
 ﻿using Server.Extend;
+using Server.Logger;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
@@ -45,7 +46,7 @@ namespace Server.Core
 
         public ServerInstance(int port, int sslPort, int udpport, string certPath = null)
         {
-            _logger = new Logger();
+            _logger = new LoggerInstance();
 
             _logger.LogTrace($"Server constructor called with port: {port}, sslPort: {sslPort}, certPath: {certPath}");
 
