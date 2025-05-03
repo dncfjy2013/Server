@@ -39,7 +39,7 @@ namespace Server.Core
         public void StartOutgoingMessageProcessing()
         {
             int Threads = Environment.ProcessorCount;
-
+            _logger.LogInformation("Send Process Start High Thread Manager");
             _highPriorityManager = new OutgoingMessageThreadManager(
                 this,
                 _outgoingHighMessages,
@@ -47,7 +47,7 @@ namespace Server.Core
                 DataPriority.High,
                 0,
                 Threads * 2);
-
+            _logger.LogInformation("Send Process Start Medium Thread Manager");
             _mediumPriorityManager = new OutgoingMessageThreadManager(
                 this,
                 _outgoingMedumMessages,
@@ -55,7 +55,7 @@ namespace Server.Core
                 DataPriority.Medium,
                 0,
                 Threads);
-
+            _logger.LogInformation("Send Process Start Low Thread Manager");
             _lowPriorityManager = new OutgoingMessageThreadManager(
                 this,
                 _outgoingLowMessages,
