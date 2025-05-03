@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 using Nest;
 using Server.DataBase.NonRelateSQL.Common;
 
-namespace Server.DataBase.NonRelateSQL.Implementations
+namespace Server.DataBase.NonRelateSQL
 {
     public class ElasticsearchDataset<T> : INonRelationalDataset<T> where T : class
     {
