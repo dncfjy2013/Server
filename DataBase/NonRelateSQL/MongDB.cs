@@ -5,7 +5,7 @@ using MongoDB.Bson.Serialization.Attributes;
 using MongoDB.Driver;
 using Server.DataBase.NonRelateSQL.Common;
 
-namespace Server.DataBase.NonRelational.MongoDB
+namespace Server.DataBase.NonRelational
 {
     public class MongoDataset<T> : ITransactionalDataset<T> where T : class
     {
