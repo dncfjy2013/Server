@@ -5,7 +5,7 @@ using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
 
-public interface IDatabaseConnection : IDisposable, IAsyncDisposable
+public interface IDatabaseConnection : IDisposable
 {
     // ========== 连接管理 ========== //
     Task OpenConnectionAsync(CancellationToken cancellationToken = default);

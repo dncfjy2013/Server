@@ -285,16 +285,6 @@ namespace Server.DataBase.RelateSQL
             GC.SuppressFinalize(this);
         }
 
-        public async ValueTask DisposeAsync()
-        {
-            if (_transaction.Value != null)
-            {
-                await _transaction.Value.DisposeAsync();
-            }
-            await _connection.DisposeAsync();
-            GC.SuppressFinalize(this);
-        }
-
         private bool IsTransientError(NpgsqlException ex)
         {
             // 这里可以根据 PostgreSQL 的错误码来判断是否是暂时性错误

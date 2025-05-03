@@ -13,7 +13,7 @@ namespace Server.DataBase.NonRelateSQL.Common
     /// 非关系型通用数据集接口，定义了对数据集的基本操作和高级功能。
     /// </summary>
     /// <typeparam name="T">数据集中元素的类型。</typeparam>
-    public interface INonRelationalDataset<T> : IAsyncDisposable
+    public interface INonRelationalDataset<T> : IDisposable
     {
         // ========== 核心CRUD操作 ========== //
         /// <summary>
@@ -163,8 +163,27 @@ public class PaginationOptions
     public class IndexDefinition<T>
     {
         public string Name { get; set; } = null!;
-        public Expression<Func<T, object>> KeyExpression { get; set; } = null!;
-        public bool IsUnique { get; set; }
+    //public Expression<Func<T, object>> KeyExpression { get; set; } = null!;
+    // 新定义：使用泛型参数处理值类型
+    public Expression<Func<T, object>> KeyExpression
+    {
+        get => _keyExpression;
+        set => _keyExpression = ConvertExpression(value);
+    }
+
+    private Expression<Func<T, object>> _keyExpression = null!;
+
+    // 表达式转换器
+    private static Expression<Func<T, object>> ConvertExpression<TProp>(
+        Expression<Func<T, TProp>> original)
+    {
+        // 处理值类型到 object 的装箱转换
+        return Expression.Lambda<Func<T, object>>(
+            Expression.Convert(original.Body, typeof(object)),
+            original.Parameters
+        );
+    }
+    public bool IsUnique { get; set; }
         public IndexType Type { get; set; } = IndexType.BTree;
     }
 
@@ -187,7 +206,7 @@ public class PaginationOptions
     /// <summary>
     /// 数据集事务接口，定义了事务的提交、回滚操作和获取事务唯一标识的方法。
     /// </summary>
-    public interface IDatasetTransaction : IAsyncDisposable
+    public interface IDatasetTransaction : IDisposable
     {
         /// <summary>
         /// 提交事务。

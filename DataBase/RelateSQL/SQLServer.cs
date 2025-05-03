@@ -279,16 +279,6 @@ namespace Server.DataBase.RelateSQL
             GC.SuppressFinalize(this);
         }
 
-        public async ValueTask DisposeAsync()
-        {
-            if (_transaction.Value != null)
-            {
-                await _transaction.Value.DisposeAsync();
-            }
-            await _connection.DisposeAsync();
-            GC.SuppressFinalize(this);
-        }
-
         private bool IsTransientError(SqlException ex)
         {
             // 检查是否为可重试的错误

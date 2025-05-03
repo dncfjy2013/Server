@@ -208,15 +208,5 @@ namespace Server.DataBase.RelateSQL
             _connection.Dispose();
             GC.SuppressFinalize(this);
         }
-
-        public async ValueTask DisposeAsync()
-        {
-            if (_transaction != null)
-            {
-                await _transaction.DisposeAsync();
-            }
-            await _connection.DisposeAsync();
-            GC.SuppressFinalize(this);
-        }
     }
 }

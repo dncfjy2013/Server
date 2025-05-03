@@ -60,7 +60,7 @@ namespace Server.DataBase.NonRelateSQL
                 var key = GetKey(id);
                 var json = JsonSerializer.Serialize(entity, _jsonOptions);
 
-                batch.StringSetAsync(key, json);
+                await batch.StringSetAsync(key, json);
                 await MaintainKeyIndex(id);
                 ids.Add(id);
             }
@@ -195,7 +195,7 @@ namespace Server.DataBase.NonRelateSQL
             {
                 var item = await GetByIdAsync(GetIdFromKey(key));
                 var value = definition.KeyExpression.Compile()(item!);
-                batch.SortedSetAddAsync(indexKey, key, Convert.ToDouble(value));
+                await batch.SortedSetAddAsync(indexKey, key, Convert.ToDouble(value));
             }
 
             batch.Execute();
@@ -239,12 +239,13 @@ namespace Server.DataBase.NonRelateSQL
         private string GetKey(string id) => $"{_keyPrefix}{id}";
         private string GetIdFromKey(string key) => key.Replace(_keyPrefix, "");
 
-        public async ValueTask DisposeAsync()
+        public void Dispose()
         {
             _redis.Close();
             _redis.Dispose();
             GC.SuppressFinalize(this);
         }
+
 
         private class RedisTransaction : IDatasetTransaction
         {
@@ -263,12 +264,15 @@ namespace Server.DataBase.NonRelateSQL
                 await _transaction.ExecuteAsync();
             }
 
+            public void Dispose()
+            {
+                throw new NotImplementedException();
+            }
+
             public async Task RollbackAsync(CancellationToken cancellationToken = default)
             {
                 // Redis事务无法回滚，只能丢弃
             }
-
-            public ValueTask DisposeAsync() => default;
         }
     }
 
