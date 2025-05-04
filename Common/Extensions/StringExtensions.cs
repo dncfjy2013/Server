@@ -51,6 +51,39 @@ namespace Server.Common.Extensions
         {
             return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(value.ToLower());
         }
+
+        // 扩展方法：将十六进制字符串转换为字节数组
+        public static byte[] HexToBytes(this string hex)
+        {
+            if (string.IsNullOrEmpty(hex))
+            {
+                return new byte[0];
+            }
+            if (hex.Length % 2 != 0)
+            {
+                throw new ArgumentException("十六进制字符串的长度必须是偶数。");
+            }
+            return Enumerable.Range(0, hex.Length)
+                             .Where(x => x % 2 == 0)
+                             .Select(x => Convert.ToByte(hex.Substring(x, 2), 16))
+                             .ToArray();
+        }
+
+        // 扩展方法：将字节数组转换为十六进制字符串
+        public static string BytesToHex(this byte[] bytes)
+        {
+            if (bytes == null)
+            {
+                return string.Empty;
+            }
+            return BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant();
+        }
+
+        // 扩展方法：将十六进制字符串转换为整数
+        public static int HexToInt(this string hex)
+        {
+            return Convert.ToInt32(hex, 16);
+        }
         #endregion
 
         #region 安全处理
