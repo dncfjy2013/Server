@@ -31,6 +31,10 @@ namespace Server.Core
             {
                 // 异步发送确认消息给客户端
                 await SendInfoDate(client, ack);
+
+                // 开始处理客户端请求内容
+                ProcessNormalCommand(data.Message);
+
                 // 记录确认消息发送成功，使用Trace级别日志
                 _logger.LogTrace($"Successfully sent ACK to client {client.Id} for SeqNum: {data.SeqNum}");
             }
@@ -54,5 +58,21 @@ namespace Server.Core
             _logger.LogTrace($"Finished handling normal message from client {client.Id}, SeqNum: {data.SeqNum}");
         }
 
+        private void ProcessNormalCommand(string Message)
+        {
+            switch (Message)
+            {
+                case nameof(MessageType.Normal):
+                    break;
+                default:
+                    Console.WriteLine(Message);
+                    break;
+            }
+        }
+    }
+
+    public enum MessageType
+    {
+        Normal,
     }
 }
