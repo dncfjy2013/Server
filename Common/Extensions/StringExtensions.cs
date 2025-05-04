@@ -52,7 +52,9 @@ namespace Server.Common.Extensions
             return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(value.ToLower());
         }
 
-        // 扩展方法：将十六进制字符串转换为字节数组
+        /// <summary>
+        /// 将十六进制字符串转换为字节数组
+        /// </summary>
         public static byte[] HexToBytes(this string hex)
         {
             if (string.IsNullOrEmpty(hex))
@@ -69,7 +71,9 @@ namespace Server.Common.Extensions
                              .ToArray();
         }
 
-        // 扩展方法：将字节数组转换为十六进制字符串
+        /// <summary>
+        /// 将字节数组转换为十六进制字符串
+        /// </summary>
         public static string BytesToHex(this byte[] bytes)
         {
             if (bytes == null)
@@ -79,7 +83,9 @@ namespace Server.Common.Extensions
             return BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant();
         }
 
-        // 扩展方法：将十六进制字符串转换为整数
+        /// <summary>
+        /// 将十六进制字符串转换为整数
+        /// </summary>
         public static int HexToInt(this string hex)
         {
             return Convert.ToInt32(hex, 16);
