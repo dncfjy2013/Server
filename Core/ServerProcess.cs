@@ -585,7 +585,7 @@ namespace Server.Core
                 return;
             }
 
-            _logger.LogTrace($"Handling HTTP client with request: {context.Request.Url}");
+            _logger.LogDebug($"Handling HTTP client with request: {context.Request.Url}");
 
             try
             {
@@ -594,12 +594,39 @@ namespace Server.Core
                     // 设置响应的内容类型
                     response.ContentType = "text/html; charset=utf-8";
 
-                    // 读取请求内容
-                    string requestContent = await ReadRequestContentAsync(context.Request);
-                    _logger.LogDebug($"Received request content: {requestContent}");
+                    string requestContent = "";
+                    string responseString = "";
 
-                    // 根据请求内容生成响应
-                    string responseString = GenerateResponse(requestContent);
+                    switch (context.Request.HttpMethod)
+                    {
+                        case "GET":
+                            // 处理 GET 请求
+                            responseString = HandleGetRequest(context.Request);
+                            break;
+                        case "POST":
+                            // 读取请求内容
+                            requestContent = await ReadRequestContentAsync(context.Request);
+                            _logger.LogDebug($"Received request content: {requestContent}");
+                            // 处理 POST 请求
+                            responseString = HandlePostRequest(requestContent);
+                            break;
+                        case "PUT":
+                            // 读取请求内容
+                            requestContent = await ReadRequestContentAsync(context.Request);
+                            _logger.LogDebug($"Received request content: {requestContent}");
+                            // 处理 PUT 请求
+                            responseString = HandlePutRequest(requestContent);
+                            break;
+                        case "DELETE":
+                            // 处理 DELETE 请求
+                            responseString = HandleDeleteRequest(context.Request);
+                            break;
+                        default:
+                            response.StatusCode = 405; // 不支持的方法
+                            responseString = "HTTP method not supported.";
+                            break;
+                    }
+
                     byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
 
                     response.ContentLength64 = buffer.Length;
@@ -628,19 +655,36 @@ namespace Server.Core
             }
         }
 
+        private string HandleGetRequest(HttpListenerRequest request)
+        {
+            // 这里添加处理 GET 请求的逻辑
+            return "This is a GET request response.";
+        }
+
+        private string HandlePostRequest(string requestContent)
+        {
+            // 这里添加处理 POST 请求的逻辑
+            return $"This is a POST request response. Received content: {requestContent}";
+        }
+
+        private string HandlePutRequest(string requestContent)
+        {
+            // 这里添加处理 PUT 请求的逻辑
+            return $"This is a PUT request response. Received content: {requestContent}";
+        }
+
+        private string HandleDeleteRequest(HttpListenerRequest request)
+        {
+            // 这里添加处理 DELETE 请求的逻辑
+            return "This is a DELETE request response.";
+        }
+
         private async Task<string> ReadRequestContentAsync(HttpListenerRequest request)
         {
             using (var reader = new System.IO.StreamReader(request.InputStream, request.ContentEncoding))
             {
                 return await reader.ReadToEndAsync();
             }
-        }
-
-        private string GenerateResponse(string requestContent)
-        {
-            // 这里可以根据请求内容生成不同的响应
-            // 目前简单返回固定的欢迎信息
-            return "<html><body><h1>Hello, HTTP Client!</h1></body></html>";
         }
 
         private async Task HandleUdpData(IPEndPoint remoteEndPoint, byte[] data)

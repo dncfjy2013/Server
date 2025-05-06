@@ -1,5 +1,5 @@
 ﻿#define DISABLE_TRACE_LOGGING 
-#define DISABLE_DEBUG_LOGGING 
+//#define DISABLE_DEBUG_LOGGING 
 //#define DISABLE_INFORMATION_LOGGING 
 
 using Server.Logger.Common;
