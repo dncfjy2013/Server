@@ -13,6 +13,7 @@ namespace Server.Core
         // 服务器监听的 SSL 加密端口号，在构造函数中初始化，一旦初始化后不可更改
         private readonly int _sslPort;
         private readonly int _udpport;
+        private readonly string _host;
         // 用于 SSL 连接的服务器证书对象，可通过构造函数传入的证书路径加载
         private X509Certificate2 _serverCert;
         // 流量监控器实例，用于监控服务器与客户端之间的流量情况，在构造函数中初始化
@@ -44,7 +45,7 @@ namespace Server.Core
         // 用于线程安全的日志记录操作的锁对象，确保在多线程环境下日志记录操作的线程安全性
         private readonly object _lock = new();
 
-        public ServerInstance(int port, int sslPort, int udpport, string certPath = null)
+        public ServerInstance(int port, int sslPort, int udpport, string host, string certPath = null)
         {
             _logger = new LoggerInstance();
 
@@ -55,6 +56,7 @@ namespace Server.Core
                 _port = port;
                 _sslPort = sslPort;
                 _udpport = udpport;
+                _host = host;
                 // Information 等级：记录服务器初始化开始这一重要信息
                 _logger.LogInformation("Server initialization process has begun.");
 
@@ -231,7 +233,8 @@ namespace Server.Core
                 _httpListener = new HttpListener();
                 _logger.LogDebug($"HTTP listener has been created.");
 
-                _logger.LogDebug($"Starting the HTTP listener.");
+                _logger.LogDebug($"Starting the HTTP listener on {_host}.");
+                _httpListener.Prefixes.Add(_host);
                 _httpListener.Start();
                 _logger.LogInformation($"HTTP server has started listening with monitoring {(enableMonitoring ? "enabled" : "disabled")}.");
                

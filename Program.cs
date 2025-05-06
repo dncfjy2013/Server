@@ -1,4 +1,4 @@
-﻿Server.Core.ServerInstance server = new Server.Core.ServerInstance(12345, 8888, 6666);
+﻿Server.Core.ServerInstance server = new Server.Core.ServerInstance(1111, 2222, 3333, "http://localhost:9999/");
 server.Start(false);
 
 Console.WriteLine("Press Enter to stop the server...");
