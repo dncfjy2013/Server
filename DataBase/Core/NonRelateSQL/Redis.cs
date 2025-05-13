@@ -4,7 +4,7 @@ using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using Server.DataBase.Common;
 
-namespace Server.DataBase.NonRelateSQL
+namespace Server.DataBase.Core.NonRelateSQL
 {
     public class RedisDataset<T> : ITransactionalDataset<T> where T : class
     {

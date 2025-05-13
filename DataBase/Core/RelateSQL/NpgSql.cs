@@ -6,7 +6,7 @@ using Npgsql;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Server.DataBase.RelateSQL
+namespace Server.DataBase.Core.RelateSQL
 {
     public class PostgreSQLDatabaseConnection : IRelationDateBase
     {

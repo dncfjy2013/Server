@@ -5,7 +5,7 @@ using Cassandra.Mapping;
 using Org.BouncyCastle.Crypto;
 using Server.DataBase.Common;
 
-namespace Server.DataBase.NonRelateSQL
+namespace Server.DataBase.Core.NonRelateSQL
 {
     public class CassandraDataset<T> : INonRelationalDataset<T> where T : class
     {

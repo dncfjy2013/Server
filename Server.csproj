@@ -32,4 +32,8 @@
     <Protobuf Include="Core\Protocal\Date.proto" GrpcServices="Server" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="DataBase\Implement\NonRelateSQL\" />
+  </ItemGroup>
+
 </Project>

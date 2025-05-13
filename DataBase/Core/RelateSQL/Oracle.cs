@@ -7,7 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Server.DataBase.RelateSQL
+namespace Server.DataBase.Core.RelateSQL
 {
     public class OracleDatabaseConnection : IRelationDateBase
     {

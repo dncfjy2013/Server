@@ -124,7 +124,7 @@ namespace Server.Core
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogCritical($"Socket Accept error: {ex.Message}, {ex}");
+                    _logger.LogCritical($"Socket Accept error: {ex.Message}");
                     _logger.LogWarning($"Retrying socket accept in 100ms...");
                     await Task.Delay(100);
                 }
@@ -186,7 +186,7 @@ namespace Server.Core
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogCritical($"UDP receive error: {ex.Message}, {ex}");
+                    _logger.LogCritical($"UDP receive error: {ex.Message}");
                     _logger.LogWarning($"Retrying UDP receive in 100ms...");
                     await Task.Delay(100);
                 }
