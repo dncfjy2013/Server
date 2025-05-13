@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using Microsoft.Data.SqlClient;
 using System.Text;
 using Oracle.ManagedDataAccess.Client;
+using MySql.Data.MySqlClient;
+using Npgsql;
+using Server.DataBase.Common;
 
 // 定义支持的数据库类型
 public enum DatabaseType
@@ -15,7 +18,7 @@ public enum DatabaseType
 }
 
 // 通用数据库配置类
-public class DatabaseConfig
+public class DatabaseConfig: BaseConfig
 {
     // 数据库类型
     public DatabaseType DatabaseType { get; set; } = DatabaseType.SqlServer;
@@ -119,53 +122,63 @@ public class DatabaseConfig
     // 构建 MySQL 连接字符串
     private string BuildMySqlConnectionString()
     {
-        var builder = new StringBuilder();
-        builder.Append($"Server={Host};Port={Port};Database={DatabaseName};");
-        if (!string.IsNullOrEmpty(UserId))
+        var builder = new MySqlConnectionStringBuilder
         {
-            builder.Append($"Uid={UserId};");
-        }
-        if (!string.IsNullOrEmpty(Password))
-        {
-            builder.Append($"Pwd={Password};");
-        }
-        builder.Append($"ConnectionTimeout={ConnectionTimeout};");
-        builder.Append($"MinPoolSize={MinPoolSize};");
-        builder.Append($"MaxPoolSize={MaxPoolSize};");
-        // 可以按需添加更多 MySQL 特定配置
+            Server = Host,
+            Port = (uint)Port,
+            UserID = UserId,
+            Password = Password,
+            Database = DatabaseName,
+            ConnectionTimeout = (uint)ConnectionTimeout,
+            MinimumPoolSize = (uint)MinPoolSize,
+            MaximumPoolSize = (uint)MaxPoolSize,
+            SslMode = Encrypt ? MySqlSslMode.Required : MySqlSslMode.None,
+        };
 
-        // 合并扩展属性
+        // 处理扩展属性
         foreach (var kvp in ExtendedProperties)
         {
-            builder.Append($"{kvp.Key}={kvp.Value};");
+            try
+            {
+                // 动态设置其他属性
+                builder[kvp.Key] = kvp.Value;
+            }
+            catch (ArgumentException)
+            {
+                // 忽略不支持的属性
+            }
         }
 
-        return builder.ToString();
+        return builder.ConnectionString;
     }
 
     // 构建 PostgreSQL 连接字符串
     private string BuildPostgreSQLConnectionString()
     {
-        var builder = new StringBuilder();
-        builder.Append($"Host={Host};Port={Port};Database={DatabaseName};");
-        if (!string.IsNullOrEmpty(UserId))
+        var builder = new NpgsqlConnectionStringBuilder
         {
-            builder.Append($"Username={UserId};");
-        }
-        if (!string.IsNullOrEmpty(Password))
-        {
-            builder.Append($"Password={Password};");
-        }
-        builder.Append($"Timeout={ConnectionTimeout};");
-        // 可以按需添加更多 PostgreSQL 特定配置
+            Host = Host,
+            Port = Port,
+            Database = DatabaseName,
+            Username = UserId,
+            Password = Password,
+            Timeout = ConnectionTimeout,
+            // 添加其他常用配置
+            Pooling = true,
+            MinPoolSize = MinPoolSize,
+            MaxPoolSize = MaxPoolSize,
+            CommandTimeout = CommandTimeout,
+            SslMode = Encrypt ? SslMode.Require : SslMode.Disable,
+            TrustServerCertificate = TrustServerCertificate
+        };
 
         // 合并扩展属性
         foreach (var kvp in ExtendedProperties)
         {
-            builder.Append($"{kvp.Key}={kvp.Value};");
+            builder[kvp.Key] = kvp.Value;
         }
 
-        return builder.ToString();
+        return builder.ConnectionString;
     }
 
     // 构建 Oracle 连接字符串

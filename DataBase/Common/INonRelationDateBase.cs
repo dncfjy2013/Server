@@ -1,4 +1,4 @@
-﻿using Server.DataBase.NonRelateSQL.Common;
+﻿using Server.DataBase.Common;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -7,13 +7,13 @@ using System.Linq.Expressions;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Server.DataBase.NonRelateSQL.Common
+namespace Server.DataBase.Common
 {
     /// <summary>
     /// 非关系型通用数据集接口，定义了对数据集的基本操作和高级功能。
     /// </summary>
     /// <typeparam name="T">数据集中元素的类型。</typeparam>
-    public interface INonRelationalDataset<T> : IDisposable
+    public interface INonRelationalDataset<T> : IDisposable, IDateBase
     {
         // ========== 核心CRUD操作 ========== //
         /// <summary>
@@ -150,19 +150,19 @@ namespace Server.DataBase.NonRelateSQL.Common
 /// 分页选项类，用于指定页码、每页大小和最大每页大小等分页参数。
 /// </summary>
 public class PaginationOptions
-    {
-        public int PageNumber { get; set; } = 1;
-        public int PageSize { get; set; } = 20;
-        public int MaxPageSize { get; set; } = 100;
-    }
+{
+    public int PageNumber { get; set; } = 1;
+    public int PageSize { get; set; } = 20;
+    public int MaxPageSize { get; set; } = 100;
+}
 
-    /// <summary>
-    /// 索引定义类，用于指定索引的名称、键表达式、是否唯一和索引类型等信息。
-    /// </summary>
-    /// <typeparam name="T">数据集中元素的类型。</typeparam>
-    public class IndexDefinition<T>
-    {
-        public string Name { get; set; } = null!;
+/// <summary>
+/// 索引定义类，用于指定索引的名称、键表达式、是否唯一和索引类型等信息。
+/// </summary>
+/// <typeparam name="T">数据集中元素的类型。</typeparam>
+public class IndexDefinition<T>
+{
+    public string Name { get; set; } = null!;
     //public Expression<Func<T, object>> KeyExpression { get; set; } = null!;
     // 新定义：使用泛型参数处理值类型
     public Expression<Func<T, object>> KeyExpression
@@ -184,71 +184,71 @@ public class PaginationOptions
         );
     }
     public bool IsUnique { get; set; }
-        public IndexType Type { get; set; } = IndexType.BTree;
-    }
+    public IndexType Type { get; set; } = IndexType.BTree;
+}
+
+/// <summary>
+/// 索引类型枚举，定义了支持的索引类型。
+/// BTree: B树索引，适用于范围查询和排序操作。
+/// Hash: 哈希索引，适用于等值查询。
+/// FullText: 全文索引，适用于文本搜索。
+/// Spatial: 空间索引，适用于地理空间数据的查询。
+/// </summary>
+public enum IndexType
+{
+    BTree,
+    Hash,
+    FullText,
+    Spatial
+}
+
+// ========== 事务接口 ========== //
+/// <summary>
+/// 数据集事务接口，定义了事务的提交、回滚操作和获取事务唯一标识的方法。
+/// </summary>
+public interface IDatasetTransaction : IDisposable
+{
+    /// <summary>
+    /// 提交事务。
+    /// </summary>
+    /// <param name="cancellationToken">用于取消操作的令牌。</param>
+    /// <returns>表示操作完成的任务。</returns>
+    Task CommitAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 索引类型枚举，定义了支持的索引类型。
-    /// BTree: B树索引，适用于范围查询和排序操作。
-    /// Hash: 哈希索引，适用于等值查询。
-    /// FullText: 全文索引，适用于文本搜索。
-    /// Spatial: 空间索引，适用于地理空间数据的查询。
+    /// 回滚事务。
     /// </summary>
-    public enum IndexType
-    {
-        BTree,
-        Hash,
-        FullText,
-        Spatial
-    }
-
-    // ========== 事务接口 ========== //
-    /// <summary>
-    /// 数据集事务接口，定义了事务的提交、回滚操作和获取事务唯一标识的方法。
-    /// </summary>
-    public interface IDatasetTransaction : IDisposable
-    {
-        /// <summary>
-        /// 提交事务。
-        /// </summary>
-        /// <param name="cancellationToken">用于取消操作的令牌。</param>
-        /// <returns>表示操作完成的任务。</returns>
-        Task CommitAsync(CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// 回滚事务。
-        /// </summary>
-        /// <param name="cancellationToken">用于取消操作的令牌。</param>
-        /// <returns>表示操作完成的任务。</returns>
-        Task RollbackAsync(CancellationToken cancellationToken = default);
-
-        /// <summary>
-        /// 获取事务的唯一标识。
-        /// </summary>
-        string TransactionId { get; }
-    }
-
-    // ========== 扩展接口 ========== //
-    /// <summary>
-    /// 支持事务的数据集扩展接口，继承自 INonRelationalDataset<T> 接口，并添加了开始事务的方法。
-    /// </summary>
-    /// <typeparam name="T">数据集中元素的类型。</typeparam>
-    public interface ITransactionalDataset<T> : INonRelationalDataset<T>
-    {
-        /// <summary>
-        /// 开始一个新的事务，并返回事务对象。
-        /// </summary>
-        /// <param name="options">事务选项，包括隔离级别和超时时间等。</param>
-        /// <param name="cancellationToken">用于取消操作的令牌。</param>
-        /// <returns>事务对象，可用于提交或回滚事务。</returns>
-        Task<IDatasetTransaction> BeginTransactionAsync(TransactionOptions? options = null, CancellationToken cancellationToken = default);
-    }
+    /// <param name="cancellationToken">用于取消操作的令牌。</param>
+    /// <returns>表示操作完成的任务。</returns>
+    Task RollbackAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 事务选项类，用于指定事务的隔离级别和超时时间等参数。
+    /// 获取事务的唯一标识。
     /// </summary>
-    public class TransactionOptions
-    {
-        public IsolationLevel IsolationLevel { get; set; } = IsolationLevel.Serializable;
-        public TimeSpan? Timeout { get; set; }
-    }
+    string TransactionId { get; }
+}
+
+// ========== 扩展接口 ========== //
+/// <summary>
+/// 支持事务的数据集扩展接口，继承自 INonRelationalDataset<T> 接口，并添加了开始事务的方法。
+/// </summary>
+/// <typeparam name="T">数据集中元素的类型。</typeparam>
+public interface ITransactionalDataset<T> : INonRelationalDataset<T>
+{
+    /// <summary>
+    /// 开始一个新的事务，并返回事务对象。
+    /// </summary>
+    /// <param name="options">事务选项，包括隔离级别和超时时间等。</param>
+    /// <param name="cancellationToken">用于取消操作的令牌。</param>
+    /// <returns>事务对象，可用于提交或回滚事务。</returns>
+    Task<IDatasetTransaction> BeginTransactionAsync(TransactionOptions? options = null, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// 事务选项类，用于指定事务的隔离级别和超时时间等参数。
+/// </summary>
+public class TransactionOptions
+{
+    public IsolationLevel IsolationLevel { get; set; } = IsolationLevel.Serializable;
+    public TimeSpan? Timeout { get; set; }
+}

@@ -1,8 +1,8 @@
 ﻿using System.Text.Json;
 using StackExchange.Redis;
 using System.Linq.Expressions;
-using global::Server.DataBase.NonRelateSQL.Common;
 using System.Runtime.CompilerServices;
+using Server.DataBase.Common;
 
 namespace Server.DataBase.NonRelateSQL
 {

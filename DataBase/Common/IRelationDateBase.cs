@@ -1,11 +1,12 @@
-﻿using System;
+﻿using Server.DataBase.Common;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
 
-public interface IDatabaseConnection : IDisposable
+public interface IRelationDateBase : IDisposable, IDateBase
 {
     // ========== 连接管理 ========== //
     Task OpenConnectionAsync(CancellationToken cancellationToken = default);

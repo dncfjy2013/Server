@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace Server.DataBase.RelateSQL
 {
-    public class SqlDatabaseConnection : IDatabaseConnection
+    public class SqlDatabaseConnection : IRelationDateBase
     {
         private readonly SqlConnection _connection;
         private readonly AsyncLocal<SqlTransaction> _transaction = new AsyncLocal<SqlTransaction>();

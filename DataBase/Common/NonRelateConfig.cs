@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Server.DataBase.NonRelateSQL.Common
+namespace Server.DataBase.Common
 {
     // 定义非关系型数据库类型枚举
     public enum NonRelationalDatabaseType
@@ -17,7 +17,7 @@ namespace Server.DataBase.NonRelateSQL.Common
     }
 
     // 通用的非关系型数据库配置类
-    public class NonRelationalDatabaseConfig
+    public class NonRelationalDatabaseConfig : BaseConfig
     {
         // 数据库类型
         public NonRelationalDatabaseType DatabaseType { get; set; }

@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace Server.DataBase.RelateSQL
 {
-    public class OracleDatabaseConnection : IDatabaseConnection
+    public class OracleDatabaseConnection : IRelationDateBase
     {
         private readonly OracleConnection _connection;
         private OracleTransaction? _transaction;

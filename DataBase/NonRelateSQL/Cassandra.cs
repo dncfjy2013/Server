@@ -3,7 +3,7 @@ using Cassandra;
 using Cassandra.Data.Linq;
 using Cassandra.Mapping;
 using Org.BouncyCastle.Crypto;
-using Server.DataBase.NonRelateSQL.Common;
+using Server.DataBase.Common;
 
 namespace Server.DataBase.NonRelateSQL
 {

@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace Server.DataBase.RelateSQL
 {
-    public class MySqlDatabaseConnection : IDatabaseConnection
+    public class MySqlDatabaseConnection : IRelationDateBase
     {
         private readonly MySqlConnection _connection;
         // 使用 AsyncLocal 确保每个异步操作有独立的事务上下文，避免线程间干扰

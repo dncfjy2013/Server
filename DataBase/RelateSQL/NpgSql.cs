@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace Server.DataBase.RelateSQL
 {
-    public class PostgreSQLDatabaseConnection : IDatabaseConnection
+    public class PostgreSQLDatabaseConnection : IRelationDateBase
     {
         private readonly NpgsqlConnection _connection;
         private readonly AsyncLocal<NpgsqlTransaction> _transaction = new AsyncLocal<NpgsqlTransaction>();

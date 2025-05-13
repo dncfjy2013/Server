@@ -2,19 +2,51 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using Server.DataBase.Common;
 using Server.DataBase.NonRelateSQL;
-using Server.DataBase.NonRelateSQL.Common;
 using Server.DataBase.NonRelational;
 using Server.DataBase.RelateSQL;
+using static Org.BouncyCastle.Math.EC.ECCurve;
 
 namespace Server.DataBase
 {
     public class DatabaseFactory
     {
+
+        public static IDateBase CreateDateBase(BaseConfig config, Type entityType = null)
+        {
+            if (config == null)
+                throw new ArgumentNullException(nameof(config), "数据库配置不能为空");
+
+            // 处理关系型数据库配置
+            if (config is DatabaseConfig dbConfig)
+            {
+                return CreateRelateConnection(dbConfig);
+            }
+
+            // 处理非关系型数据库配置
+            if (config is NonRelationalDatabaseConfig nonRelationalConfig)
+            {
+                // 检查实体类型是否提供
+                if (entityType == null)
+                    throw new ArgumentNullException(nameof(entityType), "创建非关系型数据库连接时必须提供实体类型");
+
+                // 使用反射创建泛型实例
+                var method = typeof(DatabaseFactory)
+                    .GetMethod("CreateNonRelateConnection", BindingFlags.Public | BindingFlags.Static)
+                    .MakeGenericMethod(entityType);
+
+                return (IDateBase)method.Invoke(null, new object[] { nonRelationalConfig });
+            }
+
+            throw new NotSupportedException($"不支持的配置类型: {config.GetType().Name}");
+        }
+
         // 创建数据库连接的方法
-        public static IDatabaseConnection CreateRelateConnection(DatabaseConfig config)
+        public static IRelationDateBase CreateRelateConnection(DatabaseConfig config)
         {
             switch (config.DatabaseType)
             {

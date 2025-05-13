@@ -3,7 +3,7 @@ using System.Reflection;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 using MongoDB.Driver;
-using Server.DataBase.NonRelateSQL.Common;
+using Server.DataBase.Common;
 
 namespace Server.DataBase.NonRelational
 {

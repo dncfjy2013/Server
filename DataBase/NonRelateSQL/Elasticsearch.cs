@@ -1,7 +1,7 @@
 ﻿using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using Nest;
-using Server.DataBase.NonRelateSQL.Common;
+using Server.DataBase.Common;
 
 namespace Server.DataBase.NonRelateSQL
 {

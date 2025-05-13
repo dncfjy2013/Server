@@ -12,7 +12,7 @@ namespace Server.Logger
         private static readonly Lazy<LoggerInstance> _instance = new Lazy<LoggerInstance>(() => new LoggerInstance());
         public static LoggerInstance Instance => _instance.Value;
 
-        private readonly BlockingCollection<LogMessage> _logQueue = new BlockingCollection<LogMessage>(1000);
+        private readonly BlockingCollection<LogMessage> _logQueue = new BlockingCollection<LogMessage>(int.MaxValue);
         private readonly Task _logWriterTask;
 
         public LoggerInstance() : this(new LoggerConfig()) { }
@@ -71,18 +71,38 @@ namespace Server.Logger
                 WriteToConsole(logMessage);
             }
 
-            // 异步处理文件输出
-            if (_config.EnableAsyncWriting && level >= _config.FileLogLevel)
+            // 处理文件输出
+            if (level >= _config.FileLogLevel)
             {
-                if (!_logQueue.TryAdd(logMessage, 50)) // 添加超时保护
+                if (_config.EnableAsyncWriting)
                 {
-                    // 队列已满时的降级处理
-                    WriteToConsole(new LogMessage(
-                        DateTime.UtcNow,
-                        LogLevel.Error,
-                        "Log queue is full, message dropped: " + message,
-                        Environment.CurrentManagedThreadId,
-                        Thread.CurrentThread.Name));
+                    try
+                    {
+                        if (!_logQueue.TryAdd(logMessage, 50)) // 添加超时保护
+                        {
+                            // 队列已满时的降级处理
+                            WriteToConsole(new LogMessage(
+                                DateTime.UtcNow,
+                                LogLevel.Error,
+                                "Log queue is full, message dropped: " + message,
+                                Environment.CurrentManagedThreadId,
+                                Thread.CurrentThread.Name));
+                        }
+                    }
+                    catch 
+                    {
+                        WriteToConsole(new LogMessage(
+                                DateTime.UtcNow,
+                                LogLevel.Error,
+                                "Log queue try add error, message dropped: " + message,
+                                Environment.CurrentManagedThreadId,
+                                Thread.CurrentThread.Name));
+                    }
+                }
+                else
+                {
+                    // 同步写入文件
+                    WriteToFile(logMessage);
                 }
             }
         }
@@ -184,18 +204,35 @@ namespace Server.Logger
         #region Cleanup
         public void Dispose()
         {
+            // 取消任务
             _cts.Cancel();
+
+            // 完成添加操作，允许GetConsumingEnumerable返回
             _logQueue.CompleteAdding();
 
             try
             {
-                _logWriterTask?.Wait(3000);
+                // 等待日志写入任务完成，设置合理的超时时间
+                _logWriterTask?.Wait(TimeSpan.FromSeconds(30));
             }
-            catch (AggregateException)
+            catch (AggregateException ex)
             {
-                // 忽略任务取消异常
+                // 处理异常，比如记录日志
+                Console.WriteLine($"Exception while waiting for log writer task: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                // 处理其他异常
+                Console.WriteLine($"Unexpected exception while waiting for log writer task: {ex.Message}");
             }
 
+            // 确保队列中的所有消息都被处理
+            while (_logQueue.TryTake(out var message))
+            {
+                WriteToFile(message);
+            }
+
+            // 释放相关资源
             _cts.Dispose();
             _logQueue.Dispose();
         }
