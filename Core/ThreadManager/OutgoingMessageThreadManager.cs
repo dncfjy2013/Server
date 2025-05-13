@@ -18,8 +18,9 @@ namespace Server.Core.ThreadManager
             int minThreads,
             int maxThreads,
             int queueThreshold = 100,
-            int monitorIntervalMs = 1000)
-            : base(channel, logger, minThreads, maxThreads, queueThreshold, monitorIntervalMs)
+            int monitorIntervalMs = 1000,
+            string name = "OutComing")
+            : base(channel, logger, minThreads, maxThreads, queueThreshold, monitorIntervalMs, name)
         {
             _server = server;
             _priority = priority;

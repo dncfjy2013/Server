@@ -1,4 +1,5 @@
-﻿using Server.Logger;
+﻿using Server.Common.Extensions;
+using Server.Logger;
 using System.Threading.Channels;
 
 namespace Server.Core.ThreadManager
@@ -40,6 +41,8 @@ namespace Server.Core.ThreadManager
         /// <summary> 监控间隔（毫秒） </summary>
         protected readonly int _monitorIntervalMs;
 
+        protected readonly string _name;
+
         /// <summary>
         /// 构造函数
         /// </summary>
@@ -55,7 +58,8 @@ namespace Server.Core.ThreadManager
             int minThreads,
             int maxThreads,
             int queueThreshold,
-            int monitorIntervalMs)
+            int monitorIntervalMs,
+            string name)
         {
             _channel = channel;
             _logger = logger;
@@ -63,9 +67,9 @@ namespace Server.Core.ThreadManager
             _maxThreads = maxThreads;
             _queueThreshold = queueThreshold;
             _monitorIntervalMs = monitorIntervalMs;
-
+            _name = name.Center(9, " ");
             // 启动监控线程
-            _logger.LogInformation($"DynamicThreadManagerBase initialized. MinThreads={minThreads}, MaxThreads={maxThreads}");
+            _logger.LogInformation($"[{_name}] DynamicThreadManagerBase initialized. MinThreads={minThreads}, MaxThreads={maxThreads}");
             StartMonitoring();
         }
 
@@ -78,7 +82,7 @@ namespace Server.Core.ThreadManager
             {
                 try
                 {
-                    _logger.LogDebug("Monitoring loop started.");
+                    _logger.LogDebug($"[{_name}] Monitoring loop started.");
                     while (!_cts.IsCancellationRequested)
                     {
                         // 等待监控间隔
@@ -86,7 +90,7 @@ namespace Server.Core.ThreadManager
 
                         // 获取当前队列长度
                         int queueLength = _channel.Reader.Count;
-                        _logger.LogTrace($"Queue length checked: {queueLength}");
+                        _logger.LogTrace($"[{_name}] Queue length checked: {queueLength}");
 
                         // 调整线程数
                         AdjustThreadCount(queueLength);
@@ -94,11 +98,11 @@ namespace Server.Core.ThreadManager
                 }
                 catch (OperationCanceledException)
                 {
-                    _logger.LogDebug("Monitoring loop cancelled.");
+                    _logger.LogDebug($"[{_name}] Monitoring loop cancelled.");
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogCritical($"Monitoring loop failed with exception: {ex.Message}");
+                    _logger.LogCritical($"[{_name}] Monitoring loop failed with exception: {ex.Message}");
                     throw;
                 }
             });
@@ -133,7 +137,7 @@ namespace Server.Core.ThreadManager
 
                         // 日志：记录扩容操作
                         _logger.LogInformation(
-                            $"Thread added. Current: {_currentThreadCount}, Queue: {queueLength}, Priority: {typeof(T).Name}");
+                            $"[{_name}] Thread added. Current: {_currentThreadCount}, Queue: {queueLength}, Priority: {typeof(T).Name}");
                     }
                 }
                 // 2. 缩容逻辑：队列长度低于阈值一半且超过最小线程数
@@ -151,7 +155,7 @@ namespace Server.Core.ThreadManager
 
                         // 日志：记录缩容操作
                         _logger.LogWarning(
-                            $"Thread removed. Current: {_currentThreadCount}, Queue: {queueLength}, Priority: {typeof(T).Name}");
+                            $"[{_name}] Thread removed. Current: {_currentThreadCount}, Queue: {queueLength}, Priority: {typeof(T).Name}");
                     }
                 }
             }
@@ -166,7 +170,7 @@ namespace Server.Core.ThreadManager
         {
             try
             {
-                _logger.LogDebug($"Worker thread started. Thread ID: {Environment.CurrentManagedThreadId}");
+                _logger.LogDebug($"[{_name}] Worker thread started. Thread ID: {Environment.CurrentManagedThreadId}");
 
                 // 持续读取消息直到通道关闭或取消
                 await foreach (var msg in _channel.Reader.ReadAllAsync(ct))
@@ -181,18 +185,18 @@ namespace Server.Core.ThreadManager
                     catch (Exception ex)
                     {
                         _logger.LogError(
-                            $"Message processing failed. Thread ID: {Environment.CurrentManagedThreadId}, Error: {ex.Message}");
+                            $"[{_name}] Message processing failed. Thread ID: {Environment.CurrentManagedThreadId}, Error: {ex.Message}");
                     }
                 }
             }
             catch (OperationCanceledException)
             {
-                _logger.LogDebug($"Worker thread cancelled. Thread ID: {Environment.CurrentManagedThreadId}");
+                _logger.LogDebug($"[{_name}] Worker thread cancelled. Thread ID: {Environment.CurrentManagedThreadId}");
             }
             catch (Exception ex)
             {
                 _logger.LogCritical(
-                    $"Worker thread terminated unexpectedly. Thread ID: {Environment.CurrentManagedThreadId}, Error: {ex.Message}");
+                    $"[{_name}] Worker thread terminated unexpectedly. Thread ID: {Environment.CurrentManagedThreadId}, Error: {ex.Message}");
             }
         }
 
@@ -211,11 +215,11 @@ namespace Server.Core.ThreadManager
                     Task.WaitAll(_activeTasks.ToArray());
                     _activeTasks.Clear();
                     _currentThreadCount = 0;
-                    _logger.LogInformation("All worker threads shutdown gracefully.");
+                    _logger.LogInformation($"[{_name}] All worker threads shutdown gracefully.");
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogCritical($"Shutdown failed with exception: {ex.Message}");
+                    _logger.LogCritical($"[{_name}] Shutdown failed with exception: {ex.Message}");
                 }
             }
         }

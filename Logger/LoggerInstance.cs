@@ -2,6 +2,7 @@
 //#define DISABLE_DEBUG_LOGGING 
 //#define DISABLE_INFORMATION_LOGGING 
 
+using Server.Common.Extensions;
 using Server.Logger.Common;
 using System.Collections.Concurrent;
 
@@ -59,7 +60,7 @@ namespace Server.Logger
                 return;
 
             var logMessage = new LogMessage(
-                DateTime.UtcNow,
+                DateTime.Now,
                 level,
                 message,
                 Environment.CurrentManagedThreadId,
@@ -82,7 +83,7 @@ namespace Server.Logger
                         {
                             // 队列已满时的降级处理
                             WriteToConsole(new LogMessage(
-                                DateTime.UtcNow,
+                                DateTime.Now,
                                 LogLevel.Error,
                                 "Log queue is full, message dropped: " + message,
                                 Environment.CurrentManagedThreadId,
@@ -92,7 +93,7 @@ namespace Server.Logger
                     catch 
                     {
                         WriteToConsole(new LogMessage(
-                                DateTime.UtcNow,
+                                DateTime.Now,
                                 LogLevel.Error,
                                 "Log queue try add error, message dropped: " + message,
                                 Environment.CurrentManagedThreadId,
@@ -180,8 +181,8 @@ namespace Server.Logger
         private string FormatMessage(LogMessage message, string target)
         {
             return $"[{message.Timestamp:yyyy-MM-dd HH:mm:ss.fff}] " +
-                   $"[{message.Level.ToString().ToUpper()}] " +
-                   $"[Thread: {message.ThreadId:0000}/{message.ThreadName ?? "Unknown"}] " +
+                   $"[{message.Level.ToString().Center(11, " ")}] " +
+                   //$"[Thread: {message.ThreadId:0000}/{message.ThreadName ?? "Unknown"}] " +
                    //$"[Target: {target}] " +
                    $"{message.Message}";
         }

@@ -1,17 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Reflection;
 using Server.DataBase.Common;
-using Server.DataBase.NonRelateSQL;
-using Server.DataBase.NonRelational;
-using Server.DataBase.RelateSQL;
-using static Org.BouncyCastle.Math.EC.ECCurve;
+using Server.DataBase.Core.NonRelateSQL;
+using Server.DataBase.Core.RelateSQL;
 
-namespace Server.DataBase
+namespace Server.DataBase.Core
 {
     public class DatabaseFactory
     {

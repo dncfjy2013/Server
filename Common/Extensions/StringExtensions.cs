@@ -25,6 +25,74 @@ namespace Server.Common.Extensions
 
         #region 格式转换
         /// <summary>
+        /// 将字符串居中填充到指定长度，使用指定字符进行填充
+        /// </summary>
+        /// <param name="source">源字符串</param>
+        /// <param name="totalWidth">扩展后的总长度</param>
+        /// <param name="paddingChar">填充字符，默认为空格</param>
+        /// <returns>居中后的字符串</returns>
+        public static string Center(this string source, int totalWidth, char paddingChar = ' ')
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+
+            if (totalWidth < 0)
+                throw new ArgumentException("总宽度不能为负数", nameof(totalWidth));
+
+            if (source.Length >= totalWidth)
+                return source;
+
+            int leftPadding = (totalWidth - source.Length) / 2;
+            int rightPadding = totalWidth - source.Length - leftPadding;
+
+            return new string(paddingChar, leftPadding) + source + new string(paddingChar, rightPadding);
+        }
+
+        /// <summary>
+        /// 将字符串居中填充到指定长度，使用指定字符串进行填充
+        /// </summary>
+        /// <param name="source">源字符串</param>
+        /// <param name="totalWidth">扩展后的总长度</param>
+        /// <param name="paddingString">填充字符串，默认为空格</param>
+        /// <returns>居中后的字符串</returns>
+        public static string Center(this string source, int totalWidth, string paddingString = " ")
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+
+            if (paddingString == null)
+                throw new ArgumentNullException(nameof(paddingString));
+
+            if (paddingString.Length == 0)
+                throw new ArgumentException("填充字符串不能为空", nameof(paddingString));
+
+            if (totalWidth < 0)
+                throw new ArgumentException("总宽度不能为负数", nameof(totalWidth));
+
+            if (source.Length >= totalWidth)
+                return source;
+
+            int paddingLength = totalWidth - source.Length;
+            int leftPaddingLength = paddingLength / 2;
+            int rightPaddingLength = paddingLength - leftPaddingLength;
+
+            string leftPadding = GeneratePadding(paddingString, leftPaddingLength);
+            string rightPadding = GeneratePadding(paddingString, rightPaddingLength);
+
+            return leftPadding + source + rightPadding;
+        }
+
+        private static string GeneratePadding(string paddingString, int length)
+        {
+            if (length <= 0)
+                return string.Empty;
+
+            int repeatCount = length / paddingString.Length;
+            int remainder = length % paddingString.Length;
+
+            return new String(paddingString[0], repeatCount) + paddingString.Substring(0, remainder);
+        }
+        /// <summary>
         /// 将字符串转换为驼峰命名法（首字母小写）
         /// </summary>
         public static string ToCamelCase(this string value)
