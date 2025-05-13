@@ -41,6 +41,18 @@ namespace Server.Core
         {
             _logger.LogTrace("Enter AcceptSslClients loop");
 
+            // 加载信任的客户端根证书（如果有）
+            X509Certificate2? trustedClientRoot = null;
+            try
+            {
+                // 从文件或存储中加载信任的根证书
+                trustedClientRoot = new X509Certificate2("trusted_client_root.cer");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning($"Failed to load trusted client root certificate: {ex.Message}");
+            }
+
             while (_isRunning)
             {
                 try
@@ -50,7 +62,7 @@ namespace Server.Core
                     _logger.LogDebug($"Accepted new SSL client: {sslClient.Client.RemoteEndPoint}");
 
                     // 2. 创建SSL流
-                    var sslStream = new SslStream(sslClient.GetStream(), false);
+                    var sslStream = new SslStream(sslClient.GetStream(), false, ValidateClientCertificate);
                     _logger.LogTrace($"Created SslStream for client: {sslClient.Client.RemoteEndPoint}");
 
                     // 3. 配置SSL验证参数
@@ -63,33 +75,98 @@ namespace Server.Core
                     };
                     _logger.LogDebug("Configured SSL authentication options");
 
-                    // 4. 执行SSL握手
-                    await sslStream.AuthenticateAsServerAsync(sslOptions);
-                    _logger.LogInformation($"SSL handshake completed for client: {sslClient.Client.RemoteEndPoint}");
+                    try
+                    {
+                        // 4. 执行SSL握手
+                        await sslStream.AuthenticateAsServerAsync(sslOptions);
+                        _logger.LogInformation($"SSL handshake completed for client: {sslClient.Client.RemoteEndPoint}");
 
-                    // 5. 分配客户端ID并创建配置对象
-                    var clientId = Interlocked.Increment(ref _nextClientId);
-                    var client = new ClientConfig(clientId, sslStream);
-                    _clients.TryAdd(clientId, client);
+                        // 5. 分配客户端ID并创建配置对象
+                        var clientId = Interlocked.Increment(ref _nextClientId);
+                        var client = new ClientConfig(clientId, sslStream);
+                        _clients.TryAdd(clientId, client);
 
-                    _logger.LogInformation($"SSL Client {clientId} connected: {sslClient.Client.RemoteEndPoint}");
-                    _logger.LogTrace($"Added client {clientId} to _clients (count={_clients.Count})");
+                        _logger.LogInformation($"SSL Client {clientId} connected: {sslClient.Client.RemoteEndPoint}");
+                        _logger.LogTrace($"Added client {clientId} to _clients (count={_clients.Count})");
 
-                    // 6. 启动客户端消息处理任务
-                    _ = HandleClient(client);
-                    _logger.LogDebug($"Started HandleClient task for SSL client {clientId}");
+                        // 6. 启动客户端消息处理任务
+                        _ = HandleClient(client);
+                        _logger.LogDebug($"Started HandleClient task for SSL client {clientId}");
+
+                    }
+                    catch (AuthenticationException authEx)
+                    {
+                        _logger.LogCritical($"SSL authentication failed: {authEx.Message}");
+                        if (authEx.InnerException != null)
+                        {
+                            _logger.LogCritical($"Inner exception: {authEx.InnerException.Message}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogCritical($"Error accepting client: {ex.Message}");
+                    }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogCritical($"SSL accept error: {ex.Message}"); // 记录完整异常堆栈
-                    _logger.LogWarning($"Retrying SSL accept in 100ms...");
-                    await Task.Delay(100); // 避免异常风暴
+                    _logger.LogCritical($"Error accepting client: {ex.Message}");
+                    _logger.LogWarning($"Retrying in 100ms...");
+                    await Task.Delay(100);
                 }
-            }
 
-            _logger.LogTrace("Exited AcceptSslClients loop (server stopped)");
+                _logger.LogTrace("Exited AcceptSslClients loop (server stopped)");
+            }
         }
 
+        // 自定义客户端证书验证回调
+        private bool ValidateClientCertificate(object sender, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors sslPolicyErrors)
+        {
+            // 如果没有提供证书，直接失败（因为我们要求客户端证书）
+            if (certificate == null)
+            {
+                _logger.LogError("Client certificate is null");
+                return false;
+            }
+
+            _logger.LogDebug($"Client certificate received: {certificate.Subject}");
+
+            // 如果有默认的验证错误
+            if (sslPolicyErrors != SslPolicyErrors.None)
+            {
+                _logger.LogWarning($"Certificate validation error: {sslPolicyErrors}");
+
+                // 处理特定的错误
+                if ((sslPolicyErrors & SslPolicyErrors.RemoteCertificateChainErrors) != 0)
+                {
+                    if (chain != null)
+                    {
+                        // 检查链状态
+                        foreach (var status in chain.ChainStatus)
+                        {
+                            _logger.LogWarning($"Chain status: {status.Status} - {status.StatusInformation}");
+
+                            // 允许自签名证书（仅用于开发环境！）
+                            if (status.Status == X509ChainStatusFlags.UntrustedRoot)
+                            {
+                                _logger.LogWarning("Accepting untrusted root certificate (development mode)");
+                                return true;
+                            }
+
+                            // 其他错误应视为失败
+                            if (status.Status != X509ChainStatusFlags.NoError)
+                                return false;
+                        }
+                    }
+                }
+
+                // 其他错误视为失败
+                return false;
+            }
+
+            // 证书验证通过
+            _logger.LogInformation("Client certificate validation passed");
+            return true;
+        }
         /// <summary>
         /// 异步接受普通Socket客户端连接（循环执行直到服务器停止）
         /// </summary>

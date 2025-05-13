@@ -78,7 +78,13 @@ namespace Server.Core.Certification
         private static void SaveCertificate(X509Certificate2 certificate)
         {
             File.WriteAllBytes("server.pfx", certificate.Export(X509ContentType.Pfx, "password"));
+            ExportCertificatePublicKey(certificate);
             Console.WriteLine("自签名证书已创建并保存为 server.pfx");
+        }
+        private static void ExportCertificatePublicKey(X509Certificate2 certificate)
+        {
+            File.WriteAllBytes("server.cer", certificate.Export(X509ContentType.Cert));
+            Console.WriteLine("证书公钥已导出为 server.cer");
         }
     }
 }
