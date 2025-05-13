@@ -1,6 +1,6 @@
 ﻿using MySql.Data.MySqlClient;
-using Server.DataBase;
 using Server.DataBase.Common;
+using Server.DataBase.Core;
 using System;
 using System.Collections.Generic;
 using System.Linq;
