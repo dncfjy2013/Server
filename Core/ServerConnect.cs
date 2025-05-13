@@ -81,7 +81,7 @@ namespace Server.Core
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogCritical($"SSL accept error: {ex.Message}, {ex}"); // 记录完整异常堆栈
+                    _logger.LogCritical($"SSL accept error: {ex.Message}"); // 记录完整异常堆栈
                     _logger.LogWarning($"Retrying SSL accept in 100ms...");
                     await Task.Delay(100); // 避免异常风暴
                 }

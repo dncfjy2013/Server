@@ -45,11 +45,11 @@ namespace Server.Core
         // 用于线程安全的日志记录操作的锁对象，确保在多线程环境下日志记录操作的线程安全性
         private readonly object _lock = new();
 
-        public ServerInstance(int port, int sslPort, int udpport, string host, string certPath = null)
+        public ServerInstance(int port, int sslPort, int udpport, string host, X509Certificate2 certf = null)
         {
             _logger = new LoggerInstance();
 
-            _logger.LogTrace($"Server constructor called with port: {port}, sslPort: {sslPort}, certPath: {certPath}");
+            _logger.LogTrace($"Server constructor called with port: {port}, sslPort: {sslPort}, certf: {certf}");
 
             try
             {
@@ -62,20 +62,20 @@ namespace Server.Core
 
                 // Information 等级：记录开始加载 SSL 证书的操作
                 _logger.LogInformation("Initiating the loading of SSL certification.");
-                if (!string.IsNullOrEmpty(certPath))
+                if (certf != null)
                 {
                     try
                     {
-                        _serverCert = new X509Certificate2(certPath);
+                        _serverCert = certf;
                         // Information 等级：记录 SSL 证书验证通过的信息
                         _logger.LogInformation("SSL certificate has been successfully verified.");
                         // Information 等级：记录已加载的 SSL 证书路径
-                        _logger.LogInformation($"SSL certificate loaded from path: {certPath}");
+                        _logger.LogInformation($"SSL certificate loaded from path: {certf}");
                     }
                     catch (Exception ex)
                     {
                         // Error 等级：记录加载 SSL 证书时出现的异常
-                        _logger.LogError($"An error occurred while loading the SSL certificate from {certPath}: {ex.Message}  ");
+                        _logger.LogError($"An error occurred while loading the SSL certificate from {certf}: {ex.Message}  ");
                     }
                 }
                 else
