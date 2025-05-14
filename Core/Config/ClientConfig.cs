@@ -35,6 +35,7 @@ namespace Server.Core.Config
         public Stopwatch ConnectionWatch { get; } = Stopwatch.StartNew();
         public string FilePath { get; set; }
         public bool IsConnect { get; set; }
+        public bool IsSecurity { get; set; }
         public ClientConfig(uint id, Socket socket)
         {
             Id = id;
@@ -46,6 +47,8 @@ namespace Server.Core.Config
             IsConnect = true;
 
             StartActivity = DateTime.Now;
+
+            IsSecurity = false;
         }
         public ClientConfig(uint id, SslStream sslStream)
         {
@@ -59,6 +62,8 @@ namespace Server.Core.Config
             IsConnect = true;
 
             StartActivity = DateTime.Now;
+
+            IsSecurity = true;
         }
 
         public void AddFileReceivedBytes(long bytes)

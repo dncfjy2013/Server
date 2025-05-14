@@ -7,6 +7,8 @@ using System.Security.Cryptography.X509Certificates;
 using Server.Utils;
 using Server.Core.Config;
 using Server.Common.Constants;
+using Server.Core.Common;
+using MySqlX.XDevAPI;
 
 namespace Server.Core
 {
@@ -62,6 +64,10 @@ namespace Server.Core
                     var sslClient = await _sslListener.AcceptTcpClientAsync();
                     _logger.LogDebug($"Accepted new SSL client: {sslClient.Client.RemoteEndPoint}");
 
+                    // 分配客户端ID并
+                    var clientId = Interlocked.Increment(ref _nextClientId);
+                    await _ClientConnectionManager.CreateClient(clientId).ConnectAsync(); 
+
                     // 2. 创建SSL流
                     var sslStream = new SslStream(sslClient.GetStream(), false, ValidateClientCertificate);
                     _logger.LogTrace($"Created SslStream for client: {sslClient.Client.RemoteEndPoint}");
@@ -82,13 +88,14 @@ namespace Server.Core
                         await sslStream.AuthenticateAsServerAsync(sslOptions);
                         _logger.LogInformation($"SSL handshake completed for client: {sslClient.Client.RemoteEndPoint}");
 
-                        // 5. 分配客户端ID并创建配置对象
-                        var clientId = Interlocked.Increment(ref _nextClientId);
+                        // 5. 创建配置对象
                         var client = new ClientConfig(clientId, sslStream);
                         _clients.TryAdd(clientId, client);
 
                         _logger.LogInformation($"SSL Client {clientId} connected: {sslClient.Client.RemoteEndPoint}");
                         _logger.LogTrace($"Added client {clientId} to _clients (count={_clients.Count})");
+
+                        await _ClientConnectionManager.TryGetClientById(clientId)?.ConnectCompleteAsync();
 
                         // 6. 启动客户端消息处理任务
                         _ = HandleClient(client);
@@ -102,9 +109,12 @@ namespace Server.Core
                         {
                             _logger.LogCritical($"Inner exception: {authEx.InnerException.Message}");
                         }
+
+                        await _ClientConnectionManager.TryGetClientById(clientId)?.ErrorAsync();
                     }
                     catch (Exception ex)
                     {
+                        await _ClientConnectionManager.TryGetClientById(clientId)?.ErrorAsync();
                         _logger.LogCritical($"Error accepting client: {ex.Message}");
                     }
                 }
@@ -285,14 +295,18 @@ namespace Server.Core
                     var clientSocket = await _listener.AcceptAsync();
                     _logger.LogDebug($"Accepted new socket client: {clientSocket.RemoteEndPoint}");
 
-                    // 2. 分配客户端ID并创建配置对象
+                    // 分配客户端ID并
                     var clientId = Interlocked.Increment(ref _nextClientId);
+                    await _ClientConnectionManager.CreateClient(clientId).ConnectAsync();
+
+                    // 2. 创建配置对象
                     var client = new ClientConfig(clientId, clientSocket);
                     _clients.TryAdd(clientId, client);
 
                     _logger.LogInformation($"Socket Client {clientId} connected: {clientSocket.RemoteEndPoint}");
                     _logger.LogTrace($"Added client {clientId} to _clients (count={_clients.Count})");
 
+                    await _ClientConnectionManager.TryGetClientById(clientId)?.ConnectCompleteAsync();
                     // 3. 启动客户端消息处理任务
                     _ = HandleClient(client);
                     _logger.LogDebug($"Started HandleClient task for socket client {clientId}");
@@ -380,7 +394,7 @@ namespace Server.Core
         /// 断开客户端连接并清理资源
         /// </summary>
         /// <param name="clientId">客户端ID</param>
-        private void DisconnectClient(uint clientId)
+        private async void DisconnectClient(uint clientId)
         {
             _logger.LogTrace($"Disconnecting client {clientId}...");
 
@@ -388,6 +402,7 @@ namespace Server.Core
             {
                 try
                 {
+                    await _ClientConnectionManager.TryGetClientById(clientId)?.DisconnectAsync();
                     // 1. 关闭网络连接
                     if (client.Socket != null)
                     {
@@ -403,10 +418,14 @@ namespace Server.Core
 
                     client.IsConnect = false;
                     _logger.LogTrace($"Marked client {clientId} as disconnected");
+
+                    await _ClientConnectionManager.TryGetClientById(clientId)?.DisconnectCompleteAsync();
                 }
                 catch (Exception ex)
                 {
                     _logger.LogWarning($"Error closing client {clientId} connection: {ex.Message}");
+
+                    await _ClientConnectionManager.TryGetClientById(clientId)?.ErrorAsync();
                 }
                 finally
                 {

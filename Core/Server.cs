@@ -1,4 +1,5 @@
-﻿using Server.Core.Extend;
+﻿using Server.Core.Common;
+using Server.Core.Extend;
 using Server.Logger;
 using System.Net;
 using System.Net.Sockets;
@@ -45,9 +46,12 @@ namespace Server.Core
         // 用于线程安全的日志记录操作的锁对象，确保在多线程环境下日志记录操作的线程安全性
         private readonly object _lock = new();
 
+        private ConnectionManager _ClientConnectionManager;
+
         public ServerInstance(int port, int sslPort, int udpport, string host, X509Certificate2 certf = null)
         {
             _logger = new LoggerInstance();
+            _ClientConnectionManager = new ConnectionManager(_logger);
 
             _logger.LogTrace($"Server constructor called with port: {port}, sslPort: {sslPort}, certf: {certf}");
 
@@ -310,6 +314,10 @@ namespace Server.Core
                     }
                 }
                 _logger.LogInformation("All connected clients have been disconnected.");
+
+                _logger.LogDebug("Disposing of the client state Manager.");
+                _ClientConnectionManager.Dispose();
+                _logger.LogDebug("The client state Manager has been disposed of.");
 
                 // 处理套接字监听器的释放，根据是否存在监听器使用不同日志记录
                 if (_listener != null)

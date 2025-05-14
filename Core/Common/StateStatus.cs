@@ -21,8 +21,8 @@ namespace Server.Core.Common
 
     public class ConnectionManager : IDisposable
     {
-        private readonly StateMachine<int, ConnectionState> _stateMachine = new();
-        private readonly ConcurrentDictionary<int, ConnectionClient> _clients = new();
+        private readonly StateMachine<uint, ConnectionState> _stateMachine = new();
+        private readonly ConcurrentDictionary<uint, ConnectionClient> _clients = new();
         private readonly ILogger _logger;
 
         public ConnectionManager(ILogger logger)
@@ -49,13 +49,13 @@ namespace Server.Core.Common
             };
         }
 
-        public ConnectionClient CreateClient(int clientId)
+        public ConnectionClient CreateClient(uint clientId)
         {
             var client = new ConnectionClient(clientId, _stateMachine, _logger);
             return _clients.AddOrUpdate(clientId, client, (_, _) => client);
         }
 
-        public bool RemoveClient(int clientId)
+        public bool RemoveClient(uint clientId)
         {
             return _clients.TryRemove(clientId, out _);
         }
@@ -63,6 +63,15 @@ namespace Server.Core.Common
         public IEnumerable<ConnectionClient> GetAllClients()
         {
             return _clients.Values.ToArray();
+        }
+
+        public ConnectionClient? TryGetClientById(uint id)
+        {
+            if (_clients.TryGetValue(id, out var client))
+            {
+                return client;
+            }
+            return null;
         }
 
         public void Dispose()
@@ -77,13 +86,13 @@ namespace Server.Core.Common
 
     public class ConnectionClient : IDisposable
     {
-        private readonly int _clientId;
-        private readonly StateMachine<int, ConnectionState> _stateMachine;
+        private readonly uint _clientId;
+        private readonly StateMachine<uint, ConnectionState> _stateMachine;
         private readonly ILogger _logger;
         private bool _disposed;
 
-        public ConnectionClient(int clientId,
-                              StateMachine<int, ConnectionState> stateMachine,
+        public ConnectionClient(uint clientId,
+                              StateMachine<uint, ConnectionState> stateMachine,
                               ILogger logger)
         {
             _clientId = clientId;
@@ -113,14 +122,9 @@ namespace Server.Core.Common
                 },
                 reason: "User initiated connection"
             );
-
-            if (CurrentState == ConnectionState.Connecting)
-            {
-                await CompleteConnectionAsync();
-            }
         }
 
-        private async Task CompleteConnectionAsync()
+        public async Task ConnectCompleteAsync()
         {
             await _stateMachine.TransitionAsync(
                 _clientId,
@@ -138,7 +142,7 @@ namespace Server.Core.Common
         {
             if (_disposed) return;
 
-            var success = await _stateMachine.TransitionAsync(
+            await _stateMachine.TransitionAsync(
                 _clientId,
                 ConnectionState.Disconnecting,
                 transitionAction: async (id, _, _) =>
@@ -148,8 +152,11 @@ namespace Server.Core.Common
                 },
                 reason: "Begin disconnecting"
             );
+        }
 
-            if (!success) return;
+        public async Task DisconnectCompleteAsync()
+        {
+            if (_disposed) return;
 
             await _stateMachine.TransitionAsync(
                 _clientId,
@@ -163,13 +170,29 @@ namespace Server.Core.Common
             );
         }
 
+        public async Task ErrorAsync()
+        {
+            if (_disposed) return;
+
+            await _stateMachine.TransitionAsync(
+                _clientId,
+                ConnectionState.Error,
+                transitionAction: async (id, _, _) =>
+                {
+                    _logger.LogTrace($"Finalizing disconnection for client {id}...");
+                    await SimulateNetworkOperation(300, 10);
+                },
+                reason: "Complete disconnection"
+            );
+        }
+
         private async Task SimulateNetworkOperation(int delayMs, int errorChancePercent = 0)
         {
             await Task.Delay(delayMs);
-            if (errorChancePercent > 0 && new Random().Next(0, 100) < errorChancePercent)
-            {
-                _logger.LogWarning($"Operation failed (Client {_clientId})");
-            }
+            //if (errorChancePercent > 0 && new Random().Next(0, 100) < errorChancePercent)
+            //{
+            //    _logger.LogWarning($"Operation failed (Client {_clientId})");
+            //}
         }
 
         public ConnectionState CurrentState =>
