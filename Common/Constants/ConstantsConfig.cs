@@ -9,5 +9,6 @@ namespace Server.Common.Constants
     public class ConstantsConfig
     {
         public const bool IsDevelopment = true; 
+        public const bool IsUnityServer = true;
     }
 }

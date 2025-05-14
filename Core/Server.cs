@@ -1,4 +1,5 @@
-﻿using Server.Core.Common;
+﻿using Server.Common.Constants;
+using Server.Core.Common;
 using Server.Core.Extend;
 using Server.Logger;
 using System.Net;
@@ -246,12 +247,14 @@ namespace Server.Core
                 AcceptHttpClients();
                 _logger.LogDebug("Accepting HTTP clients process has been initiated.");
 
-                // Trace 等级：记录开始消息处理的详细信息
-                _logger.LogTrace("Commencing Incoming message processing.");
-                StartProcessing();
-                // Trace 等级：记录消息处理已成功开始的详细信息
-                _logger.LogTrace("Incoming Message processing has been successfully started.");
-
+                if (ConstantsConfig.IsUnityServer)
+                {
+                    // Trace 等级：记录开始消息处理的详细信息
+                    _logger.LogTrace("Commencing Incoming message processing.");
+                    StartProcessing();
+                    // Trace 等级：记录消息处理已成功开始的详细信息
+                    _logger.LogTrace("Incoming Message processing has been successfully started.");
+                }
                 // Trace 等级：记录开始消息处理的详细信息
                 _logger.LogTrace("Commencing Outcoming message processing.");
                 StartOutgoingMessageProcessing();

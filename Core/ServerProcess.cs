@@ -1,4 +1,5 @@
 ﻿using Protocol;
+using Server.Common.Constants;
 using Server.Core.Config;
 using Server.Core.ThreadManager;
 using Server.Utils;
@@ -396,36 +397,44 @@ namespace Server.Core
                             ReceivedTime = DateTime.Now
                         };
 
-                        // 背压策略：丢弃低优先级消息（队列积压时）
-                        bool isQueueFull = _messageHighQueue.Reader.Count > MaxQueueSize ||
-                                           _messageMediumQueue.Reader.Count > MaxQueueSize ||
-                                           _messagelowQueue.Reader.Count > MaxQueueSize;
-
-                        if (isQueueFull && message.Data.Priority == DataPriority.Low)
+                        if (ConstantsConfig.IsUnityServer)
                         {
-                            _logger.LogCritical($"Client {client.Id} discarded low-priority message (queue full: High={_messageHighQueue.Reader.Count}, Medium={_messageMediumQueue.Reader.Count}, Low={_messagelowQueue.Reader.Count})");
-                            continue;
-                        }
 
-                        // 按优先级入队
-                        switch (packet.Data.Priority)
+                            // 背压策略：丢弃低优先级消息（队列积压时）
+                            bool isQueueFull = _messageHighQueue.Reader.Count > MaxQueueSize ||
+                                               _messageMediumQueue.Reader.Count > MaxQueueSize ||
+                                               _messagelowQueue.Reader.Count > MaxQueueSize;
+
+                            if (isQueueFull && message.Data.Priority == DataPriority.Low)
+                            {
+                                _logger.LogCritical($"Client {client.Id} discarded low-priority message (queue full: High={_messageHighQueue.Reader.Count}, Medium={_messageMediumQueue.Reader.Count}, Low={_messagelowQueue.Reader.Count})");
+                                continue;
+                            }
+
+                            // 按优先级入队
+                            switch (packet.Data.Priority)
+                            {
+                                case DataPriority.Low:
+                                    await _messagelowQueue.Writer.WriteAsync(message);
+                                    _logger.LogDebug($"Client {client.Id} low-priority message enqueued (Id={message.Client.Id})");
+                                    break;
+                                case DataPriority.High:
+                                    await _messageHighQueue.Writer.WriteAsync(message);
+                                    _logger.LogDebug($"Client {client.Id} high-priority message enqueued (Id={message.Client.Id})");
+                                    break;
+                                case DataPriority.Medium:
+                                    await _messageMediumQueue.Writer.WriteAsync(message);
+                                    _logger.LogDebug($"Client {client.Id} medium-priority message enqueued (Id={message.Client.Id})");
+                                    break;
+                            }
+
+                            // 队列积压监控与背压（按优先级分级处理）
+                            await MonitorQueueBackpressure(client, packet.Data.Priority, (int)header.MessageLength);
+                        }
+                        else
                         {
-                            case DataPriority.Low:
-                                await _messagelowQueue.Writer.WriteAsync(message);
-                                _logger.LogDebug($"Client {client.Id} low-priority message enqueued (Id={message.Client.Id})");
-                                break;
-                            case DataPriority.High:
-                                await _messageHighQueue.Writer.WriteAsync(message);
-                                _logger.LogDebug($"Client {client.Id} high-priority message enqueued (Id={message.Client.Id})");
-                                break;
-                            case DataPriority.Medium:
-                                await _messageMediumQueue.Writer.WriteAsync(message);
-                                _logger.LogDebug($"Client {client.Id} medium-priority message enqueued (Id={message.Client.Id})");
-                                break;
+                            ProcessMessageWithPriority(message, message.Data.Priority);
                         }
-
-                        // 队列积压监控与背压（按优先级分级处理）
-                        await MonitorQueueBackpressure(client, packet.Data.Priority, (int)header.MessageLength);
                     }
                     catch (Exception ex)
                     {
