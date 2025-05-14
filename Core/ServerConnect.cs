@@ -337,10 +337,13 @@ namespace Server.Core
                 {
                     // 接受 HTTP 请求
                     var context = await _httpListener.GetContextAsync();
+                    var clientId = Interlocked.Increment(ref _nextClientId);
+                    await _ClientConnectionManager.CreateClient(clientId).ConnectAsync();
                     _logger.LogDebug($"Accepted new HTTP client: {context.Request.RemoteEndPoint}");
 
                     _logger.LogInformation($"HTTP client connected: {context.Request.RemoteEndPoint}");
 
+                    await _ClientConnectionManager.TryGetClientById(clientId)?.ConnectCompleteAsync();
                     // 启动客户端消息处理任务
                     _ = HandleHttpClient(context);
                     _logger.LogDebug($"Started HandleHttpClient task for HTTP client");
@@ -370,9 +373,13 @@ namespace Server.Core
                 try
                 {
                     var result = await _udpListener.ReceiveAsync();
+
+                    var clientId = Interlocked.Increment(ref _nextClientId);
+                    await _ClientConnectionManager.CreateClient(clientId).ConnectAsync();
+
                     var remoteEndPoint = result.RemoteEndPoint;
                     var data = result.Buffer;
-
+                    await _ClientConnectionManager.TryGetClientById(clientId)?.ConnectCompleteAsync();
                     _logger.LogDebug($"Received UDP data from: {remoteEndPoint}");
 
                     // 处理 UDP 数据
