@@ -66,7 +66,7 @@ namespace Server.Core
 
                     // 分配客户端ID并
                     var clientId = Interlocked.Increment(ref _nextClientId);
-                    await _ClientConnectionManager.CreateClient(clientId).ConnectAsync(); 
+                    _ClientConnectionManager.CreateClient(clientId).ConnectAsync(); 
 
                     // 2. 创建SSL流
                     var sslStream = new SslStream(sslClient.GetStream(), false, ValidateClientCertificate);
@@ -95,7 +95,7 @@ namespace Server.Core
                         _logger.LogInformation($"SSL Client {clientId} connected: {sslClient.Client.RemoteEndPoint}");
                         _logger.LogTrace($"Added client {clientId} to _clients (count={_clients.Count})");
 
-                        await _ClientConnectionManager.TryGetClientById(clientId)?.ConnectCompleteAsync();
+                        _ClientConnectionManager.TryGetClientById(clientId)?.ConnectCompleteAsync();
 
                         // 6. 启动客户端消息处理任务
                         _ = HandleClient(client);
@@ -110,11 +110,11 @@ namespace Server.Core
                             _logger.LogCritical($"Inner exception: {authEx.InnerException.Message}");
                         }
 
-                        await _ClientConnectionManager.TryGetClientById(clientId)?.ErrorAsync();
+                        _ClientConnectionManager.TryGetClientById(clientId)?.ErrorAsync();
                     }
                     catch (Exception ex)
                     {
-                        await _ClientConnectionManager.TryGetClientById(clientId)?.ErrorAsync();
+                        _ClientConnectionManager.TryGetClientById(clientId)?.ErrorAsync();
                         _logger.LogCritical($"Error accepting client: {ex.Message}");
                     }
                 }
@@ -297,7 +297,7 @@ namespace Server.Core
 
                     // 分配客户端ID并
                     var clientId = Interlocked.Increment(ref _nextClientId);
-                    await _ClientConnectionManager.CreateClient(clientId).ConnectAsync();
+                    _ClientConnectionManager.CreateClient(clientId).ConnectAsync();
 
                     // 2. 创建配置对象
                     var client = new ClientConfig(clientId, clientSocket);
@@ -306,7 +306,7 @@ namespace Server.Core
                     _logger.LogInformation($"Socket Client {clientId} connected: {clientSocket.RemoteEndPoint}");
                     _logger.LogTrace($"Added client {clientId} to _clients (count={_clients.Count})");
 
-                    await _ClientConnectionManager.TryGetClientById(clientId)?.ConnectCompleteAsync();
+                    _ClientConnectionManager.TryGetClientById(clientId)?.ConnectCompleteAsync();
                     // 3. 启动客户端消息处理任务
                     _ = HandleClient(client);
                     _logger.LogDebug($"Started HandleClient task for socket client {clientId}");
@@ -338,12 +338,12 @@ namespace Server.Core
                     // 接受 HTTP 请求
                     var context = await _httpListener.GetContextAsync();
                     var clientId = Interlocked.Increment(ref _nextClientId);
-                    await _ClientConnectionManager.CreateClient(clientId).ConnectAsync();
+                    _ClientConnectionManager.CreateClient(clientId).ConnectAsync();
                     _logger.LogDebug($"Accepted new HTTP client: {context.Request.RemoteEndPoint}");
 
                     _logger.LogInformation($"HTTP client connected: {context.Request.RemoteEndPoint}");
 
-                    await _ClientConnectionManager.TryGetClientById(clientId)?.ConnectCompleteAsync();
+                    _ClientConnectionManager.TryGetClientById(clientId)?.ConnectCompleteAsync();
                     // 启动客户端消息处理任务
                     _ = HandleHttpClient(context);
                     _logger.LogDebug($"Started HandleHttpClient task for HTTP client");
@@ -375,11 +375,11 @@ namespace Server.Core
                     var result = await _udpListener.ReceiveAsync();
 
                     var clientId = Interlocked.Increment(ref _nextClientId);
-                    await _ClientConnectionManager.CreateClient(clientId).ConnectAsync();
+                    _ClientConnectionManager.CreateClient(clientId).ConnectAsync();
 
                     var remoteEndPoint = result.RemoteEndPoint;
                     var data = result.Buffer;
-                    await _ClientConnectionManager.TryGetClientById(clientId)?.ConnectCompleteAsync();
+                    _ClientConnectionManager.TryGetClientById(clientId)?.ConnectCompleteAsync();
                     _logger.LogDebug($"Received UDP data from: {remoteEndPoint}");
 
                     // 处理 UDP 数据

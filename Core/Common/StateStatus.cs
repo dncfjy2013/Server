@@ -108,7 +108,7 @@ namespace Server.Core.Common
             _stateMachine.SetTimeout(_clientId, TimeSpan.FromSeconds(30), ConnectionState.Disconnected);
         }
 
-        public async Task ConnectAsync()
+        public async void ConnectAsync()
         {
             if (_disposed) return;
 
@@ -118,7 +118,6 @@ namespace Server.Core.Common
                 transitionAction: async (id, _, _) =>
                 {
                     _logger.LogTrace($"Connecting client {id}...");
-                    await SimulateNetworkOperation(1000, 20);
                 },
                 reason: "User initiated connection"
             );
@@ -132,7 +131,6 @@ namespace Server.Core.Common
                 transitionAction: async (id, _, _) =>
                 {
                     _logger.LogTrace($"Finalizing connection for client {id}...");
-                    await SimulateNetworkOperation(500);
                 },
                 reason: "Connection established"
             );
@@ -148,7 +146,6 @@ namespace Server.Core.Common
                 transitionAction: async (id, _, _) =>
                 {
                     _logger.LogTrace($"Starting disconnection for client {id}...");
-                    await SimulateNetworkOperation(100);
                 },
                 reason: "Begin disconnecting"
             );
@@ -164,7 +161,6 @@ namespace Server.Core.Common
                 transitionAction: async (id, _, _) =>
                 {
                     _logger.LogTrace($"Finalizing disconnection for client {id}...");
-                    await SimulateNetworkOperation(300, 10);
                 },
                 reason: "Complete disconnection"
             );
@@ -180,19 +176,9 @@ namespace Server.Core.Common
                 transitionAction: async (id, _, _) =>
                 {
                     _logger.LogTrace($"Finalizing disconnection for client {id}...");
-                    await SimulateNetworkOperation(300, 10);
                 },
                 reason: "Complete disconnection"
             );
-        }
-
-        private async Task SimulateNetworkOperation(int delayMs, int errorChancePercent = 0)
-        {
-            await Task.Delay(delayMs);
-            //if (errorChancePercent > 0 && new Random().Next(0, 100) < errorChancePercent)
-            //{
-            //    _logger.LogWarning($"Operation failed (Client {_clientId})");
-            //}
         }
 
         public ConnectionState CurrentState =>
