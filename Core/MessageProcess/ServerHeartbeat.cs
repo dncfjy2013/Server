@@ -26,7 +26,8 @@ namespace Server.Core
             {
                 InfoType = data.InfoType,
                 Message = "ACK",
-                AckNum = data.SeqNum
+                AckNum = data.SeqNum,
+                SeqNum = data.SeqNum,
             };
 
             // 记录正常心跳日志（Info级别）

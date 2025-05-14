@@ -24,6 +24,7 @@ namespace Server.Core
             {
                 InfoType = data.InfoType,
                 AckNum = data.SeqNum,
+                SeqNum = data.SeqNum,
                 Message = "ACK"
             };
 
