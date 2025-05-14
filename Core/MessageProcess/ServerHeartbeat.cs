@@ -30,7 +30,7 @@ namespace Server.Core
             };
 
             // 记录正常心跳日志（Info级别）
-            _logger.LogInformation($"Client {client.Id} heartbeat received, sending ACK");
+            _logger.LogInformation($"Client {client.Id} heartbeat {data.SeqNum} received, sending ACK");
 
             // 统计发送数据量
             long sentSize = MemoryCalculator.CalculateObjectSize(ack);

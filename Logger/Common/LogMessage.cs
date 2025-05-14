@@ -1,4 +1,6 @@
-﻿namespace Server.Logger.Common
+﻿using Server.Common.Extensions;
+
+namespace Server.Logger.Common
 {
     #region Log Message Structure
     public struct LogMessage
@@ -9,6 +11,8 @@
         public int ThreadId { get; }
         public string ThreadName { get; }
 
+        public string LevelMessage { get; }
+
         public LogMessage(DateTime timestamp, LogLevel level, string message,
             int threadId, string threadName)
         {
@@ -17,6 +21,8 @@
             Message = message;
             ThreadId = threadId;
             ThreadName = threadName;
+
+            LevelMessage = level.ToString().Center(11, " ");
         }
     }
     #endregion

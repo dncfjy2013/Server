@@ -1,5 +1,5 @@
 ﻿#define DISABLE_TRACE_LOGGING 
-//#define DISABLE_DEBUG_LOGGING 
+#define DISABLE_DEBUG_LOGGING 
 //#define DISABLE_INFORMATION_LOGGING 
 
 using Server.Common.Extensions;
@@ -181,7 +181,7 @@ namespace Server.Logger
         private string FormatMessage(LogMessage message, string target)
         {
             return $"[{message.Timestamp:yyyy-MM-dd HH:mm:ss.fff}] " +
-                   $"[{message.Level.ToString().Center(11, " ")}] " +
+                   $"[{message.LevelMessage}] " +
                    //$"[Thread: {message.ThreadId:0000}/{message.ThreadName ?? "Unknown"}] " +
                    //$"[Target: {target}] " +
                    $"{message.Message}";

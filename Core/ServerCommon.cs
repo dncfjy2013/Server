@@ -192,14 +192,14 @@ namespace Server.Core
             }
             catch (SocketException sex)
             {
-                _logger.LogError($"Client {client.Id} Socket error in SendData: {sex.SocketErrorCode} - {sex.Message}. Stack trace: {sex.StackTrace}");
+                _logger.LogError($"Client {client.Id} Socket error in SendData: {sex.Message}");
                 // 断开客户端连接
                 DisconnectClient(client.Id);
                 return false;
             }
             catch (Exception ex)
             {
-                _logger.LogCritical($"Client {client.Id} Unexpected error in SendData: {ex.Message}. Stack trace: {ex.StackTrace}");
+                _logger.LogCritical($"Client {client.Id} Unexpected error in SendData: {ex.Message}");
                 return false;
             }
         }
