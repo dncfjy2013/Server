@@ -11,9 +11,6 @@ namespace Server.Core
 {
     partial class ServerInstance
     {
-        // 定义消息队列的最大容量，这里设置为 int 类型的最大值，表示队列理论上可以无限扩展
-        private readonly int MaxQueueSize = int.MaxValue;
-
         // 创建一个无界的通道用于存储高优先级的客户端消息
         // 通道是一种用于在不同线程或任务之间安全传递数据的机制
         private Channel<ClientMessage> _messageHighQueue = Channel.CreateUnbounded<ClientMessage>();
@@ -50,11 +47,11 @@ namespace Server.Core
         private readonly Dictionary<DataPriority, SemaphoreSlim> _prioritySemaphores = new()
         {
             // 为高优先级消息设置信号量，允许的并发数量为处理器核心数的两倍
-            [DataPriority.High] = new SemaphoreSlim(Environment.ProcessorCount * 2, Environment.ProcessorCount * 2),
+            [DataPriority.High] = new SemaphoreSlim(ConstantsConfig.High_Min_Semaphores, ConstantsConfig.High_Max_Semaphores),
             // 为中优先级消息设置信号量，允许的并发数量等于处理器核心数
-            [DataPriority.Medium] = new SemaphoreSlim(Environment.ProcessorCount, Environment.ProcessorCount),
+            [DataPriority.Medium] = new SemaphoreSlim(ConstantsConfig.Medium_Min_Semaphores, ConstantsConfig.Medium_Max_Semaphores),
             // 为低优先级消息设置信号量，允许的并发数量为处理器核心数的一半
-            [DataPriority.Low] = new SemaphoreSlim(Environment.ProcessorCount / 2, Environment.ProcessorCount / 2)
+            [DataPriority.Low] = new SemaphoreSlim(ConstantsConfig.Low_Min_Semaphores, ConstantsConfig.Low_Max_Semaphores)
         };
 
         // 创建一个用于取消消息处理任务的 CancellationTokenSource
@@ -77,43 +74,39 @@ namespace Server.Core
             {
                 _logger.LogTrace("Entering StartProcessing method.");
                 _logger.LogDebug("Initiating the initialization of message thread managers for different priorities.");
-
-                // 获取当前系统的 CPU 核心数，用于动态确定不同优先级消息队列的消费者数量
-                int processorCount = Environment.ProcessorCount;
-                _logger.LogDebug($"Current system CPU core count obtained: {processorCount}."); // 改为Debug级别（Critical通常用于致命错误）
-
+ 
                 // 启动高优先级消息的处理任务
-                _logger.LogInformation("Starting the initialization of the high-priority message thread manager.");
+                _logger.LogDebug("Starting the initialization of the high-priority message thread manager.");
                 _incomingHighManager = new IncomingMessageThreadManager(
                     this,
                     _messageHighQueue,
                     _logger,
                     DataPriority.High,
-                    minThreads: processorCount / 2,
-                    maxThreads: processorCount * 2);
-                _logger.LogInformation("High-priority message thread manager initialization completed.");
+                    minThreads: ConstantsConfig.In_High_MinThreadNum,
+                    maxThreads: ConstantsConfig.In_High_MaxThreadNum);
+                _logger.LogDebug("High-priority message thread manager initialization completed.");
 
                 // 启动中优先级消息的处理任务
-                _logger.LogInformation("Starting the initialization of the medium-priority message thread manager.");
+                _logger.LogDebug("Starting the initialization of the medium-priority message thread manager.");
                 _incomingMediumManager = new IncomingMessageThreadManager(
                     this,
                     _messageMediumQueue,
                     _logger,
                     DataPriority.Medium,
-                    minThreads: processorCount / 4,
-                    maxThreads: processorCount);
-                _logger.LogInformation("Medium-priority message thread manager initialization completed.");
+                    minThreads: ConstantsConfig.In_Medium_MinThreadNum,
+                    maxThreads: ConstantsConfig.In_Medium_MaxThreadNum);
+                _logger.LogDebug("Medium-priority message thread manager initialization completed.");
 
                 // 启动低优先级消息的处理任务
-                _logger.LogInformation("Starting the initialization of the low-priority message thread manager.");
+                _logger.LogDebug("Starting the initialization of the low-priority message thread manager.");
                 _incomingLowManager = new IncomingMessageThreadManager(
                     this,
                     _messagelowQueue,
                     _logger,
                     DataPriority.Low,
-                    minThreads: 1,
-                    maxThreads: processorCount / 4);
-                _logger.LogInformation("Low-priority message thread manager initialization completed.");
+                    minThreads: ConstantsConfig.In_Low_MinThreadNum,
+                    maxThreads: ConstantsConfig.In_Low_MaxThreadNum);
+                _logger.LogDebug("Low-priority message thread manager initialization completed.");
 
                 _logger.LogDebug("Initialization of all priority message thread managers completed.");
                 _logger.LogTrace("Exiting StartProcessing method.");
@@ -323,9 +316,9 @@ namespace Server.Core
                         _logger.LogDebug($"Client {client.Id} header parsed: Version={header.Version}, Length={header.MessageLength}");
 
                         // 3. 校验协议版本
-                        if (!config.SupportedVersions.Contains((byte)header.Version))
+                        if (!ConstantsConfig.config.SupportedVersions.Contains((byte)header.Version))
                         {
-                            _logger.LogWarning($"Client {client.Id} unsupported version {header.Version} (supported: {string.Join(",", config.SupportedVersions)})");
+                            _logger.LogWarning($"Client {client.Id} unsupported version {header.Version} (supported: {string.Join(",", ConstantsConfig.config.SupportedVersions)})");
                             continue;
                         }
                         _logger.LogDebug($"Client {client.Id} protocol version {header.Version} verified");
@@ -401,9 +394,9 @@ namespace Server.Core
                         {
 
                             // 背压策略：丢弃低优先级消息（队列积压时）
-                            bool isQueueFull = _messageHighQueue.Reader.Count > MaxQueueSize ||
-                                               _messageMediumQueue.Reader.Count > MaxQueueSize ||
-                                               _messagelowQueue.Reader.Count > MaxQueueSize;
+                            bool isQueueFull = _messageHighQueue.Reader.Count > ConstantsConfig.MaxQueueSize ||
+                                               _messageMediumQueue.Reader.Count > ConstantsConfig.MaxQueueSize ||
+                                               _messagelowQueue.Reader.Count > ConstantsConfig.MaxQueueSize;
 
                             if (isQueueFull && message.Data.Priority == DataPriority.Low)
                             {
@@ -458,29 +451,29 @@ namespace Server.Core
             switch (priority)
             {
                 case DataPriority.Low:
-                    if (_messagelowQueue.Reader.Count > MaxQueueSize)
+                    if (_messagelowQueue.Reader.Count > ConstantsConfig.MaxQueueSize)
                     {
                         _logger.LogCritical($"Client {client.Id} LOW QUEUE BACKPRESSURE: {_messagelowQueue.Reader.Count} messages积压");
                         await ImplementBackpressure(client, TimeSpan.FromSeconds(1)); // 低优先级暂停1秒
                     }
                     break;
                 case DataPriority.Medium:
-                    if (_messageMediumQueue.Reader.Count > MaxQueueSize * 0.9) // 90%阈值预警
+                    if (_messageMediumQueue.Reader.Count > ConstantsConfig.MaxQueueSize * 0.9) // 90%阈值预警
                     {
-                        _logger.LogWarning($"Client {client.Id} MEDIUM QUEUE NEAR BACKPRESSURE: {_messageMediumQueue.Reader.Count}/{MaxQueueSize}");
+                        _logger.LogWarning($"Client {client.Id} MEDIUM QUEUE NEAR BACKPRESSURE: {_messageMediumQueue.Reader.Count}/{ConstantsConfig.MaxQueueSize}");
                     }
-                    if (_messageMediumQueue.Reader.Count > MaxQueueSize)
+                    if (_messageMediumQueue.Reader.Count > ConstantsConfig.MaxQueueSize)
                     {
                         _logger.LogCritical($"Client {client.Id} MEDIUM QUEUE BACKPRESSURE: {_messageMediumQueue.Reader.Count} messages积压");
                         await ImplementBackpressure(client, TimeSpan.FromMilliseconds(600)); // 中等优先级暂停600ms
                     }
                     break;
                 case DataPriority.High:
-                    if (_messageHighQueue.Reader.Count > MaxQueueSize * 0.9) // 90%阈值预警
+                    if (_messageHighQueue.Reader.Count > ConstantsConfig.MaxQueueSize * 0.9) // 90%阈值预警
                     {
-                        _logger.LogWarning($"Client {client.Id} HIGH QUEUE NEAR BACKPRESSURE: {_messageHighQueue.Reader.Count}/{MaxQueueSize}");
+                        _logger.LogWarning($"Client {client.Id} HIGH QUEUE NEAR BACKPRESSURE: {_messageHighQueue.Reader.Count}/{ConstantsConfig.MaxQueueSize}");
                     }
-                    if (_messageHighQueue.Reader.Count > MaxQueueSize)
+                    if (_messageHighQueue.Reader.Count > ConstantsConfig.MaxQueueSize)
                     {
                         _logger.LogCritical($"Client {client.Id} HIGH QUEUE BACKPRESSURE: {_messageHighQueue.Reader.Count} messages积压");
                         await ImplementBackpressure(client, TimeSpan.FromMilliseconds(200)); // 高优先级暂停200ms

@@ -105,7 +105,7 @@ namespace Server.Core.Common
         private void InitializeClient()
         {
             _stateMachine.InitializeState(_clientId, ConnectionState.Disconnected);
-            _stateMachine.SetTimeout(_clientId, TimeSpan.FromSeconds(30), ConnectionState.Disconnected);
+            //_stateMachine.SetTimeout(_clientId, TimeSpan.FromSeconds(30), ConnectionState.Disconnected);
         }
 
         public async void ConnectAsync()

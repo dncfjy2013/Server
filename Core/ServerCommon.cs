@@ -1,5 +1,6 @@
 ﻿using Google.Protobuf;
 using Protocol;
+using Server.Common.Constants;
 using Server.Core.Config;
 using System.Collections.Concurrent;
 using System.Net.Sockets;
@@ -137,7 +138,7 @@ namespace Server.Core
                         Header = new ProtocolHeader { Version = 0x01, Reserved = ByteString.CopyFrom(new byte[3]) },
                         Data = data
                     },
-                    config);
+                    ConstantsConfig.config);
 
                 _logger.LogTrace($"Client {client.Id} Protocol packet created. Proceeding to serialize it.");
 

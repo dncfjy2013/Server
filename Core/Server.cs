@@ -26,16 +26,10 @@ namespace Server.Core
         private readonly Timer _heartbeatTimer;
         // 流量监控定时器，用于定期触发流量监控器进行流量数据的收集和分析
         private readonly Timer _trafficMonitorTimer;
-        // 流量监控的时间间隔，单位为毫秒，默认值为 5000 毫秒（即 5 秒），可通过相应方法修改
-        private int _monitorInterval = 5000;
         // 服务器运行状态标志，当为 true 时表示服务器正在运行，可接受客户端连接；为 false 时则停止服务
         private bool _isRunning;
-        // 心跳检查的时间间隔，单位为毫秒，固定值为 10000 毫秒（即 10 秒）
-        private readonly int HeartbeatInterval = 10000;
         // 用于普通 TCP 连接的套接字监听器，负责监听普通端口的客户端连接请求
         private Socket _listener;
-        // 套接字监听器的最大连接队列长度，即等待处理的客户端连接请求的最大数量，固定值为 100
-        private readonly int ListenMax = 100;
         // 用于 SSL 加密连接的 TCP 监听器，负责监听 SSL 端口的客户端连接请求
         private TcpListener _sslListener;
         // 用于 HttpListener 连接的监听器，负责监听 Http 端口的客户端连接请求
@@ -93,9 +87,9 @@ namespace Server.Core
                 _logger.LogInformation("Starting the initialization of the traffic monitor.");
                 try
                 {
-                    _trafficMonitor = new TrafficMonitor(_clients, _monitorInterval, _logger);
+                    _trafficMonitor = new TrafficMonitor(_clients, ConstantsConfig.MonitorInterval, _logger);
                     // Information 等级：记录流量监控器初始化成功及使用的监控间隔
-                    _logger.LogInformation($"Traffic monitor has been initialized with an interval of {_monitorInterval} ms.");
+                    _logger.LogInformation($"Traffic monitor has been initialized with an interval of {ConstantsConfig.MonitorInterval} ms.");
                 }
                 catch (Exception ex)
                 {
@@ -132,11 +126,11 @@ namespace Server.Core
                 lock (_lock)
                 {
                     // Trace：锁内变量检查（细粒度调试）
-                    _logger.LogTrace($"Current interval before update: {_monitorInterval} ms");
+                    _logger.LogTrace($"Current interval before update: {ConstantsConfig.MonitorInterval} ms");
 
                     // Information：配置变更通知（影响系统行为的操作）
-                    _logger.LogInformation($"Updating traffic monitor interval from {_monitorInterval} ms to {interval} ms");
-                    _monitorInterval = interval;
+                    _logger.LogInformation($"Updating traffic monitor interval from {ConstantsConfig.MonitorInterval} ms to {interval} ms");
+                    ConstantsConfig.MonitorInterval = interval;
 
                     // Critical：强制保留的核心变更日志（如配置持久化失败时需审计）
                     _logger.LogCritical($"Traffic monitor interval changed to {interval} ms");
@@ -169,8 +163,8 @@ namespace Server.Core
                 _isRunning = true;
 
                 // 启动心跳定时器，属于关键操作步骤，使用Debug记录
-                _logger.LogDebug($"Starting the heartbeat timer with an immediate start and interval of {HeartbeatInterval} ms.");
-                _heartbeatTimer.Change(0, HeartbeatInterval);
+                _logger.LogDebug($"Starting the heartbeat timer with an immediate start and interval of {ConstantsConfig.HeartbeatInterval} ms.");
+                _heartbeatTimer.Change(0, ConstantsConfig.HeartbeatInterval);
                 _logger.LogDebug("Heartbeat timer has been successfully started.");
 
                 if (enableMonitoring)
@@ -181,8 +175,8 @@ namespace Server.Core
                     _logger.LogDebug("Traffic monitoring has been enabled.");
 
                     // 启动流量监控定时器，属于关键操作步骤，使用Debug记录
-                    _logger.LogDebug($"Starting the traffic monitor timer with an immediate start and interval of {_monitorInterval} ms.");
-                    _trafficMonitorTimer.Change(0, _monitorInterval);
+                    _logger.LogDebug($"Starting the traffic monitor timer with an immediate start and interval of {ConstantsConfig.MonitorInterval} ms.");
+                    _trafficMonitorTimer.Change(0, ConstantsConfig.MonitorInterval);
                     _logger.LogDebug("Traffic monitor timer has been successfully started.");
                 }
 
@@ -195,8 +189,8 @@ namespace Server.Core
                 _listener.Bind(new IPEndPoint(IPAddress.Any, _port));
                 _logger.LogDebug($"Socket has been successfully bound to port {_port}.");
 
-                _logger.LogDebug($"Starting to listen on port {_port} with a backlog of {ListenMax}.");
-                _listener.Listen(ListenMax);
+                _logger.LogDebug($"Starting to listen on port {_port} with a backlog of {ConstantsConfig.ListenMax}.");
+                _listener.Listen(ConstantsConfig.ListenMax);
                 _logger.LogInformation($"Socket server has started listening on port {_port} with monitoring {(enableMonitoring ? "enabled" : "disabled")}.");
 
                 // 启动SSL端口监听

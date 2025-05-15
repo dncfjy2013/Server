@@ -1,5 +1,6 @@
 ﻿using Google.Protobuf;
 using Protocol;
+using Server.Common.Constants;
 using Server.Core.ThreadManager;
 using System.Collections.Concurrent;
 using System.Threading.Channels;
@@ -27,9 +28,9 @@ namespace Server.Core
 
         // 在Server类中新增字段
         private readonly Dictionary<DataPriority, (int MaxRetries, TimeSpan Interval)> _retryPolicies = new() {
-                { DataPriority.High, (MaxRetries: 5, Interval: TimeSpan.FromSeconds(5)) }, // 高优先级：3次重试，间隔10秒
-                { DataPriority.Medium, (MaxRetries: 3, Interval: TimeSpan.FromSeconds(10)) }, // 中优先级：2次重试，间隔20秒
-                { DataPriority.Low, (MaxRetries: 1, Interval: TimeSpan.FromSeconds(15)) } }; // 低优先级：1次重试，间隔30秒
+                { DataPriority.High, (MaxRetries: ConstantsConfig.Send_High_Retry, Interval: ConstantsConfig.Send_High_Retry_TimeSpan) }, // 高优先级：3次重试，间隔10秒
+                { DataPriority.Medium, (MaxRetries: ConstantsConfig.Send_Medium_Retry, Interval: ConstantsConfig.Send_Medium_Retry_TimeSpan) }, // 中优先级：2次重试，间隔20秒
+                { DataPriority.Low, (MaxRetries: ConstantsConfig.Send_Low_Retry, Interval: ConstantsConfig.Send_Low_Retry_TimeSpan) } }; // 低优先级：1次重试，间隔30秒
 
         private OutgoingMessageThreadManager _highPriorityManager;
         private OutgoingMessageThreadManager _mediumPriorityManager;
@@ -39,30 +40,30 @@ namespace Server.Core
         public void StartOutgoingMessageProcessing()
         {
             int Threads = Environment.ProcessorCount;
-            _logger.LogInformation("Send Process Start High Thread Manager");
+            _logger.LogDebug("Send Process Start High Thread Manager");
             _highPriorityManager = new OutgoingMessageThreadManager(
                 this,
                 _outgoingHighMessages,
                 _logger,
                 DataPriority.High,
-                0,
-                Threads * 2);
-            _logger.LogInformation("Send Process Start Medium Thread Manager");
+                minThreads: ConstantsConfig.Out_High_MinThreadNum,
+                maxThreads: ConstantsConfig.Out_High_MaxThreadNum);
+            _logger.LogDebug("Send Process Start Medium Thread Manager");
             _mediumPriorityManager = new OutgoingMessageThreadManager(
                 this,
                 _outgoingMedumMessages,
                 _logger,
                 DataPriority.Medium,
-                0,
-                Threads);
-            _logger.LogInformation("Send Process Start Low Thread Manager");
+                minThreads: ConstantsConfig.Out_Medium_MinThreadNum,
+                maxThreads: ConstantsConfig.Out_Medium_MaxThreadNum);
+            _logger.LogDebug("Send Process Start Low Thread Manager");
             _lowPriorityManager = new OutgoingMessageThreadManager(
                 this,
                 _outgoingLowMessages,
                 _logger,
                 DataPriority.Low,
-                0,
-                Threads / 2);
+                minThreads: ConstantsConfig.Out_Low_MinThreadNum,
+                maxThreads: ConstantsConfig.Out_Low_MaxThreadNum);
         }
 
         public async Task ProcessOutgoingMessages(ServerOutgoingMessage msg, CancellationToken ct)

@@ -43,6 +43,8 @@ namespace Server.Core.ThreadManager
 
         protected readonly string _name;
 
+        protected readonly string _dataPriority;
+
         /// <summary>
         /// 构造函数
         /// </summary>
@@ -59,7 +61,8 @@ namespace Server.Core.ThreadManager
             int maxThreads,
             int queueThreshold,
             int monitorIntervalMs,
-            string name)
+            string name,
+            string priority)
         {
             _channel = channel;
             _logger = logger;
@@ -68,8 +71,9 @@ namespace Server.Core.ThreadManager
             _queueThreshold = queueThreshold;
             _monitorIntervalMs = monitorIntervalMs;
             _name = name.Center(9, " ");
+            _dataPriority = priority.Center(6, " ");
             // 启动监控线程
-            _logger.LogInformation($"[{_name}] DynamicThreadManagerBase initialized. MinThreads={minThreads}, MaxThreads={maxThreads}");
+            _logger.LogInformation($"[{_name}] [{_dataPriority.ToString()}] DynamicThreadManagerBase initialized. MinThreads={minThreads}, MaxThreads={maxThreads}");
             StartMonitoring();
         }
 

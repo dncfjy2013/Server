@@ -27,17 +27,6 @@ namespace Server.Core
         private uint _nextClientId;
 
         /// <summary>
-        /// 协议全局配置（序列化、校验和、版本支持等）
-        /// </summary>
-        ProtocolConfiguration config = new ProtocolConfiguration
-        {
-            DataSerializer = new ProtobufSerializerAdapter(),        // Protobuf序列化器
-            ChecksumCalculator = new Crc16Calculator(),              // CRC16校验和计算器
-            SupportedVersions = new byte[] { 0x01, 0x02 },           // 支持的协议版本号
-            MaxPacketSize = 128 * 1024 * 1024                        // 最大数据包大小（128MB）
-        };
-
-        /// <summary>
         /// 异步接受SSL客户端连接（循环执行直到服务器停止）
         /// </summary>
         private async Task AcceptSslClients()

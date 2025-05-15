@@ -1,4 +1,5 @@
 ﻿using Protocol;
+using Server.Common.Constants;
 using Server.Core.Config;
 using Server.Logger;
 using System.Threading.Channels;
@@ -18,10 +19,10 @@ namespace Server.Core.ThreadManager
             DataPriority priority,
             int minThreads,
             int maxThreads,
-            int queueThreshold = 100,
-            int monitorIntervalMs = 1000,
+            int queueThreshold = ConstantsConfig.In_Queue_ThreadshouldSize,
+            int monitorIntervalMs = ConstantsConfig.In_Queue_MonitorIntervalMs,
             string name = "InComing")
-            : base(channel, logger, minThreads, maxThreads, queueThreshold, monitorIntervalMs, name)
+            : base(channel, logger, minThreads, maxThreads, queueThreshold, monitorIntervalMs, name, priority.ToString())
         {
             _server = server; // 初始化 _server 字段
             _priority = priority;

@@ -1,4 +1,5 @@
 ﻿using Protocol;
+using Server.Common.Constants;
 using Server.Core.Config;
 using Server.Utils;
 
@@ -6,9 +7,6 @@ namespace Server.Core
 {
     partial class ServerInstance
     {
-        // 心跳超时时间（秒），超过此时间未收到客户端活动则视为断开
-        private readonly int TimeoutSeconds = 45; 
-
         /// <summary>
         /// 处理客户端心跳消息（接收并返回ACK）
         /// </summary>
@@ -49,8 +47,8 @@ namespace Server.Core
         private void CheckHeartbeats()
         {
             var now = DateTime.Now;
-            var timeout = TimeSpan.FromSeconds(TimeoutSeconds);
-            _logger.LogTrace($"Heartbeat check started (Timeout={TimeoutSeconds}s)");
+            var timeout = TimeSpan.FromSeconds(ConstantsConfig.TimeoutSeconds);
+            _logger.LogTrace($"Heartbeat check started (Timeout={ConstantsConfig.TimeoutSeconds}s)");
 
             // 遍历所有客户端连接
             foreach (var client in _clients.ToList()) // 复制列表避免迭代时修改集合
@@ -65,7 +63,7 @@ namespace Server.Core
                 if (elapsed > timeout)
                 {
                     // 心跳超时，断开客户端连接
-                    _logger.LogWarning($"Client {clientId} heartbeat timeout ({elapsed.TotalSeconds:F1}s > {TimeoutSeconds}s)");
+                    _logger.LogWarning($"Client {clientId} heartbeat timeout ({elapsed.TotalSeconds:F1}s > {ConstantsConfig.TimeoutSeconds}s)");
                     DisconnectClient(clientId);
 
                     // 从客户端列表移除
