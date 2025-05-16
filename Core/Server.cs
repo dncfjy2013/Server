@@ -1,4 +1,5 @@
 ﻿using Server.Common.Constants;
+using Server.Core.Certification;
 using Server.Core.Common;
 using Server.Core.Extend;
 using Server.Logger;
@@ -42,6 +43,8 @@ namespace Server.Core
         private int _connectSocket, _connectSSL, _connectUDP, _connectHTTP;
 
         private ConnectionManager _ClientConnectionManager;
+
+        private SSLManager _SSLManager;
 
         public ServerInstance(int port, int sslPort, int udpport, string host, X509Certificate2 certf = null)
         {
@@ -212,6 +215,8 @@ namespace Server.Core
                     _logger.LogDebug($"Starting to accept SSL clients on port {_sslPort}.");
                     AcceptSslClients();
                     _logger.LogDebug("Accepting SSL clients process has been initiated.");
+
+                    _SSLManager = new SSLManager(_logger);
                 }
                 else
                 {

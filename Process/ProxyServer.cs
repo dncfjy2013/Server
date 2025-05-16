@@ -13,7 +13,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-enum ProtocolType
+enum ConnectType
 {
     Tcp,
     SslTcp,
@@ -34,7 +34,7 @@ class AdvancedPortForwarder
         public string Ip { get; }
         public int Port { get; }
         public int TargetPort { get; }
-        public ProtocolType BackendProtocol { get; set; } = ProtocolType.Tcp;
+        public ConnectType BackendProtocol { get; set; } = ConnectType.Tcp;
         public X509Certificate2 ServerCertificate { get; set; }
         public int CurrentConnections => _CurrentConnections;
 
@@ -54,7 +54,7 @@ class AdvancedPortForwarder
     {
         public string ListenIp { get; set; } = "0.0.0.0";
         public int ListenPort { get; set; }
-        public ProtocolType Protocol { get; set; }
+        public ConnectType Protocol { get; set; }
         public List<TargetServer> TargetServers { get; set; } = new();
         public int MaxConnections { get; set; } = 1000;
         public bool ClientCertificateRequired { get; set; }
@@ -97,14 +97,14 @@ class AdvancedPortForwarder
         {
             switch (ep.Protocol)
             {
-                case ProtocolType.Tcp:
-                case ProtocolType.SslTcp:
+                case ConnectType.Tcp:
+                case ConnectType.SslTcp:
                     await RunTcpBasedEndpointAsync(ep);
                     break;
-                case ProtocolType.Udp:
+                case ConnectType.Udp:
                     await RunUdpEndpointAsync(ep);
                     break;
-                case ProtocolType.Http:
+                case ConnectType.Http:
                     await RunHttpEndpointAsync(ep);
                     break;
             }
@@ -151,7 +151,7 @@ class AdvancedPortForwarder
         var targetClient = new TcpClient();
         await targetClient.ConnectAsync(selected.Ip, selected.TargetPort);
  
-        if (ep.Protocol == ProtocolType.SslTcp)
+        if (ep.Protocol == ConnectType.SslTcp)
         {
             // 修正1：证书集合创建方式
             var certCollection = new X509CertificateCollection(
