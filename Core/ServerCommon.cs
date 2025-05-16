@@ -194,8 +194,6 @@ namespace Server.Core
             catch (SocketException sex)
             {
                 _logger.LogError($"Client {client.Id} Socket error in SendData: {sex.Message}");
-                // 断开客户端连接
-                DisconnectClient(client.Id);
                 return false;
             }
             catch (Exception ex)

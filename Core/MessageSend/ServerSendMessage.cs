@@ -154,21 +154,24 @@ namespace Server.Core
                     _outgoingHighMessages.Writer.TryWrite(new ServerOutgoingMessage
                     {
                         Data = data,
-                        SentTime = DateTime.Now
+                        Priority = priority,
+                        RetryCount = -1
                     });
                     break;
                 case DataPriority.Medium:
                     _outgoingMedumMessages.Writer.TryWrite(new ServerOutgoingMessage
                     {
                         Data = data,
-                        SentTime = DateTime.Now
+                        Priority = priority,
+                        RetryCount = -1
                     });
                     break;
                 case DataPriority.Low:
                     _outgoingLowMessages.Writer.TryWrite(new ServerOutgoingMessage
                     {
                         Data = data,
-                        SentTime = DateTime.Now
+                        Priority = priority,
+                        RetryCount = -1
                     });
                     break;
             }

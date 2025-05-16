@@ -6,7 +6,15 @@ using System.Threading.Tasks;
 
 namespace Server.Entity
 {
-    public class Common
+    public enum MessageType
     {
+        Normal,
+        PrintTime,
+        PrintLog,
+    }
+
+    public enum ControlType
+    {
+        None,
     }
 }
