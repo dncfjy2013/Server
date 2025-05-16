@@ -230,6 +230,8 @@ namespace Server.Core
                 AcceptHttpClients();
                 _logger.LogDebug("Accepting HTTP clients process has been initiated.");
 
+                _logger.LogCritical($"Server start with type as {(ConstantsConfig.IsUnityServer? "unity" : "large")} ");
+
                 if (ConstantsConfig.IsUnityServer)
                 {
                     // Trace 等级：记录开始消息处理的详细信息
