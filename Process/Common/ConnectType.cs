@@ -1,0 +1,19 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Server.Process.Common
+{
+    /// <summary>
+    /// 连接类型枚举
+    /// </summary>
+    public enum ConnectType
+    {
+        Tcp,
+        SslTcp,
+        Udp,
+        Http
+    }
+}
