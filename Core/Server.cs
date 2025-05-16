@@ -24,8 +24,6 @@ namespace Server.Core
         private ILogger _logger;
         // 心跳定时器，用于定期检查客户端的心跳情况，确保客户端连接正常
         private readonly Timer _heartbeatTimer;
-        // 流量监控定时器，用于定期触发流量监控器进行流量数据的收集和分析
-        private readonly Timer _trafficMonitorTimer;
         // 服务器运行状态标志，当为 true 时表示服务器正在运行，可接受客户端连接；为 false 时则停止服务
         private bool _isRunning;
         // 用于普通 TCP 连接的套接字监听器，负责监听普通端口的客户端连接请求
@@ -100,9 +98,6 @@ namespace Server.Core
                 // Debug 等级：记录创建心跳定时器的操作
                 _logger.LogDebug("Creating the heartbeat timer.");
                 _heartbeatTimer = new Timer(_ => CheckHeartbeats(), null, Timeout.Infinite, Timeout.Infinite);
-                // Debug 等级：记录创建流量监控定时器的操作
-                _logger.LogDebug("Creating the traffic monitor timer.");
-                _trafficMonitorTimer = new Timer(_ => _trafficMonitor.Monitor(), null, Timeout.Infinite, Timeout.Infinite);
 
                 // Information 等级：记录服务器开始运行的信息
                 _logger.LogInformation("Server is starting.");
@@ -126,21 +121,19 @@ namespace Server.Core
                 lock (_lock)
                 {
                     // Trace：锁内变量检查（细粒度调试）
-                    _logger.LogTrace($"Current interval before update: {ConstantsConfig.MonitorInterval} ms");
+                    _logger.LogTrace($"Current interval before update: {interval} ms");
 
+                    double time = _trafficMonitor.GetMonitorInterval();
                     // Information：配置变更通知（影响系统行为的操作）
-                    _logger.LogInformation($"Updating traffic monitor interval from {ConstantsConfig.MonitorInterval} ms to {interval} ms");
-                    ConstantsConfig.MonitorInterval = interval;
-
-                    // Critical：强制保留的核心变更日志（如配置持久化失败时需审计）
-                    _logger.LogCritical($"Traffic monitor interval changed to {interval} ms");
-
-                    // Debug：定时器操作（关键功能调整）
-                    _logger.LogDebug($"Updating traffic monitor timer to interval: {interval} ms");
-                    _trafficMonitorTimer.Change(interval, interval);
-
-                    // Trace：操作完成确认（细粒度调试）
-                    _logger.LogTrace("Traffic monitor timer interval updated successfully");
+                    _logger.LogInformation($"Updating traffic monitor interval from {time} ms to {interval} ms");
+                    if (!_trafficMonitor.SetMonitorInterval(interval))
+                    {
+                        _logger.LogInformation($"Updating traffic monitor interval error");
+                    }
+                    else
+                    {
+                        _logger.LogCritical($"Traffic monitor interval changed from {time} ms to {interval} ms");
+                    }
                 }
                 // Debug：锁释放（线程安全相关）
                 _logger.LogDebug("Lock released after interval modification");
@@ -173,11 +166,6 @@ namespace Server.Core
                     _logger.LogDebug("Enabling traffic monitoring.");
                     _trafficMonitor.ModifyEnable(true);
                     _logger.LogDebug("Traffic monitoring has been enabled.");
-
-                    // 启动流量监控定时器，属于关键操作步骤，使用Debug记录
-                    _logger.LogDebug($"Starting the traffic monitor timer with an immediate start and interval of {ConstantsConfig.MonitorInterval} ms.");
-                    _trafficMonitorTimer.Change(0, ConstantsConfig.MonitorInterval);
-                    _logger.LogDebug("Traffic monitor timer has been successfully started.");
                 }
 
                 // 启动普通端口监听
@@ -290,7 +278,7 @@ namespace Server.Core
 
                 // 停止流量监控定时器，也是系统定时任务的操作，使用Debug记录
                 _logger.LogDebug("Stopping the traffic monitor timer by setting its interval to infinite.");
-                _trafficMonitorTimer.Change(Timeout.Infinite, Timeout.Infinite);
+                _trafficMonitor.Dispose();
                 _logger.LogDebug("The traffic monitor timer has been successfully stopped.");
 
                 

@@ -1,4 +1,5 @@
-﻿using Server.Core.Config;
+﻿using Server.Common.Constants;
+using Server.Core.Config;
 using Server.Logger;
 using Server.Utils;
 using System.Collections.Concurrent;
@@ -18,11 +19,11 @@ namespace Server.Core.Extend
 
         // 监控间隔时间（单位可能为毫秒等，具体取决于业务逻辑）
         // 该值决定了监控任务执行的时间间隔，例如每隔一定时间检查一次客户端的状态等
-        private readonly int _monitorInterval;
+        private int _monitorInterval;
 
         // 用于统计总流量的秒表，可记录从开始到结束的时间间隔
         // 可用于计算一段时间内的总流量，辅助进行流量监控和性能分析
-        private readonly Stopwatch _totalTrafficWatch = new();
+        private readonly Timer _totalTrafficWatch;
 
         // 用于存储每个客户端的实时流量统计信息的并发字典
         // 键为客户端的唯一标识（整数类型）
@@ -53,12 +54,13 @@ namespace Server.Core.Extend
         private int _sampleCounter;
 
         // 流量监控功能的启用标志
-        // 当该值为 true 时，开启流量监控功能；为 false 时，关闭流量监控功能
         private bool _enableTrafficMonitoring = false;
 
-        // 日志记录器实例，用于记录程序运行过程中的各种信息，如错误信息、调试信息等
-        // 可帮助开发者进行程序调试和问题排查
+        // 日志记录器实例
         private ILogger _logger;
+
+        // 新增资源释放标志
+        private bool _disposed = false;
 
         /// <summary>
         /// 流量监控器的构造函数，用于初始化监控器并启动流量监控
@@ -85,7 +87,7 @@ namespace Server.Core.Extend
                 logger.LogDebug($"Monitor interval has been set to {monitorInterval}.");
 
                 // 启动总流量统计的秒表
-                _totalTrafficWatch.Start();
+                _totalTrafficWatch = new Timer(_ => Monitor(), null, Timeout.Infinite, Timeout.Infinite); ;
                 // 记录 Info 日志，表明总流量统计秒表已启动
                 logger.LogInformation("Total traffic stopwatch has been started.");
 
@@ -117,36 +119,94 @@ namespace Server.Core.Extend
         /// <param name="enable">一个布尔值，true 表示启用流量监控，false 表示禁用流量监控</param>
         public void ModifyEnable(bool enable)
         {
-            // 记录 Trace 日志，表明进入 ModifyEnable 方法
             _logger.LogTrace($"Entering ModifyEnable method with enable value: {enable}");
 
             try
             {
-                // 将传入的启用状态赋值给类的私有字段，以控制流量监控功能的开启或关闭
                 _enableTrafficMonitoring = enable;
 
-                // 记录 Debug 日志，显示流量监控功能的新启用状态
-                _logger.LogDebug($"Traffic monitoring is now set to {(_enableTrafficMonitoring ? "enabled" : "disabled")}");
+                if (_enableTrafficMonitoring)
+                {
+                    _logger.LogDebug($"Starting the traffic monitor timer with an immediate start and interval of {_monitorInterval} ms.");
+                    if(!_totalTrafficWatch.Change(0, _monitorInterval))
+                    {
+                        _logger.LogError($"Error Starting the traffic monitor timer with an immediate start and interval of {_monitorInterval} ms.");
+                    }
+                    else
+                        _logger.LogDebug("Traffic monitor timer has been successfully started.");
+                }
+                else
+                {
+                    _logger.LogDebug($"Sttoping the traffic monitor timer");
+                    if (!_totalTrafficWatch.Change(Timeout.Infinite, Timeout.Infinite))
+                    {
+                        _logger.LogError("Traffic monitor timer stoped error.");
+                    }
+                    else
+                        _logger.LogDebug("Traffic monitor timer has been successfully stoped.");
+                }
 
-                // 记录 Info 日志，表明流量监控功能的启用状态已成功修改
                 _logger.LogInformation($"Traffic monitoring enable status has been modified to {(_enableTrafficMonitoring ? "enabled" : "disabled")}");
             }
             catch (Exception ex)
             {
-                // 若在修改启用状态过程中出现异常，记录 Error 日志，显示异常信息
                 _logger.LogError($"An error occurred while modifying the traffic monitoring enable status: {ex.Message} {ex}");
             }
 
-            // 记录 Trace 日志，表明 ModifyEnable 方法执行结束
             _logger.LogTrace("Exiting ModifyEnable method");
         }
 
+        public double GetMonitorInterval()
+        {
+            _logger.LogTrace($"Return MonitorInterval with value: {_monitorInterval}ms");
+            return _monitorInterval;
+        }
+
+        public bool SetMonitorInterval(int value)
+        {
+            _logger.LogTrace($"Entering SetMonitorInterval with value: {value}ms");
+
+            try
+            {
+                if (value <= 0)
+                {
+                    _logger.LogWarning($"Invalid monitor interval value: {value}ms. Must be greater than 0");
+                    return false;
+                }
+
+                _logger.LogDebug($"Attempting to set traffic monitor interval to {value}ms");
+                _monitorInterval = value;
+
+                _logger.LogDebug($"Starting timer change operation with interval: {value}ms");
+                if (!_totalTrafficWatch.Change(0, value))
+                {
+                    _logger.LogError($"Failed to update traffic monitor interval to {value}ms. Timer state: {_disposed}");
+                    return false;
+                }
+
+                _logger.LogInformation($"Traffic monitor interval successfully updated to {value}ms");
+                return true;
+            }
+            catch (ObjectDisposedException ex)
+            {
+                _logger.LogError("Timer has already been disposed. Cannot modify interval");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Unexpected error setting monitor interval: {ex.Message}");
+                return false;
+            }
+            finally
+            {
+                _logger.LogTrace($"Exiting SetMonitorInterval. Current interval: {_monitorInterval}ms");
+            }
+        }
         /// <summary>
         /// 流量监控主方法（按采样率统计客户端流量数据）
         /// </summary>
         public void Monitor()
         {
-            // 若未启用流量监控，直接返回
             if (!_enableTrafficMonitoring)
             {
                 _logger.LogTrace("Traffic monitoring is disabled, skipping monitor");
@@ -301,7 +361,50 @@ namespace Server.Core.Extend
                 }
             }
         }
+        /// <summary>
+        /// 释放非托管资源并执行清理操作
+        /// </summary>
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
 
+        /// <summary>
+        /// 实际资源释放逻辑（支持继承）
+        /// </summary>
+        /// <param name="disposing">true表示显式调用Dispose，false表示通过析构函数释放</param>
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed) return;
+
+            if (disposing)
+            {
+                // 停止并释放定时器资源
+                try
+                {
+                    // 停止定时器（即使未启动也安全）
+                    _totalTrafficWatch.Change(Timeout.Infinite, Timeout.Infinite);
+                    // 显式释放定时器资源
+                    _totalTrafficWatch.Dispose();
+                    _logger.LogInformation("Traffic monitor timer has been disposed");
+                }
+                catch (ObjectDisposedException)
+                {
+                    // 忽略已释放的异常
+                    _logger.LogTrace("Timer already disposed");
+                }
+            }
+
+            // 清理其他托管资源（本例中主要为定时器）
+            _disposed = true;
+        }
+
+        // 析构函数（作为安全网，但优先使用Dispose）
+        ~TrafficMonitor()
+        {
+            Dispose(false);
+        }
     }
 
 }

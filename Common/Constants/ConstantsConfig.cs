@@ -48,7 +48,7 @@ namespace Server.Common.Constants
         #endregion
 
         // 流量监控的时间间隔，单位为毫秒，默认值为 5000 毫秒（即 5 秒），可通过相应方法修改
-        public static int MonitorInterval = 5000;
+        public const int MonitorInterval = 5000;
         // 心跳检查的时间间隔，单位为毫秒，固定值为 10000 毫秒（即 10 秒）
         public const int HeartbeatInterval = 10000;
         // 套接字监听器的最大连接队列长度，即等待处理的客户端连接请求的最大数量，固定值为 100
