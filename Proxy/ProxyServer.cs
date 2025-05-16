@@ -1,5 +1,6 @@
 ﻿using Server.Logger;
 using Server.Proxy.Config;
+using Server.Proxy.LoadBalance;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -277,7 +278,7 @@ namespace Server.Proxy.Common
             try
             {
                 // 负载均衡：选择当前压力最小的目标服务器
-                target = SelectServer(ep.TargetServers);
+                target = SelectServer(ep);
                 // 更新连接指标（活跃连接数+1）
                 UpdateMetrics(target, 1);
 
@@ -405,6 +406,7 @@ namespace Server.Proxy.Common
             return Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development";
         }
         #endregion
+
         #region UDP协议处理模块
         /// <summary>
         /// 启动UDP端点监听
@@ -475,7 +477,7 @@ namespace Server.Proxy.Common
             try
             {
                 // 负载均衡：选择当前连接数最少的目标服务器
-                var target = SelectServer(ep.TargetServers);
+                var target = SelectServer(ep);
                 // 使用using确保UdpClient及时释放资源
                 using var client = new UdpClient();
 
@@ -585,7 +587,7 @@ namespace Server.Proxy.Common
                 _logger.LogDebug($"HTTP请求 [{requestId}]：{request.HttpMethod} {request.Url} 来自 {remoteEndPoint}");
 
                 // 负载均衡获取目标服务器
-                var target = SelectServer(ep.TargetServers);
+                var target = SelectServer(ep);
                 // 构造目标URI（保留原始URL路径和查询参数）
                 var targetUri = new Uri($"http://{target.Ip}:{target.TargetPort}{request.RawUrl}");
 
@@ -658,19 +660,26 @@ namespace Server.Proxy.Common
         #endregion
 
         #region 通用辅助方法
+        private readonly ConcurrentDictionary<string, ILoadBalancingStrategy> _strategyCache = new();
         /// <summary>
-        /// 负载均衡算法：最小连接数策略
-        /// 扩展方向：可添加轮询、随机、加权轮询等策略（通过工厂模式实现）
+        /// 负载均衡算法
         /// </summary>
-        private TargetServer SelectServer(List<TargetServer> servers)
+        private TargetServer SelectServer(EndpointConfig ep)
         {
-            // 使用LINQ获取当前连接数最小的服务器
-            var minServer = servers.MinBy(s => s.CurrentConnections);
-            if (minServer == null)
+            var servers = ep.TargetServers;
+            if (servers == null || !servers.Any())
             {
                 throw new InvalidOperationException("目标服务器列表为空，无法转发请求");
             }
-            return minServer;
+
+            // 获取或创建负载均衡策略实例
+            var strategyKey = ep.LoadBalancingAlgorithm.ToString();
+            var strategy = _strategyCache.GetOrAdd(
+                strategyKey,
+                _ => LoadBalancingStrategyFactory.CreateStrategy(ep.LoadBalancingAlgorithm)
+            );
+
+            return strategy.SelectServer(servers);
         }
 
         /// <summary>
@@ -913,105 +922,5 @@ namespace Server.Proxy.Common
         #endregion
 
         #endregion
-    }
-
-    /// <summary>
-    /// 端口转发器整体性能指标
-    /// 作用：提供转发器运行时的全局状态监控数据，可用于：
-    /// ▶ 实时仪表盘展示
-    /// ▶ 性能瓶颈分析（如连接数突增）
-    /// ▶ 健康检查接口（如HTTP端点返回JSON指标）
-    /// </summary>
-    public class PortForwarderMetrics
-    {
-        /// <summary>
-        /// 当前所有协议的活跃连接总数
-        /// 计算方式：各目标服务器的ActiveConnections字段之和
-        /// 注意：UDP无连接概念，此处统计仅包含TCP/HTTP连接
-        /// </summary>
-        public int ActiveConnections { get; set; }
-
-        /// <summary>
-        /// 各目标服务器的连接性能指标列表
-        /// 键：{TargetServer.Ip}:{TargetServer.TargetPort}
-        /// 包含数据：
-        /// • 活跃连接数（ActiveConnections）
-        /// • 总连接数（TotalConnections，自转发器启动以来的累计值）
-        /// • 最后一次连接活动时间（LastActivity）
-        /// </summary>
-        public List<ConnectionMetrics> ConnectionMetrics { get; set; } = new();
-
-        /// <summary>
-        /// 各监听端点的状态列表
-        /// 每个元素对应一个EndpointConfig配置项，包含：
-        /// • 监听端口（ListenPort）
-        /// • 协议类型（Protocol）
-        /// • 是否处于活跃状态（IsActive，是否至少有一个对应协议的监听器在运行）
-        /// </summary>
-        public List<EndpointStatus> EndpointStatus { get; set; } = new();
-    }
-
-    /// <summary>
-    /// 单个目标服务器的连接性能指标
-    /// 作用：追踪转发器与目标服务器之间的连接状态，支持：
-    /// ▶ 负载均衡算法决策（如最小连接数）
-    /// ▶ 服务器健康度评估（通过LastActivity判断是否超时）
-    /// ▶ 连接泄漏检测（TotalConnections异常增长）
-    /// </summary>
-    public class ConnectionMetrics
-    {
-        /// <summary>
-        /// 目标服务器标识（格式：IP:Port）
-        /// 示例："192.168.1.100:8080"
-        /// </summary>
-        public string Target { get; set; }
-
-        /// <summary>
-        /// 当前与该目标服务器的活跃连接数
-        /// 注：TCP连接池中的空闲连接不计入活跃连接（仅处于数据传输中的连接）
-        /// </summary>
-        public int ActiveConnections { get; set; }
-
-        /// <summary>
-        /// 自转发器启动以来连接到该目标服务器的总次数
-        /// 每次成功建立连接（包括从连接池获取的有效连接）均计数+1
-        /// </summary>
-        public int TotalConnections { get; set; }
-
-        /// <summary>
-        /// 该目标服务器最后一次数据传输的时间（UTC时间）
-        /// 用途：
-        /// • 检测服务器是否无响应（如LastActivity超过阈值则标记为不可用）
-        /// • 实现连接超时机制（如空闲连接自动关闭）
-        /// </summary>
-        public DateTime LastActivity { get; set; }
-    }
-
-    /// <summary>
-    /// 监听端点状态信息
-    /// 作用：反映配置的监听端点是否正常运行，用于：
-    /// ▶ 端点可用性检查（如端口是否被正确监听）
-    /// ▶ 配置验证（启动后对比配置与实际运行的端点）
-    /// ▶ 动态重新加载端点配置（如热更新时判断是否需要重启监听器）
-    /// </summary>
-    public class EndpointStatus
-    {
-        /// <summary>
-        /// 端点监听的端口号
-        /// </summary>
-        public int ListenPort { get; set; }
-
-        /// <summary>
-        /// 端点协议类型（TCP/UDP/HTTP/SSL-TCP）
-        /// </summary>
-        public ConnectType Protocol { get; set; }
-
-        /// <summary>
-        /// 端点是否处于活跃状态
-        /// 判断逻辑：
-        /// isActive = 是否存在对应的监听器（TCPListener/HttpListener/UdpClient）
-        /// 注：UDP监听器启动后即处于活跃状态，即使无数据包接收
-        /// </summary>
-        public bool IsActive { get; set; }
     }
 }

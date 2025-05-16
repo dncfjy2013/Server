@@ -73,17 +73,19 @@ namespace Server.Proxy.Config
         /// </summary>
         public int CurrentConnections => _currentConnections;
 
+        public int Weight {  get; set; }
         /// <summary>
         /// 初始化目标服务器配置
         /// </summary>
         /// <param name="ip">目标服务器IP地址或域名</param>
         /// <param name="port">源端口（通常与ListenPort相同）</param>
         /// <param name="targetPort">目标服务器实际监听端口</param>
-        public TargetServer(string ip, int port, int targetPort)
+        public TargetServer(string ip, int port, int targetPort, int weight = 0)
         {
             Ip = ip;
             Port = port;
             TargetPort = targetPort;
+            Weight = weight;
         }
 
         /// <summary>
