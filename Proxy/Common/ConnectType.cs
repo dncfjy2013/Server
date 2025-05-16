@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Server.Process.Common
+namespace Server.Proxy.Common
 {
     /// <summary>
     /// 连接类型枚举

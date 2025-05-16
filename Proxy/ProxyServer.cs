@@ -1,5 +1,5 @@
 ﻿using Server.Logger;
-using Server.Process.Config;
+using Server.Proxy.Config;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -11,7 +11,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.RateLimiting;
 
-namespace Server.Process.Common
+namespace Server.Proxy.Common
 {
     /// <summary>
     /// 高级端口转发器核心类

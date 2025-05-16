@@ -1,11 +1,11 @@
 ﻿using Server.Logger;
-using Server.Process.Config;
+using Server.Proxy.Config;
 using System;
 using System.Collections.Generic;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 
-namespace Server.Process.Common
+namespace Server.Proxy.Common
 {
     /// <summary>
     /// 端口转发管理器 - 封装高级端口转发器的配置与生命周期管理
