@@ -86,6 +86,8 @@ namespace Server.Core
 
                         _ClientConnectionManager.TryGetClientById(clientId)?.ConnectCompleteAsync();
 
+                        Interlocked.Increment(ref _connectSSL);
+
                         // 6. 启动客户端消息处理任务
                         _ = HandleClient(client);
                         _logger.LogDebug($"Started HandleClient task for SSL client {clientId}");
@@ -296,6 +298,9 @@ namespace Server.Core
                     _logger.LogTrace($"Added client {clientId} to _clients (count={_clients.Count})");
 
                     _ClientConnectionManager.TryGetClientById(clientId)?.ConnectCompleteAsync();
+
+                    Interlocked.Increment(ref _connectSocket);
+
                     // 3. 启动客户端消息处理任务
                     _ = HandleClient(client);
                     _logger.LogDebug($"Started HandleClient task for socket client {clientId}");
@@ -402,11 +407,13 @@ namespace Server.Core
                     // 1. 关闭网络连接
                     if (client.Socket != null)
                     {
+                        Interlocked.Decrement(ref _connectSocket);
                         client.Socket.Shutdown(SocketShutdown.Both);
                         _logger.LogDebug($"Shut down socket for client {clientId}");
                     }
                     else if (client.SslStream != null)
                     {
+                        Interlocked.Decrement(ref _connectSSL);
                         client.SslStream.Close();
                         _logger.LogDebug($"Closed SSL stream for client {clientId}");
                         client.Socket?.Dispose();

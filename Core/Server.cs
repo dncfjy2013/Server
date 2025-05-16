@@ -39,6 +39,8 @@ namespace Server.Core
         // 用于线程安全的日志记录操作的锁对象，确保在多线程环境下日志记录操作的线程安全性
         private readonly object _lock = new();
 
+        private int _connectSocket, _connectSSL, _connectUDP, _connectHTTP;
+
         private ConnectionManager _ClientConnectionManager;
 
         public ServerInstance(int port, int sslPort, int udpport, string host, X509Certificate2 certf = null)
@@ -389,6 +391,12 @@ namespace Server.Core
                 // 释放日志记录器时出现异常，使用Error记录
                 _logger.LogError($"An error occurred while disposing of the _logger: {ex.Message}");
             }
+        }
+
+        public List<int> GetConnectNum()
+        {
+            List<int> re = new List<int>() { _connectSocket, _connectSSL, _connectUDP, _connectHTTP };
+            return re;
         }
     }
 }
