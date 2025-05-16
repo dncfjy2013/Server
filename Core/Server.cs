@@ -54,8 +54,8 @@ namespace Server.Core
                 _sslPort = sslPort;
                 _udpport = udpport;
                 _host = host;
-                // Information 等级：记录服务器初始化开始这一重要信息
-                _logger.LogInformation("Server initialization process has begun.");
+
+                _logger.LogInformation("Server has begining initialization process.");
 
                 // Information 等级：记录开始加载 SSL 证书的操作
                 _logger.LogInformation("Initiating the loading of SSL certification.");
@@ -66,8 +66,6 @@ namespace Server.Core
                         _serverCert = certf;
                         // Information 等级：记录 SSL 证书验证通过的信息
                         _logger.LogInformation("SSL certificate has been successfully verified.");
-                        // Information 等级：记录已加载的 SSL 证书路径
-                        _logger.LogInformation($"SSL certificate loaded from path: {certf}");
                     }
                     catch (Exception ex)
                     {
@@ -98,9 +96,9 @@ namespace Server.Core
                 // Debug 等级：记录创建心跳定时器的操作
                 _logger.LogDebug("Creating the heartbeat timer.");
                 _heartbeatTimer = new Timer(_ => CheckHeartbeats(), null, Timeout.Infinite, Timeout.Infinite);
-
+                
                 // Information 等级：记录服务器开始运行的信息
-                _logger.LogInformation("Server is starting.");
+                _logger.LogInformation("Server initialized successed.");
             }
             catch (Exception ex)
             {
@@ -120,20 +118,22 @@ namespace Server.Core
                 _logger.LogDebug("Acquiring lock for thread-safe interval modification");
                 lock (_lock)
                 {
-                    // Trace：锁内变量检查（细粒度调试）
-                    _logger.LogTrace($"Current interval before update: {interval} ms");
-
                     double time = _trafficMonitor.GetMonitorInterval();
+
+                    // Trace：锁内变量检查（细粒度调试）
+                    _logger.LogTrace($"Current interval before update: {time} ms");
+
                     // Information：配置变更通知（影响系统行为的操作）
-                    _logger.LogInformation($"Updating traffic monitor interval from {time} ms to {interval} ms");
+                    _logger.LogDebug($"Updating traffic monitor interval from {time} ms to {interval} ms");
+
+                    // Debug：定时器操作（关键功能调整）
+                    _logger.LogDebug($"Updating traffic monitor timer to interval: from {time} ms {interval} ms");
                     if (!_trafficMonitor.SetMonitorInterval(interval))
                     {
-                        _logger.LogInformation($"Updating traffic monitor interval error");
+                        _logger.LogError($"traffic monitor timer to interval from {time} ms to {interval}");
                     }
                     else
-                    {
                         _logger.LogCritical($"Traffic monitor interval changed from {time} ms to {interval} ms");
-                    }
                 }
                 // Debug：锁释放（线程安全相关）
                 _logger.LogDebug("Lock released after interval modification");
@@ -152,7 +152,7 @@ namespace Server.Core
             try
             {
                 // 设置服务器运行状态为开启，属于重要状态变更，使用Information记录
-                _logger.LogInformation("Setting _isRunning to true, server is now accepting connections.");
+                _logger.LogInformation("Server is now accepting connections.");
                 _isRunning = true;
 
                 // 启动心跳定时器，属于关键操作步骤，使用Debug记录
@@ -163,10 +163,11 @@ namespace Server.Core
                 if (enableMonitoring)
                 {
                     // 启用流量监控，属于功能开启操作，使用Debug记录
-                    _logger.LogDebug("Enabling traffic monitoring.");
+                    _logger.LogDebug($"Starting the traffic monitor timer with an immediate start and interval of {ConstantsConfig.MonitorInterval} ms.");
                     _trafficMonitor.ModifyEnable(true);
-                    _logger.LogDebug("Traffic monitoring has been enabled.");
                 }
+                else
+                    _logger.LogDebug($"No traffic monitor timer with an immediate start.");
 
                 // 启动普通端口监听
                 _logger.LogDebug($"Initiating the creation of a socket for port {_port}.");
@@ -179,7 +180,20 @@ namespace Server.Core
 
                 _logger.LogDebug($"Starting to listen on port {_port} with a backlog of {ConstantsConfig.ListenMax}.");
                 _listener.Listen(ConstantsConfig.ListenMax);
-                _logger.LogInformation($"Socket server has started listening on port {_port} with monitoring {(enableMonitoring ? "enabled" : "disabled")}.");
+                _logger.LogInformation($"Socket server has started listening on port {_port}.");
+
+                _logger.LogDebug($"Starting to create an UDP listener for port {_udpport}.");
+                _udpListener = new UdpClient(_udpport);
+                _logger.LogDebug($"UDP listener for port {_udpport} has been created");
+
+                _logger.LogDebug($"Starting to create an HTTP listener.");
+                _httpListener = new HttpListener();
+                _logger.LogDebug($"HTTP listener has been created.");
+
+                _logger.LogDebug($"Starting the HTTP listener on {_host}.");
+                _httpListener.Prefixes.Add(_host);
+                _httpListener.Start();
+                _logger.LogInformation($"HTTP server has started listening on {_host}.");
 
                 // 启动SSL端口监听
                 if (_serverCert != null)
@@ -190,11 +204,11 @@ namespace Server.Core
 
                     _logger.LogDebug($"Starting the SSL listener on port {_sslPort}.");
                     _sslListener.Start();
-                    _logger.LogInformation($"SSL server has started listening on port {_sslPort} with monitoring {(enableMonitoring ? "enabled" : "disabled")}.");
+                    _logger.LogInformation($"SSL server has started listening on port {_sslPort}.");
 
                     // 开始接受SSL客户端连接，属于关键操作步骤，使用Debug记录
                     _logger.LogDebug($"Starting to accept SSL clients on port {_sslPort}.");
-                    _ = AcceptSslClients();
+                    AcceptSslClients();
                     _logger.LogDebug("Accepting SSL clients process has been initiated.");
                 }
                 else
@@ -208,23 +222,10 @@ namespace Server.Core
                 AcceptSocketClients();
                 _logger.LogDebug("Accepting socket clients process has been initiated.");
 
-                _logger.LogDebug($"Starting to create an UDP listener for port {_udpport}.");
-                _udpListener = new UdpClient(_udpport);
-                _logger.LogDebug($"UDP listener for port {_udpport} has been created.");
-
                 _logger.LogDebug($"Starting to accept udp clients on port {_udpport}.");
                 AcceptUdpClients();
                 _logger.LogDebug("Accepting udp clients process has been initiated.");
 
-                _logger.LogDebug($"Starting to create an HTTP listener.");
-                _httpListener = new HttpListener();
-                _logger.LogDebug($"HTTP listener has been created.");
-
-                _logger.LogDebug($"Starting the HTTP listener on {_host}.");
-                _httpListener.Prefixes.Add(_host);
-                _httpListener.Start();
-                _logger.LogInformation($"HTTP server has started listening with monitoring {(enableMonitoring ? "enabled" : "disabled")}.");
-               
                 _logger.LogDebug($"Starting to accept HTTP clients.");
                 AcceptHttpClients();
                 _logger.LogDebug("Accepting HTTP clients process has been initiated.");
@@ -266,21 +267,15 @@ namespace Server.Core
                 _processingCts.Cancel();
                 _logger.LogDebug("Successfully canceled the message - processing cancellation token source _processingCts.");
 
-                // 设置服务器运行状态为停止，是重要的状态变更，使用Information记录
-                _logger.LogInformation("Setting _isRunning to false to halt the acceptance of new connections.");
-                _isRunning = false;
-                _logger.LogInformation("_isRunning has been set to false, new connections are no longer accepted.");
-
                 // 停止心跳定时器，属于系统定时任务的操作，使用Debug记录
                 _logger.LogDebug("Halting the heartbeat timer by setting its interval to infinite.");
                 _heartbeatTimer.Change(Timeout.Infinite, Timeout.Infinite);
                 _logger.LogDebug("The heartbeat timer has been successfully stopped.");
 
                 // 停止流量监控定时器，也是系统定时任务的操作，使用Debug记录
-                _logger.LogDebug("Stopping the traffic monitor timer by setting its interval to infinite.");
+                _logger.LogDebug("Stopping the traffic monitor timer.");
                 _trafficMonitor.Dispose();
                 _logger.LogDebug("The traffic monitor timer has been successfully stopped.");
-
                 
                 // 断开所有客户端连接，属于重要的资源清理操作，使用Information记录
                 _logger.LogInformation("Initiating the disconnection process for all connected clients.");
@@ -350,18 +345,24 @@ namespace Server.Core
 
                 _incomingLowManager.Shutdown();
                 _logger.LogDebug("All incoming low-priority message processing threads have been shut down.");
+
                 _incomingMediumManager.Shutdown();
                 _logger.LogDebug("All incoming medium-priority message processing threads have been shut down.");
+
                 _incomingHighManager.Shutdown();
                 _logger.LogDebug("All incoming high-priority message processing threads have been shut down.");
+
                 _logger.LogInformation("All incoming message processing threads have been shut down.");
 
                 _highPriorityManager.Shutdown();
                 _logger.LogDebug("All outgoing high-priority message processing threads have been shut down.");
+
                 _mediumPriorityManager.Shutdown();
                 _logger.LogDebug("All outgoing medium-priority message processing threads have been shut down.");
+
                 _lowPriorityManager.Shutdown();
                 _logger.LogDebug("All outgoing low-priority message processing threads have been shut down.");
+
                 _logger.LogInformation("All outgoing message processing threads have been shut down.");
             }
             catch (Exception ex)
@@ -370,6 +371,7 @@ namespace Server.Core
                 _logger.LogCritical($"A critical error occurred during server shutdown: {ex.Message}");
             }
 
+            _isRunning = false;
             // 服务器停止，是重要的系统状态变更，使用Critical记录
             _logger.LogCritical("Server has been stopped.");
 

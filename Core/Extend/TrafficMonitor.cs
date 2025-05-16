@@ -72,24 +72,24 @@ namespace Server.Core.Extend
             _logger = logger;
 
             // 记录 Trace 日志，表明开始执行构造函数
-            logger.LogTrace("Starting the constructor of TrafficMonitor.");
+            _logger.LogTrace("Starting the constructor of TrafficMonitor.");
 
             try
             {
                 // 将传入的客户端配置字典赋值给类的私有字段
                 _clients = clients;
                 // 记录 Debug 日志，显示客户端配置字典已成功赋值
-                logger.LogDebug("Clients configuration dictionary has been assigned.");
+                _logger.LogDebug("Clients configuration dictionary has been assigned.");
 
                 // 将传入的监控时间间隔赋值给类的私有字段
                 _monitorInterval = monitorInterval;
                 // 记录 Debug 日志，显示监控时间间隔已成功赋值
-                logger.LogDebug($"Monitor interval has been set to {monitorInterval}.");
+                _logger.LogDebug($"Monitor interval has been set to {monitorInterval}.");
 
                 // 启动总流量统计的秒表
                 _totalTrafficWatch = new Timer(_ => Monitor(), null, Timeout.Infinite, Timeout.Infinite); ;
                 // 记录 Info 日志，表明总流量统计秒表已启动
-                logger.LogInformation("Total traffic stopwatch has been started.");
+                _logger.LogDebug("Total traffic stopwatch has been started.");
 
                 // 遍历所有客户端配置
                 foreach (var client in _clients.Values)
@@ -97,20 +97,20 @@ namespace Server.Core.Extend
                     // 将客户端的初始流量统计信息存储到客户端实时流量统计字典中
                     _clientTrafficStats[client.Id] = (client.BytesReceived, client.BytesSent, client.FileBytesReceived, client.FileBytesSent, client.ReceiveCount, client.SendCount, client.ReceiveFileCount, client.SendFileCount, client.ConnectionWatch);
                     // 记录 Debug 日志，显示已为特定客户端初始化流量统计信息
-                    logger.LogDebug($"Initialized traffic statistics for client with ID {client.Id}.");
+                    _logger.LogDebug($"Initialized traffic statistics for client with ID {client.Id}.");
                 }
 
                 // 记录 Info 日志，表明所有客户端的流量统计信息已初始化完成
-                logger.LogInformation("Traffic statistics for all clients have been initialized.");
+                _logger.LogInformation("Traffic statistics for all clients have been initialized.");
             }
             catch (Exception ex)
             {
                 // 若在构造函数执行过程中出现异常，记录 Error 日志，显示异常信息
-                logger.LogError($"An error occurred during the initialization of TrafficMonitor: {ex.Message} {ex}");
+                _logger.LogError($"An error occurred during the initialization of TrafficMonitor: {ex.Message} {ex}");
             }
 
             // 记录 Trace 日志，表明构造函数执行结束
-            logger.LogTrace("Constructor of TrafficMonitor has been completed.");
+            _logger.LogTrace("Constructor of TrafficMonitor has been completed.");
         }
 
         /// <summary>

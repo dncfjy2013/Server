@@ -29,7 +29,7 @@ namespace Server.Core
         /// <summary>
         /// 异步接受SSL客户端连接（循环执行直到服务器停止）
         /// </summary>
-        private async Task AcceptSslClients()
+        private async void AcceptSslClients()
         {
             _logger.LogTrace("Enter AcceptSslClients loop");
 
