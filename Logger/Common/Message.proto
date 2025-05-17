@@ -1,0 +1,35 @@
+﻿syntax = "proto3";
+
+// 显式指定C#命名空间为 "Protos"（与代码中的引用一致）
+option csharp_namespace = "Protos";
+option optimize_for = SPEED;
+
+// 日志级别（枚举值建议加上前缀避免冲突，如 LOG_LEVEL_XXX）
+enum LogLevel {
+  TRACE = 0;
+  DEBUG = 1;
+  INFORMATION = 2;
+  WARNING = 3;
+  ERROR = 4;
+  CRITICAL = 5;
+  NONE = 6;
+}
+
+// 日志消息
+message LogMessage {
+  int64 timestamp = 1;         // Unix时间戳(毫秒)
+  LogLevel level = 2;          // 日志级别
+  string message = 3;          // 日志内容
+  int32 thread_id = 4;         // 线程ID
+  string thread_name = 5;      // 线程名称
+  Exception exception = 6;     // 异常信息
+  map<string, string> properties = 7; // 自定义属性
+}
+
+// 异常信息（避免与System.Exception冲突，建议重命名为LogException）
+message LogException {
+  string type = 1;             // 异常类型
+  string message = 2;          // 异常消息
+  string stack_trace = 3;      // 堆栈跟踪
+  LogException inner_exception = 4; // 内部异常（修改类型名）
+}
