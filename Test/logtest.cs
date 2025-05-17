@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 namespace loggertest
 {
     [MemoryDiagnoser]
-    [SimpleJob(RuntimeMoniker.Net60, launchCount: 1, warmupCount: 5, invocationCount: 10)]
+    [SimpleJob(RuntimeMoniker.Net80, launchCount: 1, warmupCount: 5, invocationCount: 10)]
     public class LoggerBenchmark
     {
         private ILogger _logger;
