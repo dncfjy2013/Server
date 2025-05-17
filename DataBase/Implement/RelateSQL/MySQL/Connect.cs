@@ -1,8 +1,6 @@
-﻿using Server.Common;
-using Server.Common.Result;
+﻿using Server.Common.Result;
 using Server.DataBase.Common;
 using Server.DataBase.Core;
-using Server.Logger;
 using System;
 
 namespace Server.DataBase.Implement.RelateSQL.MySQL

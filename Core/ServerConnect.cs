@@ -6,7 +6,6 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using Server.Utils;
 using Server.Core.Config;
-using Server.Common.Constants;
 using Server.Core.Common;
 using MySqlX.XDevAPI;
 

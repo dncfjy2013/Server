@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Server.Logger
+namespace Logger
 {
     public class AsyncConsoleLogger : IDisposable
     {

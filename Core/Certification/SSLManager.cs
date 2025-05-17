@@ -5,9 +5,9 @@ using System.Security.Cryptography.X509Certificates;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
-using Server.Common.Constants;
 using System.Net.Security;
 using Server.Logger;
+using Server.Core.Common;
 
 namespace Server.Core.Certification
 {

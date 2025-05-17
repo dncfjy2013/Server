@@ -1,6 +1,6 @@
 ﻿using Google.Protobuf;
 using Protocol;
-using Server.Common.Constants;
+using Server.Core.Common;
 using Server.Core.Config;
 using System.Collections.Concurrent;
 using System.Net.Sockets;

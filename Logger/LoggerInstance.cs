@@ -1,5 +1,5 @@
-﻿using Server.Common.Extensions;
-using Server.Logger.Common;
+﻿using Logger;
+using Server.Common.Extensions;
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;
@@ -12,7 +12,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
-namespace Server.Logger.Common
+namespace Logger
 {
     // 日志级别枚举
     public enum LogLevel

@@ -1,8 +1,8 @@
 ﻿// 安装依赖：BenchmarkDotNet、Microsoft.Extensions.DependencyInjection
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Jobs;
+using Logger;
 using Server.Logger;
-using Server.Logger.Common;
 using System;
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
