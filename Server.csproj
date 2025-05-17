@@ -7,6 +7,10 @@
     <Nullable>enable</Nullable>
     <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Proxy\Common\ip-rules.txt" />
+  </ItemGroup>
 		
   <ItemGroup>
     <PackageReference Include="CassandraCSharpDriver" Version="3.22.0" />
@@ -35,6 +39,13 @@
 
   <ItemGroup>
     <Folder Include="DataBase\Implement\NonRelateSQL\" />
+    <Folder Include="Proxy\新文件夹\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="ip-rules.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

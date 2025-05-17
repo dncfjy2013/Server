@@ -31,7 +31,12 @@ namespace Server.Test
                 AddCustomMappings(service);
 
                 // 4. 从文件加载规则（如果存在）
-                const string configPath = "ip-rules.txt";
+                // 获取当前应用程序的基目录（即项目的bin / Debug或bin / Release目录）
+                string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+
+                // 构建相对于应用程序基目录的配置文件路径
+                const string configFileName = "ip-rules.txt";
+                string configPath = Path.Combine(baseDirectory, configFileName);
                 if (File.Exists(configPath))
                 {
                     logger.LogInformation($"Loading rules from file: {configPath}");
