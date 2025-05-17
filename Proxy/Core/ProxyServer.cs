@@ -1,5 +1,6 @@
 ﻿using Org.BouncyCastle.Asn1.X509;
 using Server.Logger;
+using Server.Proxy.Common;
 using Server.Proxy.Config;
 using Server.Proxy.LoadBalance;
 using System.Buffers;
@@ -13,7 +14,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.RateLimiting;
 
-namespace Server.Proxy.Common
+namespace Server.Proxy.Core
 {
     /// <summary>
     /// 高级端口转发器核心类
@@ -24,10 +25,10 @@ namespace Server.Proxy.Common
     /// ✅ 可观测性：完善的日志系统和性能指标统计
     /// ✅ 生命周期管理：实现 IAsyncDisposable 支持优雅启停
     /// </summary>
-    public sealed class AdvancedPortForwarder : IAsyncDisposable
+    sealed partial class AdvancedPortForwarder : IAsyncDisposable
     {
         private readonly ILogger _logger; // 依赖注入的日志组件，用于运行时追踪
-        private readonly List<EndpointConfig> _endpoints; // 存储所有端点配置（不可变列表保证线程安全）
+        private List<EndpointConfig> _endpoints; // 存储所有端点配置（不可变列表保证线程安全）
         private readonly ConcurrentDictionary<int, RateLimiter> _portLimiters = new(); // 端口级连接数限流器（线程安全集合）
         private readonly ConcurrentDictionary<int, TcpListener> _tcpListeners = new(); // TCP 监听器集合
         private readonly ConcurrentDictionary<int, HttpListener> _httpListeners = new(); // HTTP 监听器集合
@@ -41,11 +42,16 @@ namespace Server.Proxy.Common
         private readonly ConcurrentDictionary<string, Stack<TcpClient>> _connectionPools = new(); // 连接池：键为目标服务器地址+端口，值为连接栈
         private const int MaxPooledConnections = 50; // 单个连接池最大连接数，防止内存占用过高
 
-        public AdvancedPortForwarder(IEnumerable<EndpointConfig> endpoints, ILogger logger)
+        public AdvancedPortForwarder(ILogger logger)
         {
-            _endpoints = endpoints.ToList(); // 转换为列表提升遍历性能
             _logger = logger;
 
+            InitIpZone();
+        }
+
+        public void Init(IEnumerable<EndpointConfig> endpoints)
+        {
+            _endpoints = endpoints.ToList(); // 转换为列表提升遍历性能
             // 初始化限流器：每个端口独立配置连接数限制
             foreach (var ep in _endpoints)
             {
@@ -501,389 +507,6 @@ namespace Server.Proxy.Common
         }
         #endregion
 
-        #region HTTP协议处理模块
-        /// <summary>
-        /// 启动HTTP端点监听
-        /// 实现细节：
-        /// • 检查平台是否支持HttpListener（如Linux需确认）
-        /// • 使用前缀路由（Prefixes）配置监听路径（当前实现监听所有路径）
-        /// • 异步获取HTTP上下文（支持长连接处理）
-        /// </summary>
-        private async Task RunHttpEndpointAsync(EndpointConfig ep, CancellationToken ct)
-        {
-            // 检查平台兼容性（如Windows默认支持，Linux需通过mono或其他方式）
-            if (!HttpListener.IsSupported)
-            {
-                _logger.LogError($"当前平台不支持HTTP监听器，端点 {ep.ListenPort} 启动失败");
-                return;
-            }
-
-            var listener = new HttpListener();
-            // 配置监听前缀（格式：协议://IP:端口/路径，此处监听根路径所有请求）
-            listener.Prefixes.Add($"http://{ep.ListenIp}:{ep.ListenPort}/");
-            listener.Start();
-
-            // 确保端口唯一监听
-            if (!_httpListeners.TryAdd(ep.ListenPort, listener))
-            {
-                listener.Stop();
-                throw new InvalidOperationException($"HTTP端口 {ep.ListenPort} 已被占用");
-            }
-
-            _logger.LogInformation($"HTTP监听器启动：端口 {ep.ListenPort}");
-
-            try
-            {
-                while (!ct.IsCancellationRequested)
-                {
-                    // 获取限流器租约（控制并发请求数，防止DDoS攻击）
-                    using var lease = await _portLimiters[ep.ListenPort].AcquireAsync(1, ct);
-                    if (!lease.IsAcquired)
-                    {
-                        _logger.LogWarning($"HTTP端口 {ep.ListenPort} 连接数已满，拒绝请求");
-                        continue;
-                    }
-
-                    try
-                    {
-                        // 异步获取HTTP上下文（阻塞直到有请求到达）
-                        var context = await listener.GetContextAsync();
-                        // 启动独立任务处理请求（支持并行处理多个请求）
-                        _ = HandleHttpContextAsync(context, ep, ct);
-                    }
-                    catch (HttpListenerException ex)
-                    {
-                        // 处理HTTP协议相关异常（如无效请求格式）
-                        _logger.LogWarning($"HTTP上下文获取失败：{ex.ErrorCode} - {ex.Message}");
-                    }
-                }
-            }
-            finally
-            {
-                // 清理资源
-                _httpListeners.TryRemove(ep.ListenPort, out _);
-                listener.Stop();
-                _logger.LogInformation($"HTTP监听器停止：端口 {ep.ListenPort}");
-            }
-        }
-
-        /// <summary>
-        /// 处理HTTP请求转发
-        /// 实现流程：
-        /// 1. 解析客户端请求（方法、URL、头信息、请求体）
-        /// 2. 负载均衡选择目标服务器并构造目标URI
-        /// 3. 使用HttpClient转发请求（支持自动处理Keep-Alive）
-        /// 4. 复制响应结果回客户端（包含状态码、头信息、响应体）
-        /// </summary>
-        private async Task HandleHttpContextAsync(HttpListenerContext context, EndpointConfig ep, CancellationToken ct)
-        {
-            var request = context.Request;
-            var response = context.Response;
-            var remoteEndPoint = request.RemoteEndPoint.ToString();
-            var requestId = Guid.NewGuid().ToString(); // 唯一请求ID（用于分布式追踪）
-            var stopwatch = Stopwatch.StartNew(); // 记录请求处理耗时
-            TargetServer target = null;
-
-            try
-            {
-                _logger.LogDebug($"HTTP请求 [{requestId}]：{request.HttpMethod} {request.Url} 来自 {remoteEndPoint}");
-
-                // 负载均衡获取目标服务器
-                target = await SelectServerAsync(ep, context);
-
-                // 构造目标URI（保留原始URL路径和查询参数）
-                var targetUri = new Uri($"http://{target.Ip}:{target.TargetPort}{request.RawUrl}");
-
-                using var httpClient = new HttpClient(); // 使用默认HttpClient（内置连接池）
-                using var httpRequest = new HttpRequestMessage(new HttpMethod(request.HttpMethod), targetUri);
-
-                // 复制请求头（排除Host头，避免覆盖目标服务器地址）
-                foreach (string headerKey in request.Headers.AllKeys)
-                {
-                    if (string.Equals(headerKey, "Host", StringComparison.OrdinalIgnoreCase))
-                        continue; // 由转发器重新设置Host头
-
-                    var headerValues = request.Headers.GetValues(headerKey);
-                    if (headerValues != null)
-                    {
-                        httpRequest.Headers.TryAddWithoutValidation(headerKey, headerValues);
-                    }
-                }
-                httpRequest.Headers.Host = targetUri.Authority; // 设置目标服务器Host头
-
-                // 处理请求体（如果存在）
-                if (request.HasEntityBody)
-                {
-                    httpRequest.Content = new StreamContent(request.InputStream);
-                    httpRequest.Content.Headers.ContentLength = request.ContentLength64;
-                    httpRequest.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
-                        request.ContentType ?? "application/octet-stream");
-                }
-
-                // 异步发送请求（获取响应头后立即开始读取响应体）
-                using var httpResponse = await httpClient.SendAsync(httpRequest,
-                    HttpCompletionOption.ResponseHeadersRead, ct);
-
-                // 复制响应状态码
-                response.StatusCode = (int)httpResponse.StatusCode;
-                // 复制响应头（合并多个值为逗号分隔字符串）
-                foreach (var header in httpResponse.Headers)
-                {
-                    response.Headers.Add(header.Key, string.Join(",", header.Value));
-                }
-
-                // 处理响应体
-                if (httpResponse.Content != null)
-                {
-                    response.ContentLength64 = httpResponse.Content.Headers.ContentLength.GetValueOrDefault();
-                    response.ContentType = httpResponse.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
-                    await httpResponse.Content.CopyToAsync(response.OutputStream, ct); // 流式复制避免内存占用
-                }
-
-                _logger.LogInformation($"HTTP请求 [{requestId}] 完成：{request.HttpMethod} {request.Url} → {httpResponse.StatusCode}，耗时 {stopwatch.ElapsedMilliseconds}ms");
-            }
-            catch (OperationCanceledException)
-            {
-                // 处理客户端取消请求（如浏览器关闭）
-                response.StatusCode = 503; // Service Unavailable
-                _logger.LogWarning($"HTTP请求 [{requestId}] 处理失败：{request.HttpMethod} {request.Url}");
-            }
-            catch (Exception ex)
-            {
-                // 统一处理内部错误
-                response.StatusCode = 500; // Internal Server Error
-                _logger.LogError($"HTTP请求 [{requestId}] 处理失败：{request.HttpMethod} {request.Url}");
-            }
-            finally
-            {
-                response.Close(); // 显式关闭响应流（释放资源）
-                stopwatch.Stop();
-                if (target != null)
-                {
-                    UpdateResponseTime(target, stopwatch.ElapsedMilliseconds);
-                }
-            }
-        }
-        #endregion
-
-        #region 通用辅助方法
-        private readonly ConcurrentDictionary<LoadBalancingAlgorithm, ILoadBalancingStrategy> _strategyCache = new();
-        #region 区域亲和性和响应时间统计
-        // IP地理位置解析器（示例接口，需实现）
-        private readonly IIpGeoLocationService _ipGeoLocationService;
-        /// <summary>
-        /// 从HTTP请求中提取客户端区域信息
-        /// </summary>
-        private string GetClientZone(HttpListenerContext context)
-        {
-            // 1. 优先从自定义头获取
-            if (context.Request.Headers["X-Client-Zone"] is string zoneHeader && !string.IsNullOrEmpty(zoneHeader))
-            {
-                return zoneHeader;
-            }
-
-            // 2. 从CDN头获取（如果通过CDN访问）
-            if (context.Request.Headers["CF-IPCountry"] is string cloudflareCountry && !string.IsNullOrEmpty(cloudflareCountry))
-            {
-                return MapCountryToZone(cloudflareCountry);
-            }
-
-            // 3. 从客户端IP解析（使用IP地理位置服务）
-            var clientIp = context.Request.RemoteEndPoint.Address.ToString();
-            return _ipGeoLocationService.GetZoneByIp(clientIp);
-        }
-
-        /// <summary>
-        /// 将国家代码映射到区域
-        /// </summary>
-        private string MapCountryToZone(string countryCode)
-        {
-            // 简化示例，实际应使用更全面的映射表
-            return countryCode switch
-            {
-                "US" => "us-east",
-                "CA" => "us-east",
-                "UK" => "eu-west",
-                "DE" => "eu-central",
-                "CN" => "ap-southeast",
-                _ => "unknown"
-            };
-        }
-        #endregion
-        private async Task CheckServerHealthAsync(EndpointConfig ep)
-        {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5)); // 创建带超时的 CancellationToken
-
-            foreach (var server in ep.TargetServers)
-            {
-                try
-                {
-                    using var client = new TcpClient();
-                    await client.ConnectAsync(
-                        IPAddress.Parse(server.Ip), // 解析 IP 字符串
-                        server.TargetPort,
-                        cts.Token // 传递 CancellationToken 实现超时
-                    );
-                    server.IsHealthy = true;
-                }
-                catch (OperationCanceledException)
-                {
-                    server.IsHealthy = false;
-                    _logger.LogWarning($"服务器 {server.Ip}:{server.TargetPort} 连接超时");
-                }
-                catch (Exception ex)
-                {
-                    server.IsHealthy = false;
-                    _logger.LogWarning($"服务器 {server.Ip}:{server.TargetPort} 健康检查失败: {ex.Message}");
-                }
-            }
-        }
-        private void UpdateResponseTime(TargetServer target, long elapsedMs)
-        {
-            // 使用线程安全的方式更新平均响应时间（例如滑动窗口或指数加权平均）
-            target.AverageResponseTimeMs =
-                (target.AverageResponseTimeMs * target.RequestCount + elapsedMs) /
-                (target.RequestCount + 1);
-
-            target.RequestCount++; // 记录请求次数
-        }
-        /// <summary>
-        /// 负载均衡算法
-        /// </summary>
-        private async Task<TargetServer> SelectServerAsync(EndpointConfig ep, object context = null)
-        {
-            var healthyServers = ep.TargetServers
-                .Where(s => s.IsHealthy)
-                .ToList();
-
-            if (!healthyServers.Any())
-            {
-                // 触发告警或回退逻辑（如使用缓存健康服务器或报错）
-                _logger.LogWarning("无健康服务器，尝试重新检查所有服务器状态");
-                await CheckServerHealthAsync(ep); // 重新检查健康状态
-                healthyServers = ep.TargetServers
-                    .Where(s => s.IsHealthy)
-                    .ToList();
-                if (!healthyServers.Any())
-                {
-                    throw new InvalidOperationException("所有目标服务器均不健康");
-                }
-            }
-
-            // 从缓存获取或创建策略实例
-            var strategy = _strategyCache.GetOrAdd(
-                ep.LoadBalancingAlgorithm,
-                algo =>
-                {
-                    // 根据算法类型传递不同的上下文参数
-                    switch (algo)
-                    {
-                        case LoadBalancingAlgorithm.Hash:
-                            // 从 context 中提取哈希键选择器
-                            if (context is Func<HttpRequestMessage, string> hashKeySelector)
-                            {
-                                return LoadBalancingStrategyFactory.CreateStrategy(algo, hashKeySelector);
-                            }
-                            throw new ArgumentException("哈希策略需要提供哈希键选择器");
-
-                        case LoadBalancingAlgorithm.ZoneAffinity:
-                            // 从 context 中提取客户端区域
-                            if (context is string clientZone)
-                            {
-                                return LoadBalancingStrategyFactory.CreateStrategy(algo, clientZone: clientZone);
-                            }
-                            throw new ArgumentException("区域亲和性策略需要提供客户端区域");
-
-                        default:
-                            // 其他策略不需要上下文参数
-                            return LoadBalancingStrategyFactory.CreateStrategy(algo);
-                    }
-                }
-            );
-
-            // 调用策略时传递请求上下文
-            return strategy.SelectServer(healthyServers, context);
-        }
-        /// <summary>
-        /// 双向数据流转发（支持取消和错误处理）
-        /// 优化点：
-        /// • 使用ArrayPool共享缓冲区（避免频繁内存分配）
-        /// • 异步流式读写（支持大文件传输）
-        /// • 区分正向/反向日志（便于问题定位）
-        /// </summary>
-        private async Task ForwardStreamsAsync(Stream source, Stream destination, string connectionId,
-            CancellationToken ct, bool isReverse = false)
-        {
-            try
-            {
-                // 从数组池获取缓冲区（默认8KB大小，可根据场景调整）
-                var buffer = ArrayPool<byte>.Shared.Rent(8192);
-                try
-                {
-                    int bytesRead;
-                    // 循环读取直到流结束或取消
-                    while ((bytesRead = await source.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
-                    {
-                        await destination.WriteAsync(buffer, 0, bytesRead, ct);
-                        await destination.FlushAsync(ct); // 强制刷新（某些流需要）
-                    }
-                }
-                finally
-                {
-                    ArrayPool<byte>.Shared.Return(buffer); // 归还缓冲区到数组池
-                }
-            }
-
-            catch (OperationCanceledException)
-            {
-                _logger.LogDebug($"数据流转发 [{connectionId}] {(isReverse ? "反向 目标→客户端" : "正向 客户端→目标")} 已取消");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning($"数据流转发 [{connectionId}] {(isReverse ? "反向 目标→客户端" : "正向 客户端→目标")} 已取消");
-            }
-        }
-
-        /// <summary>
-        /// 更新连接性能指标
-        /// 实现逻辑：
-        /// • 使用ConcurrentDictionary保证线程安全
-        /// • 原子操作更新活跃连接数（通过Interlocked）
-        /// • 记录总连接数和最后活动时间
-        /// </summary>
-        private void UpdateMetrics(TargetServer target, int delta)
-        {
-            var key = $"{target.Ip}:{target.TargetPort}";
-
-            // 原子更新目标服务器连接数（线程安全）
-            if (delta > 0)
-                target.Increment(); // Interlocked.Increment
-            else
-                target.Decrement(); // Interlocked.Decrement
-
-            // 更新或添加连接指标（使用线程安全的AddOrUpdate）
-            _connectionMetrics.AddOrUpdate(
-                key,
-                // 新增条目时初始化
-                _ => new ConnectionMetrics
-                {
-                    Target = key,
-                    ActiveConnections = delta,
-                    TotalConnections = delta > 0 ? 1 : 0,
-                    LastActivity = DateTime.UtcNow
-                },
-                // 现有条目时更新
-                (_, metrics) =>
-                {
-                    metrics.ActiveConnections += delta;
-                    if (delta > 0)
-                        metrics.TotalConnections++; // 每个新增连接计数+1
-                    metrics.LastActivity = DateTime.UtcNow; // 更新最后活动时间
-                    return metrics;
-                });
-        }
-        #endregion
-
         #region 资源释放模块
         /// <summary>
         /// 停止所有TCP监听器（并行执行提升效率）
@@ -1045,10 +668,4 @@ namespace Server.Proxy.Common
 
         #endregion
     }
-
-    // IP地理位置服务接口（示例）
-    public interface IIpGeoLocationService
-    {
-        string GetZoneByIp(string ipAddress);
-    } 
 }

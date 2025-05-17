@@ -1,7 +1,9 @@
 ﻿using Server.Logger;
 using Server.Proxy.Config;
+using Server.Proxy.Core;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 
@@ -14,13 +16,13 @@ namespace Server.Proxy.Common
     {
         private readonly ILogger _logger;
         private readonly AdvancedPortForwarder _forwarder;
-        private readonly List<EndpointConfig> _endpointConfigs = new();
+        private List<EndpointConfig> _endpointConfigs = new();
         private bool _isRunning = false;
 
         public PortForwardingManager(ILogger logger)
         {
             _logger = logger;
-            _forwarder = new AdvancedPortForwarder(_endpointConfigs, logger);
+            _forwarder = new AdvancedPortForwarder(logger);
         }
 
         #region TCP 配置方法
@@ -39,7 +41,7 @@ namespace Server.Proxy.Common
                 ListenPort = listenPort,
                 Protocol = ConnectType.Tcp,
                 TargetServers = targetServers.Select(t =>
-                    new TargetServer(t.ip, listenPort, t.port)).ToList(),
+                    new TargetServer(t.ip, listenPort, t.port, _forwarder.GetZoneByIP(t.ip))).ToList(),
                 MaxConnections = maxConnections
             });
 
@@ -64,7 +66,7 @@ namespace Server.Proxy.Common
                 Protocol = ConnectType.SslTcp,
                 ServerCertificate = serverCertificate,
                 ClientCertificateRequired = requireClientCertificate,
-                TargetServers = targetServers.Select(t => new TargetServer(t.ip, listenPort, t.port)
+                TargetServers = targetServers.Select(t => new TargetServer(t.ip, listenPort, t.port, _forwarder.GetZoneByIP(t.ip))
                 {
                     BackendProtocol = ConnectType.SslTcp  // 目标服务器使用SSL协议
                 }).ToList(),
@@ -89,7 +91,7 @@ namespace Server.Proxy.Common
                 ListenPort = listenPort,
                 Protocol = ConnectType.Udp,
                 TargetServers = targetServers.Select(t =>
-                    new TargetServer(t.ip, listenPort, t.port)).ToList(),
+                    new TargetServer(t.ip, listenPort, t.port, _forwarder.GetZoneByIP(t.ip))).ToList(),
                 MaxConnections = maxConnections
             });
 
@@ -111,7 +113,7 @@ namespace Server.Proxy.Common
                 ListenPort = listenPort,
                 Protocol = ConnectType.Http,
                 TargetServers = targetServers.Select(t =>
-                    new TargetServer(t.host, listenPort, t.port)).ToList(),
+                    new TargetServer(t.host, listenPort, t.port, _forwarder.GetZoneByIP(t.host))).ToList(),
                 MaxConnections = maxConnections
             });
 
@@ -133,6 +135,8 @@ namespace Server.Proxy.Common
             }
 
             ValidateEndpointConfigs();
+
+            _forwarder.Init(_endpointConfigs);
 
             _logger.LogInformation($"启动端口转发管理器，配置数: {_endpointConfigs.Count}");
             await _forwarder.StartAsync();

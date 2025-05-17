@@ -85,12 +85,13 @@ namespace Server.Proxy.Config
         /// <param name="ip">目标服务器IP地址或域名</param>
         /// <param name="port">源端口（通常与ListenPort相同）</param>
         /// <param name="targetPort">目标服务器实际监听端口</param>
-        public TargetServer(string ip, int port, int targetPort, int weight = 5)
+        public TargetServer(string ip, int port, int targetPort, string zone, int weight = 5)
         {
             Ip = ip;
             Port = port;
             TargetPort = targetPort;
             Weight = weight;
+            Zone = zone;
         }
 
         /// <summary>
