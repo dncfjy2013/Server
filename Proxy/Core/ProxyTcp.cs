@@ -19,6 +19,9 @@ namespace Server.Proxy.Core
     {
         private readonly ConcurrentDictionary<int, TcpListener> _tcpListeners = new(); // TCP 监听器集合
 
+        private readonly ConcurrentDictionary<string, Stack<TcpClient>> _connectionPools = new(); // 连接池：键为目标服务器地址+端口，值为连接栈
+        private const int MaxPooledConnections = 50; // 单个连接池最大连接数，防止内存占用过高
+
         #region TCP 协议处理模块
         /// <summary>
         /// 启动 TCP/SSL-TCP 监听器
@@ -219,7 +222,44 @@ namespace Server.Proxy.Core
             return Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development";
         }
         #endregion
+        /// <summary>
+        /// 更新连接性能指标
+        /// 实现逻辑：
+        /// • 使用ConcurrentDictionary保证线程安全
+        /// • 原子操作更新活跃连接数（通过Interlocked）
+        /// • 记录总连接数和最后活动时间
+        /// </summary>
+        private void UpdateMetrics(TargetServer target, int delta)
+        {
+            var key = $"{target.Ip}:{target.TargetPort}";
 
+            // 原子更新目标服务器连接数（线程安全）
+            if (delta > 0)
+                target.Increment(); // Interlocked.Increment
+            else
+                target.Decrement(); // Interlocked.Decrement
+
+            // 更新或添加连接指标（使用线程安全的AddOrUpdate）
+            _connectionMetrics.AddOrUpdate(
+                key,
+                // 新增条目时初始化
+                _ => new ConnectionMetrics
+                {
+                    Target = key,
+                    ActiveConnections = delta,
+                    TotalConnections = delta > 0 ? 1 : 0,
+                    LastActivity = DateTime.UtcNow
+                },
+                // 现有条目时更新
+                (_, metrics) =>
+                {
+                    metrics.ActiveConnections += delta;
+                    if (delta > 0)
+                        metrics.TotalConnections++; // 每个新增连接计数+1
+                    metrics.LastActivity = DateTime.UtcNow; // 更新最后活动时间
+                    return metrics;
+                });
+        }
         /// <summary>
         /// 停止所有TCP监听器（并行执行提升效率）
         /// 注意：Stop() 会中断正在Accept的连接，需配合CancellationToken处理

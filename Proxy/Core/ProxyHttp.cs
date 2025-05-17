@@ -123,7 +123,15 @@ namespace Server.Proxy.Core
                 _ => "unknown"
             };
         }
+        private void UpdateResponseTime(TargetServer target, long elapsedMs)
+        {
+            // 使用线程安全的方式更新平均响应时间（例如滑动窗口或指数加权平均）
+            target.AverageResponseTimeMs =
+                (target.AverageResponseTimeMs * target.RequestCount + elapsedMs) /
+                (target.RequestCount + 1);
 
+            target.RequestCount++; // 记录请求次数
+        }
         #region HTTP协议处理模块
         /// <summary>
         /// 启动HTTP端点监听

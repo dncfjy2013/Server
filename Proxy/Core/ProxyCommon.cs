@@ -47,15 +47,6 @@ namespace Server.Proxy.Core
                 }
             }
         }
-        private void UpdateResponseTime(TargetServer target, long elapsedMs)
-        {
-            // 使用线程安全的方式更新平均响应时间（例如滑动窗口或指数加权平均）
-            target.AverageResponseTimeMs =
-                (target.AverageResponseTimeMs * target.RequestCount + elapsedMs) /
-                (target.RequestCount + 1);
-
-            target.RequestCount++; // 记录请求次数
-        }
         /// <summary>
         /// 负载均衡算法
         /// </summary>
@@ -152,45 +143,6 @@ namespace Server.Proxy.Core
             }
         }
 
-        /// <summary>
-        /// 更新连接性能指标
-        /// 实现逻辑：
-        /// • 使用ConcurrentDictionary保证线程安全
-        /// • 原子操作更新活跃连接数（通过Interlocked）
-        /// • 记录总连接数和最后活动时间
-        /// </summary>
-        private void UpdateMetrics(TargetServer target, int delta)
-        {
-            var key = $"{target.Ip}:{target.TargetPort}";
-
-            // 原子更新目标服务器连接数（线程安全）
-            if (delta > 0)
-                target.Increment(); // Interlocked.Increment
-            else
-                target.Decrement(); // Interlocked.Decrement
-
-            // 更新或添加连接指标（使用线程安全的AddOrUpdate）
-            _connectionMetrics.AddOrUpdate(
-                key,
-                // 新增条目时初始化
-                _ => new ConnectionMetrics
-                {
-                    Target = key,
-                    ActiveConnections = delta,
-                    TotalConnections = delta > 0 ? 1 : 0,
-                    LastActivity = DateTime.UtcNow
-                },
-                // 现有条目时更新
-                (_, metrics) =>
-                {
-                    metrics.ActiveConnections += delta;
-                    if (delta > 0)
-                        metrics.TotalConnections++; // 每个新增连接计数+1
-                    metrics.LastActivity = DateTime.UtcNow; // 更新最后活动时间
-                    return metrics;
-                });
-        }
         #endregion
-
     }
 }

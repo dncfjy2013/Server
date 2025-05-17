@@ -35,10 +35,6 @@ namespace Server.Proxy.Core
         private bool _isRunning; // 运行状态标识（避免重复启动）
         private bool _disposed; // 资源释放标识（防止重复释放）
 
-        // TCP 连接池相关
-        private readonly ConcurrentDictionary<string, Stack<TcpClient>> _connectionPools = new(); // 连接池：键为目标服务器地址+端口，值为连接栈
-        private const int MaxPooledConnections = 50; // 单个连接池最大连接数，防止内存占用过高
-
         public AdvancedPortForwarder(ILogger logger)
         {
             _logger = logger;
