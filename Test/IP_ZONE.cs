@@ -10,7 +10,7 @@ namespace Server.Test
 {
     public class IP_ZONE
     {
-        static ILogger logger = new LoggerInstance();
+        static ILogger logger = LoggerInstance.Instance;
         public async static Task Main()
         {
             // 1. 初始化服务（使用自定义配置和日志）

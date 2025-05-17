@@ -48,7 +48,7 @@ namespace Server.Core
 
         public ServerInstance(int port, int sslPort, int udpport, string host, X509Certificate2 certf = null)
         {
-            _logger = new LoggerInstance();
+            _logger = LoggerInstance.Instance;
             _ClientConnectionManager = new ConnectionManager(_logger);
 
             _logger.LogTrace($"Server constructor called with port: {port}, sslPort: {sslPort}, certf: {certf}");
