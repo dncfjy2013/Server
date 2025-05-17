@@ -2,6 +2,7 @@
 using Server.Proxy.Common;
 using Server.Proxy.Config;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -13,6 +14,8 @@ namespace Server.Proxy.Core
 {
     sealed partial class AdvancedPortForwarder
     {
+        private readonly ConcurrentDictionary<int, HttpListener> _httpListeners = new(); // HTTP 监听器集合
+
         DefaultIpGeoLocationService.Options _options = new DefaultIpGeoLocationService.Options
         {
             CacheSize = 2000,
@@ -285,5 +288,31 @@ namespace Server.Proxy.Core
             }
         }
         #endregion
+
+        /// <summary>
+        /// 停止所有HTTP监听器
+        /// 注意：HttpListener.Stop() 会抛出异常给正在等待的GetContextAsync
+        /// </summary>
+        private async Task StopHttpListenersAsync()
+        {
+            var tasks = new List<Task>();
+            foreach (var listener in _httpListeners.Values)
+            {
+                tasks.Add(Task.Run(() =>
+                {
+                    try
+                    {
+                        listener.Stop(); // 停止监听，终止所有请求处理
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError($"停止HTTP监听器失败：{ex.Message}");
+                    }
+                }));
+            }
+
+            await Task.WhenAll(tasks);
+            _httpListeners.Clear();
+        }
     }
 }
