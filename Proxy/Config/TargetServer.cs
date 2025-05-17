@@ -74,13 +74,18 @@ namespace Server.Proxy.Config
         public int CurrentConnections => _currentConnections;
 
         public int Weight {  get; set; }
+        public double AverageResponseTimeMs { get; set; } // 平均响应时间（最小响应时间策略用）
+        public string Zone { get; set; }             // 区域（亲和性策略用）
+        public bool IsHealthy { get; set; } = true;   // 健康状态（健康检查用）
+
+        public int RequestCount {  get; set; }
         /// <summary>
         /// 初始化目标服务器配置
         /// </summary>
         /// <param name="ip">目标服务器IP地址或域名</param>
         /// <param name="port">源端口（通常与ListenPort相同）</param>
         /// <param name="targetPort">目标服务器实际监听端口</param>
-        public TargetServer(string ip, int port, int targetPort, int weight = 0)
+        public TargetServer(string ip, int port, int targetPort, int weight = 5)
         {
             Ip = ip;
             Port = port;

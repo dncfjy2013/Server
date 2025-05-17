@@ -5,12 +5,12 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Server.Proxy.LoadBalance
+namespace Server.Proxy.LoadBalance.Algorithm
 {
     // 最小连接数策略（原实现）
     public class LeastConnectionsStrategy : ILoadBalancingStrategy
     {
-        public TargetServer SelectServer(List<TargetServer> servers)
+        public TargetServer SelectServer(List<TargetServer> servers, object obj = null)
         {
             var minServer = servers.MinBy(s => s.CurrentConnections);
             if (minServer == null)

@@ -1,4 +1,5 @@
-﻿using Server.Logger;
+﻿using Org.BouncyCastle.Asn1.X509;
+using Server.Logger;
 using Server.Proxy.Config;
 using Server.Proxy.LoadBalance;
 using System.Buffers;
@@ -278,7 +279,7 @@ namespace Server.Proxy.Common
             try
             {
                 // 负载均衡：选择当前压力最小的目标服务器
-                target = SelectServer(ep);
+                target = await SelectServerAsync(ep);
                 // 更新连接指标（活跃连接数+1）
                 UpdateMetrics(target, 1);
 
@@ -477,7 +478,7 @@ namespace Server.Proxy.Common
             try
             {
                 // 负载均衡：选择当前连接数最少的目标服务器
-                var target = SelectServer(ep);
+                var target = await SelectServerAsync(ep);
                 // 使用using确保UdpClient及时释放资源
                 using var client = new UdpClient();
 
@@ -581,13 +582,15 @@ namespace Server.Proxy.Common
             var remoteEndPoint = request.RemoteEndPoint.ToString();
             var requestId = Guid.NewGuid().ToString(); // 唯一请求ID（用于分布式追踪）
             var stopwatch = Stopwatch.StartNew(); // 记录请求处理耗时
+            TargetServer target = null;
 
             try
             {
                 _logger.LogDebug($"HTTP请求 [{requestId}]：{request.HttpMethod} {request.Url} 来自 {remoteEndPoint}");
 
                 // 负载均衡获取目标服务器
-                var target = SelectServer(ep);
+                target = await SelectServerAsync(ep, context);
+
                 // 构造目标URI（保留原始URL路径和查询参数）
                 var targetUri = new Uri($"http://{target.Ip}:{target.TargetPort}{request.RawUrl}");
 
@@ -655,33 +658,152 @@ namespace Server.Proxy.Common
             {
                 response.Close(); // 显式关闭响应流（释放资源）
                 stopwatch.Stop();
+                if (target != null)
+                {
+                    UpdateResponseTime(target, stopwatch.ElapsedMilliseconds);
+                }
             }
         }
         #endregion
 
         #region 通用辅助方法
-        private readonly ConcurrentDictionary<string, ILoadBalancingStrategy> _strategyCache = new();
+        private readonly ConcurrentDictionary<LoadBalancingAlgorithm, ILoadBalancingStrategy> _strategyCache = new();
+        #region 区域亲和性和响应时间统计
+        // IP地理位置解析器（示例接口，需实现）
+        private readonly IIpGeoLocationService _ipGeoLocationService;
+        /// <summary>
+        /// 从HTTP请求中提取客户端区域信息
+        /// </summary>
+        private string GetClientZone(HttpListenerContext context)
+        {
+            // 1. 优先从自定义头获取
+            if (context.Request.Headers["X-Client-Zone"] is string zoneHeader && !string.IsNullOrEmpty(zoneHeader))
+            {
+                return zoneHeader;
+            }
+
+            // 2. 从CDN头获取（如果通过CDN访问）
+            if (context.Request.Headers["CF-IPCountry"] is string cloudflareCountry && !string.IsNullOrEmpty(cloudflareCountry))
+            {
+                return MapCountryToZone(cloudflareCountry);
+            }
+
+            // 3. 从客户端IP解析（使用IP地理位置服务）
+            var clientIp = context.Request.RemoteEndPoint.Address.ToString();
+            return _ipGeoLocationService.GetZoneByIp(clientIp);
+        }
+
+        /// <summary>
+        /// 将国家代码映射到区域
+        /// </summary>
+        private string MapCountryToZone(string countryCode)
+        {
+            // 简化示例，实际应使用更全面的映射表
+            return countryCode switch
+            {
+                "US" => "us-east",
+                "CA" => "us-east",
+                "UK" => "eu-west",
+                "DE" => "eu-central",
+                "CN" => "ap-southeast",
+                _ => "unknown"
+            };
+        }
+        #endregion
+        private async Task CheckServerHealthAsync(EndpointConfig ep)
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5)); // 创建带超时的 CancellationToken
+
+            foreach (var server in ep.TargetServers)
+            {
+                try
+                {
+                    using var client = new TcpClient();
+                    await client.ConnectAsync(
+                        IPAddress.Parse(server.Ip), // 解析 IP 字符串
+                        server.TargetPort,
+                        cts.Token // 传递 CancellationToken 实现超时
+                    );
+                    server.IsHealthy = true;
+                }
+                catch (OperationCanceledException)
+                {
+                    server.IsHealthy = false;
+                    _logger.LogWarning($"服务器 {server.Ip}:{server.TargetPort} 连接超时");
+                }
+                catch (Exception ex)
+                {
+                    server.IsHealthy = false;
+                    _logger.LogWarning($"服务器 {server.Ip}:{server.TargetPort} 健康检查失败: {ex.Message}");
+                }
+            }
+        }
+        private void UpdateResponseTime(TargetServer target, long elapsedMs)
+        {
+            // 使用线程安全的方式更新平均响应时间（例如滑动窗口或指数加权平均）
+            target.AverageResponseTimeMs =
+                (target.AverageResponseTimeMs * target.RequestCount + elapsedMs) /
+                (target.RequestCount + 1);
+
+            target.RequestCount++; // 记录请求次数
+        }
         /// <summary>
         /// 负载均衡算法
         /// </summary>
-        private TargetServer SelectServer(EndpointConfig ep)
+        private async Task<TargetServer> SelectServerAsync(EndpointConfig ep, object context = null)
         {
-            var servers = ep.TargetServers;
-            if (servers == null || !servers.Any())
+            var healthyServers = ep.TargetServers
+                .Where(s => s.IsHealthy)
+                .ToList();
+
+            if (!healthyServers.Any())
             {
-                throw new InvalidOperationException("目标服务器列表为空，无法转发请求");
+                // 触发告警或回退逻辑（如使用缓存健康服务器或报错）
+                _logger.LogWarning("无健康服务器，尝试重新检查所有服务器状态");
+                await CheckServerHealthAsync(ep); // 重新检查健康状态
+                healthyServers = ep.TargetServers
+                    .Where(s => s.IsHealthy)
+                    .ToList();
+                if (!healthyServers.Any())
+                {
+                    throw new InvalidOperationException("所有目标服务器均不健康");
+                }
             }
 
-            // 获取或创建负载均衡策略实例
-            var strategyKey = ep.LoadBalancingAlgorithm.ToString();
+            // 从缓存获取或创建策略实例
             var strategy = _strategyCache.GetOrAdd(
-                strategyKey,
-                _ => LoadBalancingStrategyFactory.CreateStrategy(ep.LoadBalancingAlgorithm)
+                ep.LoadBalancingAlgorithm,
+                algo =>
+                {
+                    // 根据算法类型传递不同的上下文参数
+                    switch (algo)
+                    {
+                        case LoadBalancingAlgorithm.Hash:
+                            // 从 context 中提取哈希键选择器
+                            if (context is Func<HttpRequestMessage, string> hashKeySelector)
+                            {
+                                return LoadBalancingStrategyFactory.CreateStrategy(algo, hashKeySelector);
+                            }
+                            throw new ArgumentException("哈希策略需要提供哈希键选择器");
+
+                        case LoadBalancingAlgorithm.ZoneAffinity:
+                            // 从 context 中提取客户端区域
+                            if (context is string clientZone)
+                            {
+                                return LoadBalancingStrategyFactory.CreateStrategy(algo, clientZone: clientZone);
+                            }
+                            throw new ArgumentException("区域亲和性策略需要提供客户端区域");
+
+                        default:
+                            // 其他策略不需要上下文参数
+                            return LoadBalancingStrategyFactory.CreateStrategy(algo);
+                    }
+                }
             );
 
-            return strategy.SelectServer(servers);
+            // 调用策略时传递请求上下文
+            return strategy.SelectServer(healthyServers, context);
         }
-
         /// <summary>
         /// 双向数据流转发（支持取消和错误处理）
         /// 优化点：
@@ -923,4 +1045,10 @@ namespace Server.Proxy.Common
 
         #endregion
     }
+
+    // IP地理位置服务接口（示例）
+    public interface IIpGeoLocationService
+    {
+        string GetZoneByIp(string ipAddress);
+    } 
 }

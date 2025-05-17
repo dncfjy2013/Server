@@ -5,14 +5,14 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Server.Proxy.LoadBalance
+namespace Server.Proxy.LoadBalance.Algorithm
 {
     // 随机策略
     public class RandomStrategy : ILoadBalancingStrategy
     {
         private readonly Random _random = new();
 
-        public TargetServer SelectServer(List<TargetServer> servers)
+        public TargetServer SelectServer(List<TargetServer> servers, object obj = null)
         {
             if (!servers.Any())
             {

@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Server.Proxy.LoadBalance
+namespace Server.Proxy.LoadBalance.Algorithm
 {
     // 加权轮询策略（基于权重的轮询）
     public class WeightedRoundRobinStrategy : ILoadBalancingStrategy
@@ -16,7 +16,7 @@ namespace Server.Proxy.LoadBalance
         private int _maxWeight = 0; // 最大权重
         private readonly object _lock = new();
 
-        public TargetServer SelectServer(List<TargetServer> servers)
+        public TargetServer SelectServer(List<TargetServer> servers, object obj = null)
         {
             if (!servers.Any())
             {

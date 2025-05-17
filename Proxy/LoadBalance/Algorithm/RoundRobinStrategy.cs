@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Server.Proxy.LoadBalance
+namespace Server.Proxy.LoadBalance.Algorithm
 {
     // 轮询策略
     public class RoundRobinStrategy : ILoadBalancingStrategy
@@ -13,7 +13,7 @@ namespace Server.Proxy.LoadBalance
         private int _currentIndex = 0;
         private readonly object _lock = new();
 
-        public TargetServer SelectServer(List<TargetServer> servers)
+        public TargetServer SelectServer(List<TargetServer> servers, object obj = null)
         {
             if (!servers.Any())
             {

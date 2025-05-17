@@ -10,6 +10,6 @@ namespace Server.Proxy.LoadBalance
     // 负载均衡策略接口
     public interface ILoadBalancingStrategy
     {
-        TargetServer SelectServer(List<TargetServer> servers);
+        TargetServer SelectServer(List<TargetServer> servers, object obj = null);
     }
 }
