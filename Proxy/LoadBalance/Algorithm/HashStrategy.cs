@@ -2,46 +2,48 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 namespace Server.Proxy.LoadBalance.Algorithm
 {
-    // 哈希策略（支持自定义哈希键）
+    // 哈希策略实现（添加空键处理）
     public class HashStrategy : ILoadBalancingStrategy
     {
         private readonly Func<HttpRequestMessage, string> _hashKeySelector;
 
-        public HashStrategy(Func<HttpRequestMessage, string> hashKeySelector) // 移除多余逗号
+        public HashStrategy(Func<HttpRequestMessage, string> hashKeySelector)
         {
             _hashKeySelector = hashKeySelector ?? throw new ArgumentNullException(nameof(hashKeySelector));
         }
 
-        /// <summary>
-        /// 选择目标服务器（支持从上下文中提取哈希键）
-        /// </summary>
-        /// <param name="servers">可用服务器列表</param>
-        /// <param name="context">请求上下文（必须为 HttpRequestMessage 类型）</param>
-        public TargetServer SelectServer(List<TargetServer> servers, object context)
+        public TargetServer SelectServer(List<TargetServer> servers, object context = null)
         {
-            if (!servers.Any()) throw new InvalidOperationException("服务器列表为空");
-            if (context == null) throw new ArgumentNullException(nameof(context));
+            if (servers.Count == 0)
+                throw new ArgumentException("No servers available", nameof(servers));
 
-            // 关键修复：检查并转换上下文类型
-            if (context is not HttpRequestMessage request)
-            {
-                throw new ArgumentException($"上下文必须是 {nameof(HttpRequestMessage)} 类型", nameof(context));
-            }
+            // 提取哈希键并处理空值
+            string key = _hashKeySelector(context as HttpRequestMessage) ?? "empty-key";
 
-            try
+            // 一致性哈希算法（示例：使用FNV-1a哈希）
+            uint hash = Fnv1aHash(key);
+            int serverIndex = (int)(hash % servers.Count);
+
+            return servers[serverIndex];
+        }
+
+        // FNV-1a哈希算法实现（64位版本）
+        private uint Fnv1aHash(string input)
+        {
+            const uint FnvPrime = 0x01000193;
+            const uint FnvOffsetBias = 0x811C9DC5;
+
+            uint hash = FnvOffsetBias;
+            foreach (byte b in Encoding.UTF8.GetBytes(input))
             {
-                var hashKey = _hashKeySelector(request); // 使用转换后的请求对象
-                var hashCode = Math.Abs(hashKey.GetHashCode());
-                var index = hashCode % servers.Count;
-                return servers[index];
+                hash ^= b;
+                hash *= FnvPrime;
             }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException("哈希键生成失败", ex);
-            }
+            return hash;
         }
     }
 }
