@@ -1,69 +1,182 @@
-﻿// 安装依赖：BenchmarkDotNet、Microsoft.Extensions.DependencyInjection
-using BenchmarkDotNet.Attributes;
+﻿using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Jobs;
-using Logger;
+using BenchmarkDotNet.Order;
 using Server.Logger;
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Runtime;
+using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace loggertest
 {
     [MemoryDiagnoser]
-    [SimpleJob(RuntimeMoniker.Net80, launchCount: 1, warmupCount: 5, invocationCount: 10)]
+    [Orderer(SummaryOrderPolicy.FastestToSlowest)]
+    [SimpleJob(RuntimeMoniker.Net80, launchCount: 1, warmupCount: 3, iterationCount: 5)]
     public class LoggerBenchmark
     {
         private ILogger _logger;
-        private readonly string _testMessage = "This is a test log message";
+        private byte[] _smallMessage;
+        private byte[] _mediumMessage;
+        private byte[] _largeMessage;
         private readonly ConcurrentQueue<string> _logQueue = new();
+        private readonly int _threadCount = Environment.ProcessorCount;
+        private readonly int _iterationsPerThread = 1_000_000;
+        private readonly List<LogLevel> _mixedLogLevels = new()
+        {
+            LogLevel.Trace, LogLevel.Debug, LogLevel.Information,
+            LogLevel.Warning, LogLevel.Error, LogLevel.Critical
+        };
 
         [GlobalSetup]
         public void Setup()
         {
+            GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
+
             _logger = LoggerInstance.Instance;
             _logger.AddTemplate(new LogTemplate
             {
                 Name = "BenchmarkTemplate",
                 Template = "{Timestamp} [{Level}] {Message}",
-                Level = LogLevel.Information,
+                Level = LogLevel.Trace,
                 IncludeException = false
+            });
+
+            _smallMessage = Encoding.UTF8.GetBytes(new string('A', 100));
+            _mediumMessage = Encoding.UTF8.GetBytes(new string('B', 1000));
+            _largeMessage = Encoding.UTF8.GetBytes(new string('C', 10000));
+
+            Warmup();
+        }
+
+        private void Warmup()
+        {
+            Console.WriteLine("预热测试中...");
+            Parallel.For(0, _threadCount, i =>
+            {
+                for (int j = 0; j < 1000; j++)
+                {
+                    _logger.LogInformation(new ReadOnlyMemory<byte>(_smallMessage));
+                }
+            });
+            Thread.Sleep(2000);
+            Console.WriteLine("预热完成");
+        }
+
+        [Benchmark(Description = "单线程-小消息")]
+        public void SingleThread_SmallMessages()
+        {
+            for (int i = 0; i < _iterationsPerThread; i++)
+            {
+                _logger.LogInformation(new ReadOnlyMemory<byte>(_smallMessage));
+            }
+        }
+
+        [Benchmark(Description = "单线程-混合大小消息")]
+        public void SingleThread_MixedMessages()
+        {
+            for (int i = 0; i < _iterationsPerThread; i++)
+            {
+                var message = i % 3 == 0 ? _smallMessage :
+                             i % 3 == 1 ? _mediumMessage : _largeMessage;
+
+                _logger.Log(
+                    _mixedLogLevels[i % _mixedLogLevels.Count],
+                    message: new ReadOnlyMemory<byte>(message),
+                    exception: null,
+                    properties: null,
+                    templateName: "BenchmarkTemplate"
+                );
+            }
+        }
+
+        [Benchmark(Description = "多线程-小消息")]
+        public void MultiThread_SmallMessages()
+        {
+            Parallel.For(0, _threadCount, i =>
+            {
+                for (int j = 0; j < _iterationsPerThread / _threadCount; j++)
+                {
+                    _logger.LogInformation(new ReadOnlyMemory<byte>(_smallMessage));
+                }
             });
         }
 
-        [Benchmark(Baseline = true)]
-        public async Task Log_Information_Sync()
+        [Benchmark(Description = "多线程-混合消息和级别")]
+        public void MultiThread_Mixed()
         {
-            for (int i = 0; i < 1_000_000; i++) // 单次测试100万条，可调整为千万/亿级
+            Parallel.For(0, _threadCount, i =>
             {
-                _logger.LogInformation(_testMessage, templateName: "BenchmarkTemplate");
-            }
-            await Task.Yield();
+                var random = new Random(i);
+                for (int j = 0; j < _iterationsPerThread / _threadCount; j++)
+                {
+                    var messageSize = random.Next(3);
+                    var messageBytes = messageSize == 0 ? _smallMessage :
+                                      messageSize == 1 ? _mediumMessage : _largeMessage;
+
+                    var level = _mixedLogLevels[random.Next(_mixedLogLevels.Count)];
+
+                    _logger.Log(
+                        level,
+                        message: new ReadOnlyMemory<byte>(messageBytes),
+                        exception: null,
+                        properties: null,
+                        templateName: "BenchmarkTemplate"
+                    );
+                }
+            });
         }
 
-        [Benchmark]
-        public async Task Log_Information_Async()
+        [Benchmark(Description = "极限并发-小消息")]
+        public void MaxConcurrency_SmallMessages()
         {
-            for (int i = 0; i < 1_000_000; i++)
+            var tasks = new List<Task>();
+            for (int i = 0; i < _threadCount * 4; i++)
             {
-                _logger.LogInformation(_testMessage, templateName: "BenchmarkTemplate");
+                tasks.Add(Task.Run(() =>
+                {
+                    for (int j = 0; j < _iterationsPerThread / (_threadCount * 4); j++)
+                    {
+                        _logger.LogInformation(new ReadOnlyMemory<byte>(_smallMessage));
+                    }
+                }));
             }
-            await Task.Yield();
+
+            Task.WaitAll(tasks.ToArray());
         }
 
-        [Benchmark]
-        public async Task Log_With_Properties()
+        [Benchmark(Description = "异常日志测试")]
+        public void ExceptionLogging()
         {
-            var properties = new Dictionary<string, object> { { "TestKey", "TestValue" } };
-            for (int i = 0; i < 1_000_000; i++)
+            Parallel.For(0, _threadCount, i =>
             {
-                _logger.LogInformation(_testMessage, properties, templateName: "BenchmarkTemplate");
-            }
-            await Task.Yield();
+                for (int j = 0; j < _iterationsPerThread / _threadCount; j++)
+                {
+                    try
+                    {
+                        if (j % 10 == 0) throw new InvalidOperationException("Test exception");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(
+                            new ReadOnlyMemory<byte>(_smallMessage),
+                            ex,
+                            templateName: "BenchmarkTemplate"
+                        );
+                    }
+                }
+            });
         }
 
         [GlobalCleanup]
         public void Cleanup()
         {
+            Console.WriteLine("测试完成，清理资源...");
             _logger.Dispose();
         }
     }

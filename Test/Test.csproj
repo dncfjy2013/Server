@@ -14,5 +14,9 @@
   <ItemGroup>
     <ProjectReference Include="..\Logger\Logger.csproj" />
   </ItemGroup>
-
+	
+  <PropertyGroup>
+	<ServerGarbageCollection>true</ServerGarbageCollection>
+	<GCSettingsLatencyMode>SustainedLowLatency</GCSettingsLatencyMode>
+  </PropertyGroup>
 </Project>
