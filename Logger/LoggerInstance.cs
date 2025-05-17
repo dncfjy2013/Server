@@ -1,5 +1,7 @@
-﻿using Server.Logger.Common;
+﻿using Server.Common.Extensions;
+using Server.Logger.Common;
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -29,6 +31,10 @@ namespace Server.Logger.Common
         public LogLevel FileLogLevel { get; set; } = LogLevel.Information;
         public string LogFilePath { get; set; } = "application.log";
         public bool EnableAsyncWriting { get; set; } = true;
+        public int MaxQueueSize { get; set; } = 100000;
+        public int BatchSize { get; set; } = 1000;
+        public int FlushInterval { get; set; } = 100;
+        public bool EnableConsoleColor { get; set; } = true; // 新增：控制台颜色开关
     }
 
     // 日志消息类
@@ -42,7 +48,10 @@ namespace Server.Logger.Common
         public Exception Exception { get; set; }
         public Dictionary<string, object> Properties { get; set; }
 
-        public LogMessage(DateTime timestamp, LogLevel level, string message, int threadId, string threadName, Exception exception = null, Dictionary<string, object> properties = null)
+        public LogMessage() { }
+
+        public LogMessage(DateTime timestamp, LogLevel level, string message, int threadId, string threadName,
+            Exception exception = null, Dictionary<string, object> properties = null)
         {
             Timestamp = timestamp;
             Level = level;
@@ -53,7 +62,35 @@ namespace Server.Logger.Common
             Properties = properties;
         }
 
-        public string LevelMessage => Level.ToString().ToUpperInvariant();
+        public void Reset()
+        {
+            Timestamp = DateTime.MinValue;
+            Level = LogLevel.Information;
+            Message = null;
+            ThreadId = 0;
+            ThreadName = null;
+            Exception = null;
+            Properties?.Clear();
+        }
+
+        public string LevelMessage => Level.ToString().ToUpperInvariant().Center(11, " ");
+    }
+
+    // 对象池实现
+    public class ObjectPool<T> where T : class, new()
+    {
+        private readonly ConcurrentBag<T> _objects;
+        private readonly Func<T> _objectGenerator;
+
+        public ObjectPool(Func<T> objectGenerator)
+        {
+            _objectGenerator = objectGenerator ?? throw new ArgumentNullException(nameof(objectGenerator));
+            _objects = new ConcurrentBag<T>();
+        }
+
+        public T Get() => _objects.TryTake(out T item) ? item : _objectGenerator();
+
+        public void Return(T item) => _objects.Add(item);
     }
 }
 
@@ -108,7 +145,8 @@ namespace Server.Logger
         void LogCritical<T>(T state, Exception exception = null, Func<T, Exception, string> formatter = null, string templateName = null);
     }
 
-    public class LoggerInstance : ILogger
+    // 高性能日志实现
+    public sealed class LoggerInstance : ILogger
     {
         // 单例实现
         private static readonly Lazy<LoggerInstance> _instance = new Lazy<LoggerInstance>(
@@ -119,11 +157,19 @@ namespace Server.Logger
         // 配置和状态
         private readonly LoggerConfig _config;
         private readonly ConcurrentDictionary<string, LogTemplate> _templates = new();
-        private readonly BlockingCollection<LogMessage> _logQueue = new(10000);
-        private readonly Task _logWriterTask;
+        private readonly ConcurrentQueue<LogMessage> _logQueue = new();
+        private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(0);
         private readonly CancellationTokenSource _cts = new();
+        private readonly Task _logWriterTask;
+        private FileStream _fileStream;
+        private StreamWriter _writer;
+        private int _bufferCount;
         private bool _isDisposed;
         private bool _isDisposing;
+
+        // 线程本地缓存原始颜色（避免多线程竞争）
+        [ThreadStatic] private static ConsoleColor _originalColor;
+        [ThreadStatic] private static bool _colorInitialized;
 
         // 接口属性实现
         public LogLevel ConsoleLogLevel
@@ -141,7 +187,14 @@ namespace Server.Logger
         public string LogFilePath
         {
             get => _config.LogFilePath;
-            set => _config.LogFilePath = value;
+            set
+            {
+                if (_config.LogFilePath != value)
+                {
+                    _config.LogFilePath = value;
+                    ResetFileWriter();
+                }
+            }
         }
 
         public bool EnableAsyncWriting
@@ -156,24 +209,67 @@ namespace Server.Logger
         public LoggerInstance(LoggerConfig config)
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
+            _messagePool = new ObjectPool<LogMessage>(() => new LogMessage());
 
             // 添加默认模板
             AddTemplate(new LogTemplate
             {
                 Name = "Default",
-                Template = "{Timestamp} [{Level}] {Message}{Exception}{Properties}",
+                Template = "{Timestamp} [{Level}] [{ThreadId}] {Message}{Exception}{Properties}",
                 Level = LogLevel.Information,
                 IncludeException = true
             });
 
+            InitializeFileWriter();
+
             // 启动异步日志处理任务
-            if (_config.EnableAsyncWriting)
+            _logWriterTask = Task.Factory.StartNew(
+                ProcessLogQueueAsync,
+                _cts.Token,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default);
+        }
+
+        // 初始化文件写入器
+        private void InitializeFileWriter()
+        {
+            try
             {
-                _logWriterTask = Task.Factory.StartNew(
-                    ProcessLogQueue,
-                    _cts.Token,
-                    TaskCreationOptions.LongRunning,
-                    TaskScheduler.Default);
+                _fileStream?.Dispose();
+                _writer?.Dispose();
+
+                _fileStream = new FileStream(
+                    _config.LogFilePath,
+                    FileMode.Append,
+                    FileAccess.Write,
+                    FileShare.ReadWrite,
+                    4096,
+                    useAsync: true);
+
+                _writer = new StreamWriter(_fileStream, Encoding.UTF8) { AutoFlush = false };
+                _bufferCount = 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"初始化日志文件失败: {ex.Message}");
+                throw;
+            }
+        }
+
+        // 重置文件写入器
+        private void ResetFileWriter()
+        {
+            try
+            {
+                _writer?.Flush();
+                _writer?.Dispose();
+                _fileStream?.Dispose();
+
+                InitializeFileWriter();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"重置日志文件失败: {ex.Message}");
             }
         }
 
@@ -216,46 +312,23 @@ namespace Server.Logger
             // 检查日志级别过滤
             if (level < template.Level) return;
 
-            // 创建日志消息
-            var logMessage = new LogMessage(
-                DateTime.Now,
-                level,
-                message,
-                Environment.CurrentManagedThreadId,
-                Thread.CurrentThread.Name,
-                exception,
-                properties)
+            // 获取对象池中的对象
+            var logMessage = _messagePool.Get();
+            logMessage.Timestamp = DateTime.Now;
+            logMessage.Level = level;
+            logMessage.Message = message;
+            logMessage.ThreadId = Environment.CurrentManagedThreadId;
+            logMessage.ThreadName = Thread.CurrentThread.Name;
+            logMessage.Exception = exception;
+            logMessage.Properties = properties ?? new Dictionary<string, object>
             {
-                // 添加调用者信息
-                Properties = properties ?? new Dictionary<string, object>
-                {
-                    ["CallerMember"] = memberName,
-                    ["CallerFile"] = Path.GetFileName(sourceFilePath),
-                    ["CallerLine"] = sourceLineNumber
-                }
+                ["CallerMember"] = memberName,
+                ["CallerFile"] = Path.GetFileName(sourceFilePath),
+                ["CallerLine"] = sourceLineNumber
             };
 
-            // 格式化消息
-            var formattedMessage = FormatMessage(template, logMessage);
-
-            // 输出到控制台
-            if (level >= ConsoleLogLevel)
-            {
-                WriteToConsole(level, formattedMessage);
-            }
-
-            // 输出到文件
-            if (level >= FileLogLevel && !string.IsNullOrEmpty(LogFilePath))
-            {
-                if (EnableAsyncWriting)
-                {
-                    _logQueue.Add(logMessage, _cts.Token);
-                }
-                else
-                {
-                    WriteToFile(logMessage);
-                }
-            }
+            // 加入队列（应用背压策略）
+            EnqueueLogMessage(logMessage);
         }
 
         // 快捷日志方法实现
@@ -309,12 +382,14 @@ namespace Server.Logger
         }
 
         // 格式化消息
-        private string FormatMessage(LogTemplate template, LogMessage message)
+        private string FormatMessage(LogMessage message, string templateName = "Default")
         {
+            var template = GetTemplate(templateName);
             var formatted = template.Template
                 .Replace("{Timestamp}", message.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff"))
                 .Replace("{Level}", message.LevelMessage)
-                .Replace("{Message}", message.Message);
+                .Replace("{Message}", message.Message)
+                .Replace("{ThreadId}", message.ThreadId.ToString());
 
             // 处理异常信息
             if (template.IncludeException && message.Exception != null)
@@ -345,88 +420,211 @@ namespace Server.Logger
             return formatted;
         }
 
-        // 写入控制台
-        private void WriteToConsole(LogLevel level, string message)
+        // 加入日志队列（带背压策略）
+        private void EnqueueLogMessage(LogMessage message)
         {
-            if (_isDisposing) return;
+            // 应用背压策略
+            if (_logQueue.Count > _config.MaxQueueSize)
+            {
+                // 队列已满，丢弃最旧的日志
+                if (_logQueue.TryDequeue(out var discarded))
+                {
+                    _messagePool.Return(discarded);
+                }
 
-            var color = GetConsoleColor(level);
-            var originalColor = Console.ForegroundColor;
+                // 记录队列满警告
+                if (_logQueue.Count % 1000 == 0)
+                {
+                    var warningMsg = _messagePool.Get();
+                    warningMsg.Timestamp = DateTime.Now;
+                    warningMsg.Level = LogLevel.Warning;
+                    warningMsg.Message = $"日志队列已满，当前大小: {_logQueue.Count}";
+                    warningMsg.ThreadId = Environment.CurrentManagedThreadId;
+
+                    // 直接写入控制台，避免递归调用
+                    WriteToConsoleDirect(warningMsg);
+                    _messagePool.Return(warningMsg);
+                }
+            }
+
+            _logQueue.Enqueue(message);
+            _semaphore.Release();
+        }
+
+        // 直接写入控制台（不经过队列）
+        private void WriteToConsoleDirect(LogMessage message)
+        {
+            if (!_config.EnableConsoleColor)
+            {
+                Console.WriteLine(FormatMessage(message));
+                return;
+            }
+
+            var color = GetConsoleColor(message.Level);
+
+            // 缓存原始颜色（仅首次）
+            if (!_colorInitialized)
+            {
+                _originalColor = Console.ForegroundColor;
+                _colorInitialized = true;
+            }
 
             try
             {
                 Console.ForegroundColor = color;
-                Console.WriteLine(message);
+                Console.WriteLine(FormatMessage(message));
             }
             finally
             {
-                Console.ForegroundColor = originalColor;
+                Console.ForegroundColor = _originalColor;
             }
         }
 
-        // 写入文件
-        private void WriteToFile(LogMessage message)
+        // 写入控制台（优化版本）
+        private void WriteToConsole(LogMessage message)
         {
-            if (_isDisposing) return;
-
-            int retryCount = 0;
-            const int maxRetries = 3;
-
-            while (retryCount < maxRetries)
+            if (!_config.EnableConsoleColor)
             {
-                try
-                {
-                    using var fs = new FileStream(
-                        LogFilePath,
-                        FileMode.Append,
-                        FileAccess.Write,
-                        FileShare.Read,
-                        4096,
-                        useAsync: false);
-
-                    using var writer = new StreamWriter(fs, Encoding.UTF8);
-                    writer.WriteLine(FormatMessage(GetTemplate("Default"), message));
-                    break;
-                }
-                catch (IOException ex) when (ex.HResult == -2147024864) // 文件被占用
-                {
-                    retryCount++;
-                    Thread.Sleep(500);
-                }
-                catch (Exception ex)
-                {
-                    WriteToConsole(LogLevel.Error, $"文件写入失败: {ex.Message}");
-                    break;
-                }
+                Console.WriteLine(FormatMessage(message));
+                return;
             }
 
-            if (retryCount >= maxRetries)
+            var color = GetConsoleColor(message.Level);
+
+            // 缓存原始颜色（仅首次）
+            if (!_colorInitialized)
             {
-                WriteToConsole(LogLevel.Critical, "日志写入达到最大重试次数");
+                _originalColor = Console.ForegroundColor;
+                _colorInitialized = true;
+            }
+
+            try
+            {
+                Console.ForegroundColor = color;
+                Console.Write(FormatMessage(message));
+                Console.Write(Environment.NewLine); // 拆分WriteLine为Write+换行，减少锁竞争
+            }
+            finally
+            {
+                Console.ForegroundColor = _originalColor;
             }
         }
 
         // 异步处理日志队列
-        private void ProcessLogQueue()
+        private async Task ProcessLogQueueAsync()
         {
             try
             {
-                foreach (var message in _logQueue.GetConsumingEnumerable(_cts.Token))
+                while (!_cts.IsCancellationRequested)
                 {
-                    WriteToFile(message);
+                    await _semaphore.WaitAsync(_cts.Token);
+
+                    // 批量处理日志
+                    var batchSize = Math.Min(_config.BatchSize, _logQueue.Count);
+                    for (int i = 0; i < batchSize && _logQueue.TryDequeue(out var message); i++)
+                    {
+                        try
+                        {
+                            // 写入文件
+                            if (message.Level >= FileLogLevel)
+                            {
+                                await WriteToFileAsync(message);
+                            }
+
+                            // 写入控制台（同步非阻塞，带颜色）
+                            if (message.Level >= ConsoleLogLevel)
+                            {
+                                WriteToConsole(message);
+                            }
+                        }
+                        finally
+                        {
+                            // 归还对象到池
+                            _messagePool.Return(message);
+                        }
+                    }
                 }
             }
             catch (OperationCanceledException)
             {
                 // 正常终止
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"日志处理任务异常: {ex}");
+            }
             finally
             {
                 // 处理队列中剩余的消息
-                while (_logQueue.TryTake(out var message))
+                while (_logQueue.TryDequeue(out var message))
                 {
-                    WriteToFile(message);
+                    try
+                    {
+                        if (message.Level >= FileLogLevel)
+                        {
+                            await WriteToFileAsync(message);
+                        }
+                    }
+                    finally
+                    {
+                        _messagePool.Return(message);
+                    }
                 }
+
+                // 确保所有缓冲区刷新
+                await FlushWriterAsync();
+            }
+        }
+
+        // 异步写入文件
+        // 在WriteToFileAsync方法中修正日志写入失败的处理
+        private async Task WriteToFileAsync(LogMessage message)
+        {
+            if (_isDisposing) return;
+
+            try
+            {
+                var formatted = FormatMessage(message);
+                await _writer.WriteLineAsync(formatted);
+                _bufferCount++;
+
+                // 批量刷新或定时刷新
+                if (_bufferCount >= _config.FlushInterval)
+                {
+                    await _writer.FlushAsync();
+                    _bufferCount = 0;
+                }
+            }
+            catch (Exception ex)
+            {
+                // 记录写入失败 - 修正版本
+                var errorMessage = _messagePool.Get();
+                errorMessage.Timestamp = DateTime.Now;
+                errorMessage.Level = LogLevel.Error;
+                errorMessage.Message = $"日志写入失败: {ex.Message}";
+                errorMessage.ThreadId = Environment.CurrentManagedThreadId;
+
+                WriteToConsole(errorMessage);
+                _messagePool.Return(errorMessage);
+
+                // 尝试重置文件写入器
+                ResetFileWriter();
+            }
+        }
+
+        // 强制刷新写入器
+        private async Task FlushWriterAsync()
+        {
+            try
+            {
+                if (_writer != null)
+                {
+                    await _writer.FlushAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"刷新日志缓冲区失败: {ex.Message}");
             }
         }
 
@@ -445,6 +643,9 @@ namespace Server.Logger
             };
         }
 
+        // 对象池引用
+        private readonly ObjectPool<LogMessage> _messagePool;
+
         // 资源释放
         public void Dispose()
         {
@@ -454,32 +655,49 @@ namespace Server.Logger
             try
             {
                 _cts.Cancel();
-                _logQueue.CompleteAdding();
 
-                // 等待异步任务完成
-                if (_logWriterTask != null && !_logWriterTask.IsCompleted)
-                {
-                    _logWriterTask.Wait(TimeSpan.FromSeconds(5));
-                }
+                // 等待异步任务完成，设置超时
+                Task.WaitAll(
+                    new[] { _logWriterTask },
+                    TimeSpan.FromSeconds(10));
 
                 // 处理剩余消息
-                while (_logQueue.TryTake(out var message))
+                while (_logQueue.TryDequeue(out var message))
                 {
-                    WriteToFile(message);
+                    try
+                    {
+                        if (message.Level >= FileLogLevel)
+                        {
+                            _writer.WriteLine(FormatMessage(message));
+                        }
+                    }
+                    finally
+                    {
+                        _messagePool.Return(message);
+                    }
                 }
+
+                // 强制刷新所有缓冲区
+                _writer?.Flush();
+            }
+            catch (AggregateException ex) when (ex.InnerExceptions.All(e => e is TaskCanceledException))
+            {
+                // 忽略任务取消异常
             }
             catch (Exception ex)
             {
-                WriteToConsole(LogLevel.Critical, $"日志系统关闭异常: {ex.Message}");
+                Console.WriteLine($"日志系统关闭异常: {ex.Message}");
             }
             finally
             {
-                _logQueue.Dispose();
+                // 释放资源
+                _semaphore.Dispose();
+                _writer?.Close();
+                _fileStream?.Close();
                 _cts.Dispose();
                 _isDisposed = true;
                 _isDisposing = false;
             }
         }
     }
-    
 }
