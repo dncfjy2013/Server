@@ -650,26 +650,26 @@ namespace Server.Logger
         // 使用文件流写入
         private async Task WriteToFileStreamAsync(LogMessage message)
         {
-            // 格式化消息
             var formattedMessage = FormatMessage(message);
-
-            // 写入缓冲区
-            await _writeLock.WaitAsync(_cts.Token);
+            await _writeLock.WaitAsync();
             try
             {
-                // 检查缓冲区是否足够
-                if (_bufferOffset + formattedMessage.Length > _writeBuffer.Length)
+                while (formattedMessage.Length > 0)
                 {
-                    // 缓冲区不足，先写入文件
-                    await _fileStream.WriteAsync(_writeBuffer.AsMemory(0, _bufferOffset), _cts.Token);
-                    _bufferOffset = 0;
+                    int spaceLeft = _writeBuffer.Length - _bufferOffset;
+                    if (spaceLeft == 0)
+                    {
+                        await _fileStream.WriteAsync(_writeBuffer.AsMemory(), _cts.Token);
+                        _bufferOffset = 0;
+                        spaceLeft = _writeBuffer.Length;
+                    }
+
+                    int copyLength = Math.Min(spaceLeft, formattedMessage.Length);
+                    formattedMessage.Span.Slice(0, copyLength).CopyTo(_writeBuffer.AsSpan(_bufferOffset));
+                    _bufferOffset += copyLength;
+                    formattedMessage = formattedMessage.Slice(copyLength);
                 }
 
-                // 复制到缓冲区
-                formattedMessage.Span.CopyTo(_writeBuffer.AsSpan(_bufferOffset));
-                _bufferOffset += formattedMessage.Length;
-
-                // 检查是否需要刷新
                 if (_bufferOffset >= _config.FlushInterval)
                 {
                     await _fileStream.WriteAsync(_writeBuffer.AsMemory(0, _bufferOffset), _cts.Token);
@@ -724,124 +724,61 @@ namespace Server.Logger
         // 格式化消息
         private Memory<byte> FormatMessage(LogMessage message)
         {
+            using var ms = new MemoryStream();
             var template = GetTemplate(null);
-            var outputBuffer = new byte[4096]; // 预分配足够大的缓冲区
-            var outputOffset = 0;
 
-            // 时间戳
+            // 写入时间戳
             var timestamp = message.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff");
-            var timestampBytes = Encoding.UTF8.GetBytes(timestamp);
-            Array.Copy(timestampBytes, 0, outputBuffer, outputOffset, timestampBytes.Length);
-            outputOffset += timestampBytes.Length;
+            ms.Write(Encoding.UTF8.GetBytes(timestamp));
+            ms.WriteByte((byte)' ');
 
-            // 级别
-            outputBuffer[outputOffset++] = (byte)' ';
-            outputBuffer[outputOffset++] = (byte)'[';
+            // 写入日志级别
+            ms.WriteByte((byte)'[');
+            ms.Write(Encoding.UTF8.GetBytes(message.Level.ToString().ToUpperInvariant()));
+            ms.WriteByte((byte)']');
+            ms.WriteByte((byte)' ');
 
-            var levelBytes = Encoding.UTF8.GetBytes(message.Level.ToString().ToUpperInvariant());
-            Array.Copy(levelBytes, 0, outputBuffer, outputOffset, levelBytes.Length);
-            outputOffset += levelBytes.Length;
+            // 写入线程ID
+            ms.WriteByte((byte)'[');
+            ms.Write(Encoding.UTF8.GetBytes(message.ThreadId.ToString()));
+            ms.WriteByte((byte)']');
+            ms.WriteByte((byte)' ');
 
-            outputBuffer[outputOffset++] = (byte)']';
-            outputBuffer[outputOffset++] = (byte)' ';
+            // 写入消息内容
+            ms.Write(message.Message.Span);
 
-            // 线程ID
-            outputBuffer[outputOffset++] = (byte)'[';
-
-            var threadIdBytes = Encoding.UTF8.GetBytes(message.ThreadId.ToString());
-            Array.Copy(threadIdBytes, 0, outputBuffer, outputOffset, threadIdBytes.Length);
-            outputOffset += threadIdBytes.Length;
-
-            outputBuffer[outputOffset++] = (byte)']';
-            outputBuffer[outputOffset++] = (byte)' ';
-
-            // 消息内容
-            message.Message.Span.CopyTo(outputBuffer.AsSpan(outputOffset));
-            outputOffset += message.Message.Length;
-
-            // 异常信息
+            // 写入异常信息（如果有）
             if (template.IncludeException && message.Exception != null)
             {
-                outputBuffer[outputOffset++] = (byte)'\n';
-                outputBuffer[outputOffset++] = (byte)'[';
-                outputBuffer[outputOffset++] = (byte)'E';
-                outputBuffer[outputOffset++] = (byte)'x';
-                outputBuffer[outputOffset++] = (byte)'c';
-                outputBuffer[outputOffset++] = (byte)'e';
-                outputBuffer[outputOffset++] = (byte)'p';
-                outputBuffer[outputOffset++] = (byte)'t';
-                outputBuffer[outputOffset++] = (byte)'i';
-                outputBuffer[outputOffset++] = (byte)'o';
-                outputBuffer[outputOffset++] = (byte)'n';
-                outputBuffer[outputOffset++] = (byte)']';
-                outputBuffer[outputOffset++] = (byte)' ';
-
-                var exceptionTypeBytes = Encoding.UTF8.GetBytes(message.Exception.GetType().FullName);
-                Array.Copy(exceptionTypeBytes, 0, outputBuffer, outputOffset, exceptionTypeBytes.Length);
-                outputOffset += exceptionTypeBytes.Length;
-
-                outputBuffer[outputOffset++] = (byte)':';
-                outputBuffer[outputOffset++] = (byte)' ';
-
-                var exceptionMessageBytes = Encoding.UTF8.GetBytes(message.Exception.Message);
-                Array.Copy(exceptionMessageBytes, 0, outputBuffer, outputOffset, exceptionMessageBytes.Length);
-                outputOffset += exceptionMessageBytes.Length;
-
+                ms.WriteByte((byte)'\n');
+                ms.Write(Encoding.UTF8.GetBytes($"[Exception] {message.Exception.GetType().FullName}: {message.Exception.Message}"));
                 if (!string.IsNullOrEmpty(message.Exception.StackTrace))
                 {
-                    outputBuffer[outputOffset++] = (byte)'\n';
-                    var stackTraceBytes = Encoding.UTF8.GetBytes(message.Exception.StackTrace);
-                    Array.Copy(stackTraceBytes, 0, outputBuffer, outputOffset, stackTraceBytes.Length);
-                    outputOffset += stackTraceBytes.Length;
+                    ms.WriteByte((byte)'\n');
+                    ms.Write(Encoding.UTF8.GetBytes(message.Exception.StackTrace));
                 }
             }
 
-            // 属性信息
+            // 写入属性信息（如果有）
             if (message.Properties != null && message.Properties.Count > 0)
             {
-                outputBuffer[outputOffset++] = (byte)'\n';
-                outputBuffer[outputOffset++] = (byte)'[';
-                outputBuffer[outputOffset++] = (byte)'P';
-                outputBuffer[outputOffset++] = (byte)'r';
-                outputBuffer[outputOffset++] = (byte)'o';
-                outputBuffer[outputOffset++] = (byte)'p';
-                outputBuffer[outputOffset++] = (byte)'e';
-                outputBuffer[outputOffset++] = (byte)'r';
-                outputBuffer[outputOffset++] = (byte)'t';
-                outputBuffer[outputOffset++] = (byte)'i';
-                outputBuffer[outputOffset++] = (byte)'e';
-                outputBuffer[outputOffset++] = (byte)'s';
-                outputBuffer[outputOffset++] = (byte)']';
-                outputBuffer[outputOffset++] = (byte)' ';
-
+                ms.WriteByte((byte)'\n');
+                ms.Write(Encoding.UTF8.GetBytes("[Properties] "));
                 bool first = true;
                 foreach (var property in message.Properties)
                 {
-                    if (!first)
-                    {
-                        outputBuffer[outputOffset++] = (byte)',';
-                        outputBuffer[outputOffset++] = (byte)' ';
-                    }
-
-                    var propertyNameBytes = Encoding.UTF8.GetBytes(property.Key);
-                    Array.Copy(propertyNameBytes, 0, outputBuffer, outputOffset, propertyNameBytes.Length);
-                    outputOffset += propertyNameBytes.Length;
-
-                    outputBuffer[outputOffset++] = (byte)'=';
-
-                    var propertyValueBytes = Encoding.UTF8.GetBytes(property.Value?.ToString() ?? "null");
-                    Array.Copy(propertyValueBytes, 0, outputBuffer, outputOffset, propertyValueBytes.Length);
-                    outputOffset += propertyValueBytes.Length;
-
+                    if (!first) ms.WriteByte((byte)',');
+                    ms.Write(Encoding.UTF8.GetBytes($"{property.Key}={property.Value?.ToString() ?? "null"}"));
                     first = false;
                 }
             }
 
-            // 换行符
-            outputBuffer[outputOffset++] = (byte)'\r';
-            outputBuffer[outputOffset++] = (byte)'\n';
+            // 写入换行符
+            ms.WriteByte((byte)'\r');
+            ms.WriteByte((byte)'\n');
 
-            return new Memory<byte>(outputBuffer, 0, outputOffset);
+            // 返回内存流的内容
+            return ms.ToArray();
         }
 
         // 控制台输出相关
