@@ -40,24 +40,25 @@ namespace Server.Logger
         private readonly Task[] _processingTasks;
         private readonly List<Task> _allTasks = new List<Task>();
         private bool _isDisposed;
-        private readonly bool _isAsyncWrite;
+        private volatile bool _isAsyncWrite; // 确保多线程可见性
 
         // 文件写入相关
         private FileStream _fileStream;
         private readonly byte[] _writeBuffer;
         private int _bufferOffset;
         private readonly SemaphoreSlim _writeLock = new SemaphoreSlim(1, 1);
-        private readonly object _flushLock = new object();
+        private readonly object _mmfSwitchLock = new object(); // 内存映射切换锁
 
         // 内存映射文件相关 (Windows优化)
-        private IntPtr _fileHandle = IntPtr.Zero;
-        private IntPtr _mapHandle = IntPtr.Zero;
         private IntPtr _mapView = IntPtr.Zero;
         private long _mapOffset;
-        private readonly bool _useMemoryMappedFile;
+        private volatile bool _useMemoryMappedFile; // 确保多线程可见性
         private readonly long _memoryMappedFileSize;
         private SafeFileHandle _safeFileHandle;
         private SafeMapHandle _safeMapHandle;
+        private Task _createNewFileTask = Task.CompletedTask; // 记录当前创建任务
+        private int _currentFileIndex = 0;
+        private DateTime _lastFileDate = DateTime.MinValue;
 
         // 性能监控
         private readonly Counter _totalLogsProcessed = new Counter();
@@ -75,7 +76,6 @@ namespace Server.Logger
         {
             Console.OutputEncoding = Encoding.UTF8;
 
-            EnsureLogDirectoryExists(config.LogFilePath);
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _writeBuffer = new byte[_config.FileBufferSize];
             _useMemoryMappedFile = _config.UseMemoryMappedFile;
@@ -89,7 +89,7 @@ namespace Server.Logger
                 SingleWriter = false,
                 SingleReader = false
             });
-
+            Console.WriteLine($"current maxqueue num {_config.MaxQueueSize}");
             // 添加默认模板
             AddTemplate(new LogTemplate
             {
@@ -100,7 +100,7 @@ namespace Server.Logger
             });
 
             // 初始化文件写入器
-            InitializeFileWriter(config.LogFilePath);
+            InitializeFileWriter();
 
             if (_isAsyncWrite)
             {
@@ -127,207 +127,82 @@ namespace Server.Logger
             }
         }
 
-        // 初始化文件写入器
-        private void InitializeFileWriter(string filepath)
+        // 初始化文件写入器（核心逻辑）
+        private void InitializeFileWriter()
         {
             try
             {
-                // 检查权限和锁定状态
-                if (!CheckFileWritePermission(filepath))
+                // 确保日志目录存在
+                EnsureLogDirectoryExists(_config.LogDirectory);
+
+                // 获取当前日期（按天重置序号）
+                DateTime now = DateTime.Now;
+                string currentDate = now.ToString("yyyyMMdd");
+                _lastFileDate = now.Date; // 记录当前日期
+
+                // 按日期重置序号（如果日期变更）
+                if (currentDate != _lastFileDate.ToString("yyyyMMdd"))
                 {
-                    throw new InvalidOperationException("没有写入日志文件的权限");
+                    _currentFileIndex = 0;
+                    _lastFileDate = now.Date;
                 }
 
-                if (IsFileLocked(filepath))
+                string baseFileName;
+                do
                 {
-                    Console.WriteLine($"日志文件已被锁定: {filepath}");
-                    // 可以选择等待或抛出异常
-                }
+                    baseFileName = Path.Combine(_config.LogDirectory,
+                        string.Format(_config.LogFileNameFormat, now, _currentFileIndex));
+                    _currentFileIndex++; // 先尝试当前序号，失败后递增
+                } while (File.Exists(baseFileName));
 
+                // 回退到上一个有效序号（因为循环中多递增了一次）
+                _currentFileIndex--;
+                baseFileName = Path.Combine(_config.LogDirectory,
+                    string.Format(_config.LogFileNameFormat, now, _currentFileIndex));
+
+                // 初始化文件写入（内存映射或文件流）
                 if (_useMemoryMappedFile)
                 {
-                    // 使用内存映射文件 (Windows优化)
-                    IntPtr fileHandle = CreateFile(
-                        _config.LogFilePath,
-                        GENERIC_READ | GENERIC_WRITE,
-                        FILE_SHARE_READ | FILE_SHARE_WRITE,
-                        IntPtr.Zero,
-                        OPEN_ALWAYS,
-                        FILE_ATTRIBUTE_NORMAL,
-                        IntPtr.Zero);
-
-                    if (fileHandle == INVALID_HANDLE_VALUE)
-                    {
-                        int errorCode = Marshal.GetLastWin32Error();
-                        Console.WriteLine($"CreateFile failed with error code: {errorCode}");
-                        throw new Win32Exception(errorCode);
-                    }
-
-                    // 使用SafeFileHandle管理文件句柄
-                    _safeFileHandle = new SafeFileHandle(fileHandle, true);
-
-                    // 设置文件初始大小
-                    if (_config.MemoryMappedFileSize > 0)
-                    {
-                        long fileSize = _config.MemoryMappedFileSize;
-                        long newPointer;
-
-                        if (!SetFilePointerEx(_safeFileHandle.DangerousGetHandle(), fileSize - 1, out newPointer, 0))
-                        {
-                            int errorCode = Marshal.GetLastWin32Error();
-                            Console.WriteLine($"SetFilePointerEx failed with error code: {errorCode}");
-                            throw new Win32Exception(errorCode);
-                        }
-
-                        if (!SetEndOfFile(_safeFileHandle.DangerousGetHandle()))
-                        {
-                            int errorCode = Marshal.GetLastWin32Error();
-                            Console.WriteLine($"SetEndOfFile failed with error code: {errorCode}");
-                            throw new Win32Exception(errorCode);
-                        }
-
-                        // 重置文件指针
-                        if (!SetFilePointerEx(_safeFileHandle.DangerousGetHandle(), 0, out newPointer, 0))
-                        {
-                            int errorCode = Marshal.GetLastWin32Error();
-                            Console.WriteLine($"SetFilePointerEx failed with error code: {errorCode}");
-                            throw new Win32Exception(errorCode);
-                        }
-                    }
-
-                    // 创建内存映射 - 使用SafeHandle的DangerousGetHandle()方法
-                    IntPtr mapHandle = CreateFileMapping(
-                        _safeFileHandle.DangerousGetHandle(),  // 修正：使用SafeHandle的句柄
-                        IntPtr.Zero,
-                        PAGE_READWRITE,
-                        (uint)(_memoryMappedFileSize >> 32),
-                        (uint)(_memoryMappedFileSize & 0xFFFFFFFF),
-                        null);
-
-                    if (mapHandle == IntPtr.Zero)
-                    {
-                        int errorCode = Marshal.GetLastWin32Error();
-
-                        // 记录详细的诊断信息
-                        Console.WriteLine($"CreateFileMapping failed with error code: {errorCode}");
-                        Console.WriteLine($"Error message: {new Win32Exception(errorCode).Message}");
-                        Console.WriteLine($"File path: {filepath}");
-                        Console.WriteLine($"MemoryMappedFileSize: {_memoryMappedFileSize} bytes");
-                        Console.WriteLine($"SafeFileHandle IsInvalid: {_safeFileHandle.IsInvalid}");
-
-                        // 尝试获取文件状态信息
-                        try
-                        {
-                            using (FileStream testStream = new FileStream(
-                                _config.LogFilePath,
-                                FileMode.Open,
-                                FileAccess.Read,
-                                FileShare.ReadWrite))
-                            {
-                                Console.WriteLine($"File size: {testStream.Length} bytes");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Error accessing file: {ex.Message}");
-                        }
-
-                        // 释放资源 - 只使用SafeHandle.Dispose()
-                        _safeFileHandle.Dispose();
-                        _safeFileHandle = null;
-
-                        throw new Win32Exception(errorCode, $"CreateFileMapping failed with error code {errorCode}");
-                    }
-
-                    // 使用SafeMapHandle管理映射句柄
-                    _safeMapHandle = new SafeMapHandle();
-                    _safeMapHandle.Initialize(mapHandle);
-
-                    // 映射视图 - 使用SafeMapHandle的句柄
-                    _mapView = MapViewOfFile(
-                        _safeMapHandle.DangerousGetHandle(),  // 修正：使用SafeHandle的句柄
-                        FILE_MAP_WRITE,
-                        0,
-                        0,
-                        (UIntPtr)_memoryMappedFileSize);
-
-                    if (_mapView == IntPtr.Zero)
-                    {
-                        int errorCode = Marshal.GetLastWin32Error();
-                        Console.WriteLine($"MapViewOfFile failed with error code: {errorCode}");
-
-                        // 释放资源
-                        _safeMapHandle.Dispose();
-                        _safeMapHandle = null;
-                        _safeFileHandle.Dispose();
-                        _safeFileHandle = null;
-
-                        throw new Win32Exception(errorCode);
-                    }
-
-                    _mapOffset = 0;
+                    InitializeMemoryMappedFile(baseFileName, _memoryMappedFileSize);
                 }
                 else
                 {
-                    // 使用传统文件流
-                    _fileStream?.Dispose();
-                    _fileStream = new FileStream(
-                        _config.LogFilePath,
-                        FileMode.Append,
-                        FileAccess.Write,
-                        FileShare.ReadWrite,
-                        _config.FileBufferSize,
-                        useAsync: true);
-
-                    _bufferOffset = 0;
+                    InitializeFileStream(baseFileName);
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to initialize file writer: {ex}");
-                // 确保资源释放
+                Console.WriteLine($"初始化文件写入器失败: {ex}");
                 Dispose();
                 throw;
             }
         }
-        private bool CheckFileWritePermission(string filePath)
+
+        // 初始化文件流
+        private void InitializeFileStream(string filePath)
         {
-            try
+            // 确保文件不存在（通过循环查找下一个可用序号）
+            int retryIndex = _currentFileIndex;
+            while (File.Exists(filePath))
             {
-                using (FileStream stream = File.Open(filePath, FileMode.OpenOrCreate,
-                                                      FileAccess.ReadWrite, FileShare.None))
-                {
-                    // 文件可读写
-                }
-                return true;
+                retryIndex++;
+                filePath = Path.Combine(_config.LogDirectory,
+                    string.Format(_config.LogFileNameFormat, DateTime.Now, retryIndex));
             }
-            catch (UnauthorizedAccessException)
-            {
-                Console.WriteLine($"没有写入权限: {filePath}");
-                return false;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"检查文件权限时出错: {ex.Message}");
-                return false;
-            }
+            _currentFileIndex = retryIndex; // 更新当前序号
+
+            _fileStream?.Dispose();
+            _fileStream = new FileStream(
+                filePath,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.ReadWrite,
+                _config.FileBufferSize,
+                useAsync: true);
+
+            _bufferOffset = 0;
         }
-        private bool IsFileLocked(string filePath)
-        {
-            try
-            {
-                using (FileStream stream = File.Open(filePath, FileMode.Open,
-                                                      FileAccess.ReadWrite, FileShare.None))
-                {
-                    // 文件未被锁定
-                }
-            }
-            catch (IOException)
-            {
-                return true; // 文件被锁定
-            }
-            return false;
-        }
+
         // 写入文件
         private void WriteToFile(LogMessage message)
         {
@@ -337,12 +212,10 @@ namespace Server.Logger
             {
                 if (_useMemoryMappedFile)
                 {
-                    // 使用内存映射文件写入
                     WriteToMemoryMappedFile(message);
                 }
                 else
                 {
-                    // 使用传统文件流写入
                     WriteToFileStream(message);
                 }
             }
@@ -356,53 +229,278 @@ namespace Server.Logger
                     Thread.CurrentThread.Name);
 
                 WriteToConsoleDirect(errorMessage);
-
-                // 重置文件写入器
-                ResetFileWriter(_config.LogFilePath);
-
+                ResetFileWriter();
                 throw;
             }
         }
 
-        // 使用内存映射文件写入 (Windows优化)
-        private unsafe void WriteToMemoryMappedFile(LogMessage message)
+        // 内存映射文件写入
+        private void WriteToMemoryMappedFile(LogMessage message)
         {
-            // 格式化消息
-            var formattedMessage = FormatMessage(message);
+            lock (_mmfSwitchLock)
+            {
+                if (_isDisposed || _mapView == IntPtr.Zero || !_safeMapHandle.IsInvalid)
+                {
+                    SwitchToFileStreamMode();
+                    WriteToFileStream(message);
+                    return;
+                }
 
-            // 确保有足够空间
-            if (_mapOffset + formattedMessage.Length > _memoryMappedFileSize)
+                if (IsMemoryMappedFileSpaceLow())
+                {
+                    SwitchToFileStreamMode();
+                    StartNewMemoryMappedFileTask();
+                    WriteToFileStream(message);
+                    return;
+                }
+
+                var formattedMessage = FormatMessage(message);
+                EnsureMemoryMappedSpace(formattedMessage.Length);
+
+                unsafe
+                {
+                    byte* mapPtr = (byte*)_mapView + _mapOffset;
+                    formattedMessage.Span.CopyTo(new Span<byte>(mapPtr, formattedMessage.Length));
+                    _mapOffset += formattedMessage.Length;
+                }
+
+                if (_mapOffset % (1024 * 1024) < formattedMessage.Length) // 每1MB刷新
+                {
+                    FlushViewOfFile(_mapView, (UIntPtr)formattedMessage.Length);
+                }
+            }
+        }
+
+        // 切换到文件流模式
+        private void SwitchToFileStreamMode()
+        {
+            _useMemoryMappedFile = false;
+            EnsureFileStreamInitialized();
+        }
+
+        // 确保文件流初始化
+        private void EnsureFileStreamInitialized()
+        {
+            if (_fileStream == null || !_fileStream.CanWrite)
+            {
+                lock (_mmfSwitchLock)
+                {
+                    if (_fileStream == null || !_fileStream.CanWrite)
+                    {
+                        string currentFile = GetCurrentLogFileName();
+                        InitializeFileStream(currentFile);
+                    }
+                }
+            }
+        }
+
+        // 创建新内存映射文件任务
+        private void StartNewMemoryMappedFileTask()
+        {
+            if (_createNewFileTask.IsCompleted)
+            {
+                _createNewFileTask = Task.Run(CreateNewMemoryMappedFileCore);
+            }
+        }
+
+        // 创建新内存映射文件核心逻辑
+        private void CreateNewMemoryMappedFileCore()
+        {
+            lock (_mmfSwitchLock)
+            {
+                if (_isDisposed) return;
+
+                // 按日期重置序号
+                if (DateTime.Now.Date > _lastFileDate)
+                {
+                    _currentFileIndex = 0;
+                    _lastFileDate = DateTime.Now.Date;
+                }
+                _currentFileIndex++;
+
+                string newFilePath = GetCurrentLogFileName();
+                try
+                {
+                    InitializeMemoryMappedFile(newFilePath, _memoryMappedFileSize);
+                    _useMemoryMappedFile = true;
+                    _mapOffset = 0;
+                    UnmapOldResources();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"创建新内存映射文件失败: {ex}");
+                    _useMemoryMappedFile = false;
+                }
+            }
+        }
+
+        // 获取当前日志文件名
+        private string GetCurrentLogFileName()
+        {
+            return Path.Combine(_config.LogDirectory,
+                string.Format(_config.LogFileNameFormat, DateTime.Now, _currentFileIndex));
+        }
+
+        // 内存映射文件空间检查
+        private bool IsMemoryMappedFileSpaceLow() =>
+            (_memoryMappedFileSize - _mapOffset) < (100 * 1024 * 1024); // 100MB阈值
+        /// <summary>
+        /// 检查是否有写入指定文件的权限
+        /// </summary>
+        private bool CheckFileWritePermission(string filePath)
+        {
+            try
+            {
+                // 检查目录是否存在且可写
+                var directory = Path.GetDirectoryName(filePath);
+                if (!Directory.Exists(directory))
+                {
+                    // 尝试创建目录
+                    Directory.CreateDirectory(directory);
+                }
+
+                // 尝试创建一个临时文件进行权限测试
+                string testFilePath = Path.Combine(directory, $"test_permission_{Guid.NewGuid()}.tmp");
+                using (FileStream stream = File.Create(testFilePath, 1, FileOptions.DeleteOnClose))
+                {
+                    // 文件创建并关闭成功，说明有写入权限
+                }
+
+                return true;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                Console.WriteLine($"没有写入权限: {filePath}");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"检查文件权限时出错: {ex.Message}");
+                return false;
+            }
+        }
+        // 确保内存映射空间足够
+        private void EnsureMemoryMappedSpace(int requiredSize)
+        {
+            if (_mapOffset + requiredSize > _memoryMappedFileSize)
             {
                 FlushMemoryMappedFile();
                 _mapOffset = 0;
             }
+        }
 
-            // 写入到内存映射区域
-            byte* mapPtr = (byte*)_mapView + _mapOffset;
-            formattedMessage.Span.CopyTo(new Span<byte>(mapPtr, formattedMessage.Length));
-            _mapOffset += formattedMessage.Length;
-
-            // 定期刷新到磁盘
-            if (_mapOffset % (1024 * 1024) < formattedMessage.Length) // 每1MB刷新一次
+        // 初始化内存映射文件
+        private void InitializeMemoryMappedFile(string filePath, long size)
+        {
+            try
             {
-                FlushViewOfFile((IntPtr)mapPtr, (UIntPtr)formattedMessage.Length);
+                EnsureLogDirectoryExists(filePath);
+                if (!CheckFileWritePermission(filePath)) throw new InvalidOperationException($"无写入权限: {filePath}");
+
+                using (FileStream fs = new FileStream(filePath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.ReadWrite))
+                {
+                    fs.SetLength(size);
+                }
+
+                IntPtr fileHandle = CreateFile(
+                    filePath,
+                    GENERIC_READ | GENERIC_WRITE,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    IntPtr.Zero,
+                    OPEN_EXISTING,
+                    FILE_ATTRIBUTE_NORMAL,
+                    IntPtr.Zero);
+
+                if (fileHandle == INVALID_HANDLE_VALUE)
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), $"创建文件句柄失败: {filePath}");
+
+                _safeFileHandle = new SafeFileHandle(fileHandle, true);
+
+                IntPtr mapHandle = CreateFileMapping(
+                    _safeFileHandle.DangerousGetHandle(),
+                    IntPtr.Zero,
+                    PAGE_READWRITE,
+                    (uint)(size >> 32),
+                    (uint)(size & 0xFFFFFFFF),
+                    null);
+
+                if (mapHandle == IntPtr.Zero)
+                {
+                    _safeFileHandle.Dispose();
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), $"创建内存映射失败: {filePath}");
+                }
+
+                _safeMapHandle = new SafeMapHandle();
+                _safeMapHandle.Initialize(mapHandle);
+
+                _mapView = MapViewOfFile(
+                    _safeMapHandle.DangerousGetHandle(),
+                    FILE_MAP_WRITE,
+                    0,
+                    0,
+                    (UIntPtr)size);
+
+                if (_mapView == IntPtr.Zero)
+                {
+                    _safeMapHandle.Dispose();
+                    _safeFileHandle.Dispose();
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), $"映射视图失败: {filePath}");
+                }
+
+                _mapOffset = 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"初始化内存映射文件失败: {ex}");
+                CleanupMemoryMappedResources();
+                throw;
             }
         }
 
-        // 刷新内存映射文件到磁盘
+        // 清理内存映射资源
+        private void CleanupMemoryMappedResources()
+        {
+            try
+            {
+                if (_mapView != IntPtr.Zero)
+                {
+                    FlushViewOfFile(_mapView, (UIntPtr)_mapOffset);
+                    UnmapViewOfFile(_mapView);
+                    _mapView = IntPtr.Zero;
+                }
+                _safeMapHandle?.Dispose();
+                _safeFileHandle?.Dispose();
+                _mapOffset = 0;
+            }
+            catch { /* 忽略清理异常 */ }
+        }
+
+        // 释放旧资源
+        private void UnmapOldResources()
+        {
+            CleanupMemoryMappedResources();
+        }
+
+        // 刷新内存映射
         private void FlushMemoryMappedFile()
         {
-            if (_mapView != IntPtr.Zero)
+            if (_mapView != IntPtr.Zero && _mapOffset > 0)
             {
                 FlushViewOfFile(_mapView, (UIntPtr)_mapOffset);
             }
         }
 
-        // 使用文件流写入
+        // 文件流写入
         private void WriteToFileStream(LogMessage message)
         {
+            if (_fileStream == null)
+            {
+                lock (_mmfSwitchLock) { EnsureFileStreamInitialized(); }
+            }
+
             var formattedMessage = FormatMessage(message);
             _writeLock.Wait();
+
             try
             {
                 while (formattedMessage.Length > 0)
@@ -410,9 +508,8 @@ namespace Server.Logger
                     int spaceLeft = _writeBuffer.Length - _bufferOffset;
                     if (spaceLeft == 0)
                     {
-                        _fileStream.Write(_writeBuffer, 0, _writeBuffer.Length); // 同步写入
+                        _fileStream.Write(_writeBuffer, 0, _writeBuffer.Length);
                         _bufferOffset = 0;
-                        spaceLeft = _writeBuffer.Length;
                     }
 
                     int copyLength = Math.Min(spaceLeft, formattedMessage.Length);
@@ -423,140 +520,72 @@ namespace Server.Logger
 
                 if (_bufferOffset >= _config.FlushInterval)
                 {
-                    _fileStream.Write(_writeBuffer, 0, _bufferOffset); // 同步写入
+                    _fileStream.Write(_writeBuffer, 0, _bufferOffset);
                     _bufferOffset = 0;
                 }
             }
-            finally
-            {
-                _writeLock.Release();
-            }
+            finally { _writeLock.Release(); }
         }
 
         // 重置文件写入器
-        private void ResetFileWriter(string filepath)
+        private void ResetFileWriter()
         {
-            try
+            lock (_mmfSwitchLock)
             {
-                if (_useMemoryMappedFile)
-                {
-                    if (_mapView != IntPtr.Zero)
-                    {
-                        UnmapViewOfFile(_mapView);
-                        _mapView = IntPtr.Zero;
-                    }
-
-                    if (_mapHandle != IntPtr.Zero)
-                    {
-                        CloseHandle(_mapHandle);
-                        _mapHandle = IntPtr.Zero;
-                    }
-
-                    if (_fileHandle != IntPtr.Zero)
-                    {
-                        CloseHandle(_fileHandle);
-                        _fileHandle = IntPtr.Zero;
-                    }
-                }
-                else
-                {
-                    _fileStream?.Flush();
-                    _fileStream?.Dispose();
-                }
-
-                InitializeFileWriter(filepath);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"重置日志文件失败: {ex.Message}");
+                CleanupMemoryMappedResources();
+                _fileStream?.Dispose();
+                InitializeFileWriter();
             }
         }
-        // 实现IDisposable
+
+        // IDisposable 实现
         public void Dispose()
         {
-            if (_isDisposed) return;
-            _isDisposed = true;
-
-            try
+            lock (_mmfSwitchLock)
             {
-                _cts.Cancel();
+                if (_isDisposed) return;
+                _isDisposed = true;
 
-                // 等待处理任务完成
-                Task.WaitAll(_allTasks.ToArray(), TimeSpan.FromSeconds(10));
-
-                // 清空队列
-                while (_logChannel.Reader.TryRead(out var message))
+                try
                 {
-                    try
+                    _cts.Cancel();
+                    Task.WaitAll(_allTasks.ToArray(), TimeSpan.FromSeconds(10));
+
+                    // 处理剩余日志
+                    while (_logChannel.Reader.TryRead(out var msg))
                     {
-                        if (message.Level >= _config.FileLogLevel)
+                        if (msg.Level >= _config.FileLogLevel)
                         {
-                            if (_useMemoryMappedFile)
+                            if (_useMemoryMappedFile && _mapView != IntPtr.Zero && _safeMapHandle.IsInvalid)
                             {
-                                WriteToMemoryMappedFile(message);
+                                WriteToMemoryMappedFile(msg);
                             }
                             else
                             {
-                                WriteToFileStream(message);
+                                EnsureFileStreamInitialized();
+                                WriteToFileStream(msg);
                             }
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"关闭时处理日志失败: {ex.Message}");
-                    }
-                }
 
-                // 刷新缓冲区
-                if (_useMemoryMappedFile)
-                {
+                    // 最终刷新
                     FlushMemoryMappedFile();
-                }
-                else
-                {
                     _fileStream?.Flush();
                 }
-            }
-            catch (AggregateException ex) when (ex.InnerExceptions.All(e => e is TaskCanceledException))
-            {
-                // 忽略任务取消异常
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"日志系统关闭异常: {ex.Message}");
-            }
-            finally
-            {
-                // 清理资源
-                if (_useMemoryMappedFile)
-                {
-                    if (_mapView != IntPtr.Zero)
-                    {
-                        UnmapViewOfFile(_mapView);
-                        _mapView = IntPtr.Zero;
-                    }
-
-                    if (_mapHandle != IntPtr.Zero)
-                    {
-                        CloseHandle(_mapHandle);
-                        _mapHandle = IntPtr.Zero;
-                    }
-
-                    if (_fileHandle != IntPtr.Zero)
-                    {
-                        CloseHandle(_fileHandle);
-                        _fileHandle = IntPtr.Zero;
-                    }
-                }
-                else
-                {
-                    _fileStream?.Dispose();
-                }
-
-                _consoleQueue.CompleteAdding();
-                _cts.Dispose();
+                catch { /* 忽略终止异常 */ }
+                finally { CleanupResources(); }
             }
         }
+
+        // 清理所有资源
+        private void CleanupResources()
+        {
+            CleanupMemoryMappedResources();
+            _fileStream?.Dispose();
+            _consoleQueue.CompleteAdding();
+            _cts.Dispose();
+        }
+
         // 入队日志消息
         private void EnqueueLogMessage(LogMessage message)
         {
@@ -781,6 +810,7 @@ namespace Server.Logger
                 Console.WriteLine($"性能监控任务异常: {ex}");
             }
         }
+
         // 模板管理方法
         public void AddTemplate(LogTemplate template)
         {
@@ -940,6 +970,10 @@ namespace Server.Logger
             {
                 base.SetHandle(handle);
             }
+
+            // 重写 IsInvalid 属性，确保正确判断句柄有效性
+            public override bool IsInvalid => handle == IntPtr.Zero || base.IsInvalid;
+
             protected override bool ReleaseHandle()
             {
                 return CloseHandle(handle);
@@ -1003,6 +1037,7 @@ namespace Server.Logger
         private const uint GENERIC_READ = 0x80000000;
         private const uint FILE_SHARE_WRITE = 0x00000002;
         private const uint OPEN_ALWAYS = 4;
+        private const uint OPEN_EXISTING = 3;  // 补充缺失的常量
         private const uint FILE_ATTRIBUTE_NORMAL = 0x80;
         private const uint PAGE_READWRITE = 0x04;
         private const uint FILE_MAP_WRITE = 0x0002;
@@ -1025,10 +1060,14 @@ public sealed class LoggerConfig
 {
     public LogLevel ConsoleLogLevel { get; set; } = LogLevel.Trace;
     public LogLevel FileLogLevel { get; set; } = LogLevel.Information;
-    public string LogFilePath { get; set; } = Path.IsPathRooted("application.log") ? "application.log" : Path.GetFullPath("application.log");
+    // 移除原 LogFilePath 配置，改为目录路径
+    public string LogDirectory { get; set; } = "Logs";  // 默认日志目录
+
+    // 新增：日志文件名格式（固定为 Log_yyyyMMdd_序号.dat）
+    public string LogFileNameFormat => "Log_{0:yyyyMMdd}_{1:D3}.dat";
     public bool EnableAsyncWriting { get; set; } = true;
     public bool EnableConsoleWriting { get; set; } = false;
-    public int MaxQueueSize { get; set; } = 1_000_000;
+    public int MaxQueueSize { get; set; } = int.MaxValue;
     public int BatchSize { get; set; } = 10_000;
     public int FlushInterval { get; set; } = 500;
     public bool EnableConsoleColor { get; set; } = true;
@@ -1037,7 +1076,7 @@ public sealed class LoggerConfig
     public int FileBufferSize { get; set; } = 64 * 1024; // 64KB
     public int MaxDegreeOfParallelism { get; set; } = Environment.ProcessorCount;
     public bool UseMemoryMappedFile { get; set; } = true;
-    public long MemoryMappedFileSize { get; set; } = 1024 * 1024 * 1000; // 2000MB
+    public long MemoryMappedFileSize { get; set; } = 1024 * 1024 * 1000; // 1000MB
 }
 
 // 日志消息类 - 使用struct减少GC压力
