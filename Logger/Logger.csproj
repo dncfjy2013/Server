@@ -8,15 +8,20 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="1BaseVersion\**" />
+    <Compile Remove="2ExpandVersion\**" />
+    <EmbeddedResource Remove="1BaseVersion\**" />
+    <EmbeddedResource Remove="2ExpandVersion\**" />
+    <None Remove="1BaseVersion\**" />
+    <None Remove="2ExpandVersion\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Common\Common.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="1BaseVersion\" />
   </ItemGroup>
 
 </Project>

@@ -1065,7 +1065,6 @@ public sealed class LoggerConfig
     public bool EnableAsyncWriting { get; set; } = true;
     public bool EnableConsoleWriting { get; set; } = false;
     public int MaxQueueSize { get; set; } = int.MaxValue;
-    public int BatchSize { get; set; } = 10_000;
     public int FlushInterval { get; set; } = 500;
     public bool EnableConsoleColor { get; set; } = true;
     public int FileBufferSize { get; set; } = 64 * 1024;
@@ -1086,8 +1085,6 @@ public readonly struct LogMessage
     public readonly Exception Exception;
     public readonly IReadOnlyDictionary<string, object> Properties;
 
-    private readonly byte[] _levelBytes;
-
     public LogMessage(DateTime timestamp, LogLevel level, ReadOnlyMemory<byte> message, int threadId, string threadName,
         Exception exception = null, IReadOnlyDictionary<string, object> properties = null)
     {
@@ -1098,10 +1095,7 @@ public readonly struct LogMessage
         ThreadName = threadName;
         Exception = exception;
         Properties = properties;
-
-        _levelBytes = Encoding.UTF8.GetBytes(level.ToString().Center(11, " ").ToUpperInvariant());
     }
-    ReadOnlySpan<byte> LevelMessage => _levelBytes.AsSpan();
 }
 
 // 日志模板配置
