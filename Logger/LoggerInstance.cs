@@ -133,8 +133,7 @@ namespace Server.Logger
         private readonly Task[] _processingTasks;
         private readonly List<Task> _allTasks = new List<Task>();
         private bool _isDisposed;
-        private bool _isAsyncWrite;
-        private bool _isConsoleWrite;
+        private readonly bool _isAsyncWrite;
 
         // 文件写入相关
         private FileStream _fileStream;
@@ -170,7 +169,6 @@ namespace Server.Logger
             _useMemoryMappedFile = _config.UseMemoryMappedFile;
             _memoryMappedFileSize = _config.MemoryMappedFileSize;
             _isAsyncWrite = _config.EnableAsyncWriting;
-            _isConsoleWrite = _config.EnableConsoleWriting;
 
             // 初始化日志通道
             _logChannel = Channel.CreateBounded<LogMessage>(new BoundedChannelOptions(_config.MaxQueueSize)
@@ -207,15 +205,13 @@ namespace Server.Logger
                     _allTasks.Add(_processingTasks[i]);
                 }
 
-                // 启动性能监控任务
-                _allTasks.Add(Task.Factory.StartNew(MonitorPerformance, _cts.Token,
-                    TaskCreationOptions.LongRunning, TaskScheduler.Default));
-            }
-            if (_isConsoleWrite) 
-            {
                 // 启动控制台输出线程
                 _consoleThread = new Thread(ProcessConsoleQueue) { IsBackground = true };
                 _consoleThread.Start();
+
+                // 启动性能监控任务
+                _allTasks.Add(Task.Factory.StartNew(MonitorPerformance, _cts.Token,
+                    TaskCreationOptions.LongRunning, TaskScheduler.Default));
             }
         }
         private SafeFileHandle _safeFileHandle;
@@ -475,14 +471,7 @@ namespace Server.Logger
             }
             else
             {
-                if (_isConsoleWrite && logMessage.Level > _config.ConsoleLogLevel)
-                {
-                    WriteToConsoleDirect(logMessage);
-                }
-                if (logMessage.Level > _config.FileLogLevel)
-                {
-                    WriteToFileStream(logMessage);
-                }
+                ProcessLogDirect(logMessage);
             }
         }
 
@@ -526,14 +515,7 @@ namespace Server.Logger
             }
             else
             {
-                if (_isConsoleWrite && logMessage.Level > _config.ConsoleLogLevel)
-                {
-                    WriteToConsoleDirect(logMessage);
-                }
-                if (logMessage.Level > _config.FileLogLevel)
-                {
-                    WriteToFileStream(logMessage);
-                }
+                ProcessLogDirect(logMessage);
             }
         }
 
@@ -561,6 +543,17 @@ namespace Server.Logger
             }
         }
 
+        private void ProcessLogDirect(LogMessage logMessage)
+        {
+            if (_config.EnableConsoleWriting && logMessage.Level > _config.ConsoleLogLevel)
+            {
+                WriteToConsoleDirect(logMessage);
+            }
+            if (logMessage.Level > _config.FileLogLevel)
+            {
+                WriteToFileStream(logMessage);
+            }
+        }
         // 处理日志队列
         private async Task ProcessLogQueueAsync()
         {
@@ -575,7 +568,7 @@ namespace Server.Logger
                             WriteToFile(message);
                         }
 
-                        if (_isConsoleWrite && message.Level >= _config.ConsoleLogLevel)
+                        if (_config.EnableConsoleWriting && message.Level >= _config.ConsoleLogLevel)
                         {
                             EnqueueConsoleMessage(message);
                         }
@@ -838,11 +831,17 @@ namespace Server.Logger
             {
                 var formatted = FormatMessage(message);
                 var formattedStr = Encoding.UTF8.GetString(formatted.Span);
-
-                var originalColor = Console.ForegroundColor;
-                Console.ForegroundColor = GetConsoleColor(message.Level);
-                Console.Write(formattedStr);
-                Console.ForegroundColor = originalColor;  
+                if (_config.EnableConsoleColor)
+                {
+                    var originalColor = Console.ForegroundColor;
+                    Console.ForegroundColor = GetConsoleColor(message.Level);
+                    Console.Write(formattedStr);
+                    Console.ForegroundColor = originalColor;
+                }
+                else
+                {
+                    Console.Write(formattedStr);
+                }
             }
             catch (Exception ex)
             {
