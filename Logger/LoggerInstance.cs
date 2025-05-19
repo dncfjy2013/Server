@@ -100,7 +100,7 @@ namespace Server.Logger
             });
 
             // 初始化文件写入器
-            InitializeFileWriter();
+            InitializeFileWriter(config.LogFilePath);
 
             if (_isAsyncWrite)
             {
@@ -128,19 +128,19 @@ namespace Server.Logger
         }
 
         // 初始化文件写入器
-        private void InitializeFileWriter()
+        private void InitializeFileWriter(string filepath)
         {
             try
             {
                 // 检查权限和锁定状态
-                if (!CheckFileWritePermission(_config.LogFilePath))
+                if (!CheckFileWritePermission(filepath))
                 {
                     throw new InvalidOperationException("没有写入日志文件的权限");
                 }
 
-                if (IsFileLocked(_config.LogFilePath))
+                if (IsFileLocked(filepath))
                 {
-                    Console.WriteLine($"日志文件已被锁定: {_config.LogFilePath}");
+                    Console.WriteLine($"日志文件已被锁定: {filepath}");
                     // 可以选择等待或抛出异常
                 }
 
@@ -211,7 +211,7 @@ namespace Server.Logger
                         // 记录详细的诊断信息
                         Console.WriteLine($"CreateFileMapping failed with error code: {errorCode}");
                         Console.WriteLine($"Error message: {new Win32Exception(errorCode).Message}");
-                        Console.WriteLine($"File path: {_config.LogFilePath}");
+                        Console.WriteLine($"File path: {filepath}");
                         Console.WriteLine($"MemoryMappedFileSize: {_memoryMappedFileSize} bytes");
                         Console.WriteLine($"SafeFileHandle IsInvalid: {_safeFileHandle.IsInvalid}");
 
@@ -358,7 +358,7 @@ namespace Server.Logger
                 WriteToConsoleDirect(errorMessage);
 
                 // 重置文件写入器
-                ResetFileWriter();
+                ResetFileWriter(_config.LogFilePath);
 
                 throw;
             }
@@ -434,7 +434,7 @@ namespace Server.Logger
         }
 
         // 重置文件写入器
-        private void ResetFileWriter()
+        private void ResetFileWriter(string filepath)
         {
             try
             {
@@ -464,7 +464,7 @@ namespace Server.Logger
                     _fileStream?.Dispose();
                 }
 
-                InitializeFileWriter();
+                InitializeFileWriter(filepath);
             }
             catch (Exception ex)
             {
