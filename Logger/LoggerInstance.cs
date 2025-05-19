@@ -1,6 +1,7 @@
 ﻿using Microsoft.Win32.SafeHandles;
 using Server.Common.Extensions;
 using Server.Logger;
+using Server.Logger.Common;
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;
@@ -21,24 +22,14 @@ using System.Threading.Tasks;
 
 namespace Server.Logger
 {
-    // 日志级别枚举
-    public enum LogLevel : byte
-    {
-        Trace = 0,
-        Debug = 1,
-        Information = 2,
-        Warning = 3,
-        Error = 4,
-        Critical = 5
-    }
-
     // 日志配置类
     public sealed class LoggerConfig
     {
-        public LogLevel ConsoleLogLevel { get; set; } = LogLevel.Information;
+        public LogLevel ConsoleLogLevel { get; set; } = LogLevel.Trace;
         public LogLevel FileLogLevel { get; set; } = LogLevel.Information;
         public string LogFilePath { get; set; } = "application.log";
         public bool EnableAsyncWriting { get; set; } = true;
+        public bool EnableConsoleWriting { get; set; } = true;
         public int MaxQueueSize { get; set; } = 1_000_000;
         public int BatchSize { get; set; } = 10_000;
         public int FlushInterval { get; set; } = 500;
@@ -93,11 +84,6 @@ namespace Server.Logger
     // 日志接口
     public interface ILogger : IDisposable
     {
-        LogLevel ConsoleLogLevel { get; set; }
-        LogLevel FileLogLevel { get; set; }
-        string LogFilePath { get; set; }
-        bool EnableAsyncWriting { get; set; }
-
         void AddTemplate(LogTemplate template);
         void RemoveTemplate(string templateName);
         LogTemplate GetTemplate(string templateName);
@@ -147,6 +133,8 @@ namespace Server.Logger
         private readonly Task[] _processingTasks;
         private readonly List<Task> _allTasks = new List<Task>();
         private bool _isDisposed;
+        private bool _isAsyncWrite;
+        private bool _isConsoleWrite;
 
         // 文件写入相关
         private FileStream _fileStream;
@@ -169,7 +157,7 @@ namespace Server.Logger
         private readonly System.Diagnostics.Stopwatch _performanceWatch = System.Diagnostics.Stopwatch.StartNew();
 
         // 控制台输出相关
-        private readonly BlockingCollection<string> _consoleQueue = new BlockingCollection<string>();
+        private readonly BlockingCollection<LogMessage> _consoleQueue = new BlockingCollection<LogMessage>();
         private readonly Thread _consoleThread;
 
         // 初始化
@@ -181,6 +169,8 @@ namespace Server.Logger
             _writeBuffer = new byte[_config.FileBufferSize];
             _useMemoryMappedFile = _config.UseMemoryMappedFile;
             _memoryMappedFileSize = _config.MemoryMappedFileSize;
+            _isAsyncWrite = _config.EnableAsyncWriting;
+            _isConsoleWrite = _config.EnableConsoleWriting;
 
             // 初始化日志通道
             _logChannel = Channel.CreateBounded<LogMessage>(new BoundedChannelOptions(_config.MaxQueueSize)
@@ -202,26 +192,31 @@ namespace Server.Logger
             // 初始化文件写入器
             InitializeFileWriter();
 
-            // 启动处理任务
-            _processingTasks = new Task[_config.MaxDegreeOfParallelism];
-            for (int i = 0; i < _config.MaxDegreeOfParallelism; i++)
+            if (_isAsyncWrite)
             {
-                _processingTasks[i] = Task.Factory.StartNew(
-                    ProcessLogQueueAsync,
-                    _cts.Token,
-                    TaskCreationOptions.LongRunning,
-                    TaskScheduler.Default);
+                // 启动处理任务
+                _processingTasks = new Task[_config.MaxDegreeOfParallelism];
+                for (int i = 0; i < _config.MaxDegreeOfParallelism; i++)
+                {
+                    _processingTasks[i] = Task.Factory.StartNew(
+                        ProcessLogQueueAsync,
+                        _cts.Token,
+                        TaskCreationOptions.LongRunning,
+                        TaskScheduler.Default);
 
-                _allTasks.Add(_processingTasks[i]);
+                    _allTasks.Add(_processingTasks[i]);
+                }
+
+                // 启动性能监控任务
+                _allTasks.Add(Task.Factory.StartNew(MonitorPerformance, _cts.Token,
+                    TaskCreationOptions.LongRunning, TaskScheduler.Default));
             }
-
-            // 启动控制台输出线程
-            _consoleThread = new Thread(ProcessConsoleQueue) { IsBackground = true };
-            _consoleThread.Start();
-
-            // 启动性能监控任务
-            _allTasks.Add(Task.Factory.StartNew(MonitorPerformance, _cts.Token,
-                TaskCreationOptions.LongRunning, TaskScheduler.Default));
+            if (_isConsoleWrite) 
+            {
+                // 启动控制台输出线程
+                _consoleThread = new Thread(ProcessConsoleQueue) { IsBackground = true };
+                _consoleThread.Start();
+            }
         }
         private SafeFileHandle _safeFileHandle;
         private SafeMapHandle _safeMapHandle;
@@ -474,7 +469,21 @@ namespace Server.Logger
                     ["CallerLine"] = sourceLineNumber
                 });
 
-            EnqueueLogMessage(logMessage);
+            if (_isAsyncWrite)
+            {
+                EnqueueLogMessage(logMessage);
+            }
+            else
+            {
+                if (_isConsoleWrite && logMessage.Level > _config.ConsoleLogLevel)
+                {
+                    WriteToConsoleDirect(logMessage);
+                }
+                if (logMessage.Level > _config.FileLogLevel)
+                {
+                    WriteToFileStream(logMessage);
+                }
+            }
         }
 
         // 泛型日志方法
@@ -511,7 +520,21 @@ namespace Server.Logger
                 exception,
                 properties);
 
-            EnqueueLogMessage(logMessage);
+            if (_isAsyncWrite)
+            {
+                EnqueueLogMessage(logMessage);
+            }
+            else
+            {
+                if (_isConsoleWrite && logMessage.Level > _config.ConsoleLogLevel)
+                {
+                    WriteToConsoleDirect(logMessage);
+                }
+                if (logMessage.Level > _config.FileLogLevel)
+                {
+                    WriteToFileStream(logMessage);
+                }
+            }
         }
 
         // 入队日志消息
@@ -549,10 +572,10 @@ namespace Server.Logger
                     {
                         if (message.Level >= _config.FileLogLevel)
                         {
-                            await WriteToFileAsync(message);
+                            WriteToFile(message);
                         }
 
-                        if (message.Level >= _config.ConsoleLogLevel)
+                        if (_isConsoleWrite && message.Level >= _config.ConsoleLogLevel)
                         {
                             EnqueueConsoleMessage(message);
                         }
@@ -578,7 +601,7 @@ namespace Server.Logger
         }
 
         // 写入文件
-        private async Task WriteToFileAsync(LogMessage message)
+        private void WriteToFile(LogMessage message)
         {
             if (_isDisposed) return;
 
@@ -592,7 +615,7 @@ namespace Server.Logger
                 else
                 {
                     // 使用传统文件流写入
-                    await WriteToFileStreamAsync(message);
+                    WriteToFileStream(message);
                 }
             }
             catch (Exception ex)
@@ -648,10 +671,10 @@ namespace Server.Logger
         }
 
         // 使用文件流写入
-        private async Task WriteToFileStreamAsync(LogMessage message)
+        private void WriteToFileStream(LogMessage message)
         {
             var formattedMessage = FormatMessage(message);
-            await _writeLock.WaitAsync();
+            _writeLock.Wait();
             try
             {
                 while (formattedMessage.Length > 0)
@@ -659,7 +682,7 @@ namespace Server.Logger
                     int spaceLeft = _writeBuffer.Length - _bufferOffset;
                     if (spaceLeft == 0)
                     {
-                        await _fileStream.WriteAsync(_writeBuffer.AsMemory(), _cts.Token);
+                        _fileStream.Write(_writeBuffer, 0, _writeBuffer.Length); // 同步写入
                         _bufferOffset = 0;
                         spaceLeft = _writeBuffer.Length;
                     }
@@ -672,7 +695,7 @@ namespace Server.Logger
 
                 if (_bufferOffset >= _config.FlushInterval)
                 {
-                    await _fileStream.WriteAsync(_writeBuffer.AsMemory(0, _bufferOffset), _cts.Token);
+                    _fileStream.Write(_writeBuffer, 0, _bufferOffset); // 同步写入
                     _bufferOffset = 0;
                 }
             }
@@ -786,9 +809,7 @@ namespace Server.Logger
         {
             try
             {
-                var formatted = FormatMessage(message);
-                var formattedStr = Encoding.UTF8.GetString(formatted.Span);
-                _consoleQueue.Add(formattedStr);
+                _consoleQueue.Add(message);
             }
             catch (Exception ex)
             {
@@ -802,7 +823,7 @@ namespace Server.Logger
             {
                 foreach (var message in _consoleQueue.GetConsumingEnumerable())
                 {
-                    Console.Write(message);
+                    WriteToConsoleDirect(message);
                 }
             }
             catch (Exception ex)
@@ -818,17 +839,10 @@ namespace Server.Logger
                 var formatted = FormatMessage(message);
                 var formattedStr = Encoding.UTF8.GetString(formatted.Span);
 
-                if (_config.EnableConsoleColor)
-                {
-                    var originalColor = Console.ForegroundColor;
-                    Console.ForegroundColor = GetConsoleColor(message.Level);
-                    Console.Write(formattedStr);
-                    Console.ForegroundColor = originalColor;
-                }
-                else
-                {
-                    Console.Write(formattedStr);
-                }
+                var originalColor = Console.ForegroundColor;
+                Console.ForegroundColor = GetConsoleColor(message.Level);
+                Console.Write(formattedStr);
+                Console.ForegroundColor = originalColor;  
             }
             catch (Exception ex)
             {
@@ -902,7 +916,7 @@ namespace Server.Logger
                             }
                             else
                             {
-                                WriteToFileStreamAsync(message).GetAwaiter().GetResult();
+                                WriteToFileStream(message);
                             }
                         }
                     }
@@ -1001,7 +1015,6 @@ namespace Server.Logger
         public void LogCritical<T>(T state, Exception exception = null, Func<T, Exception, string> formatter = null, string templateName = null)
             => Log(LogLevel.Critical, state, formatter, exception, null, templateName);
 
-        // 移除已过时的 ReliabilityContract 特性
         private sealed class SafeMapHandle : SafeHandleZeroOrMinusOneIsInvalid
         {
             [DllImport("kernel32.dll", SetLastError = true)]
@@ -1091,38 +1104,6 @@ namespace Server.Logger
 
             public void Increment() => Interlocked.Increment(ref _value);
             public void Add(long amount) => Interlocked.Add(ref _value, amount);
-        }
-
-        // 实现ILogger接口属性
-        public LogLevel ConsoleLogLevel
-        {
-            get => _config.ConsoleLogLevel;
-            set => _config.ConsoleLogLevel = value;
-        }
-
-        public LogLevel FileLogLevel
-        {
-            get => _config.FileLogLevel;
-            set => _config.FileLogLevel = value;
-        }
-
-        public string LogFilePath
-        {
-            get => _config.LogFilePath;
-            set
-            {
-                if (_config.LogFilePath != value)
-                {
-                    _config.LogFilePath = value;
-                    ResetFileWriter();
-                }
-            }
-        }
-
-        public bool EnableAsyncWriting
-        {
-            get => _config.EnableAsyncWriting;
-            set => _config.EnableAsyncWriting = value;
         }
     }
 }
