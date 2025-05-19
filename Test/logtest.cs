@@ -2,6 +2,7 @@
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Order;
 using Server.Logger;
+using Server.Logger.Common;
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;

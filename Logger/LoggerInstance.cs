@@ -15,6 +15,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using System.Security;
+using System.Security.AccessControl;
 using System.Text;
 using System.Threading;
 using System.Threading.Channels;
@@ -22,100 +23,6 @@ using System.Threading.Tasks;
 
 namespace Server.Logger
 {
-    // 日志配置类
-    public sealed class LoggerConfig
-    {
-        public LogLevel ConsoleLogLevel { get; set; } = LogLevel.Trace;
-        public LogLevel FileLogLevel { get; set; } = LogLevel.Information;
-        public string LogFilePath { get; set; } = "application.log";
-        public bool EnableAsyncWriting { get; set; } = true;
-        public bool EnableConsoleWriting { get; set; } = true;
-        public int MaxQueueSize { get; set; } = 1_000_000;
-        public int BatchSize { get; set; } = 10_000;
-        public int FlushInterval { get; set; } = 500;
-        public bool EnableConsoleColor { get; set; } = true;
-        public int MaxRetryCount { get; set; } = 3;
-        public int RetryDelayMs { get; set; } = 100;
-        public int FileBufferSize { get; set; } = 64 * 1024; // 64KB
-        public int MaxDegreeOfParallelism { get; set; } = Environment.ProcessorCount;
-        public bool UseMemoryMappedFile { get; set; } = true;
-        public long MemoryMappedFileSize { get; set; } = 1024 * 1024 * 100; // 100MB
-    }
-
-    // 日志消息类 - 使用struct减少GC压力
-    public readonly struct LogMessage
-    {
-        public readonly DateTime Timestamp;
-        public readonly LogLevel Level;
-        public readonly ReadOnlyMemory<byte> Message;
-        public readonly int ThreadId;
-        public readonly string ThreadName;
-        public readonly Exception Exception;
-        public readonly IReadOnlyDictionary<string, object> Properties;
-
-        private readonly byte[] _levelBytes;
-
-        public LogMessage(DateTime timestamp, LogLevel level, ReadOnlyMemory<byte> message, int threadId, string threadName,
-            Exception exception = null, IReadOnlyDictionary<string, object> properties = null)
-        {
-            Timestamp = timestamp;
-            Level = level;
-            Message = message;
-            ThreadId = threadId;
-            ThreadName = threadName;
-            Exception = exception;
-            Properties = properties;
-
-            _levelBytes = Encoding.UTF8.GetBytes(level.ToString().Center(11, " ").ToUpperInvariant());
-        }
-        ReadOnlySpan<byte> LevelMessage => _levelBytes.AsSpan();
-    }
-
-    // 日志模板配置
-    public sealed class LogTemplate
-    {
-        public string Name { get; set; }
-        public string Template { get; set; }
-        public LogLevel Level { get; set; }
-        public bool IncludeException { get; set; }
-        public bool IncludeCallerInfo { get; set; }
-    }
-
-    // 日志接口
-    public interface ILogger : IDisposable
-    {
-        void AddTemplate(LogTemplate template);
-        void RemoveTemplate(string templateName);
-        LogTemplate GetTemplate(string templateName);
-
-        void Log(LogLevel level, ReadOnlyMemory<byte> message, Exception exception = null,
-            IReadOnlyDictionary<string, object> properties = null, string templateName = null,
-            [CallerMemberName] string memberName = "",
-            [CallerFilePath] string sourceFilePath = "",
-            [CallerLineNumber] int sourceLineNumber = 0);
-
-        // 泛型日志方法
-        void Log<T>(LogLevel level, T state, Func<T, Exception, string> formatter = null,
-            Exception exception = null, IReadOnlyDictionary<string, object> properties = null,
-            string templateName = null);
-
-        // 快捷日志方法
-        void LogTrace(ReadOnlyMemory<byte> message, IReadOnlyDictionary<string, object> properties = null, string templateName = null);
-        void LogDebug(ReadOnlyMemory<byte> message, IReadOnlyDictionary<string, object> properties = null, string templateName = null);
-        void LogInformation(ReadOnlyMemory<byte> message, IReadOnlyDictionary<string, object> properties = null, string templateName = null);
-        void LogWarning(ReadOnlyMemory<byte> message, Exception exception = null, IReadOnlyDictionary<string, object> properties = null, string templateName = null);
-        void LogError(ReadOnlyMemory<byte> message, Exception exception = null, IReadOnlyDictionary<string, object> properties = null, string templateName = null);
-        void LogCritical(ReadOnlyMemory<byte> message, Exception exception = null, IReadOnlyDictionary<string, object> properties = null, string templateName = null);
-
-        // 泛型快捷方法
-        void LogTrace<T>(T state, Func<T, Exception, string> formatter = null, string templateName = null);
-        void LogDebug<T>(T state, Func<T, Exception, string> formatter = null, string templateName = null);
-        void LogInformation<T>(T state, Func<T, Exception, string> formatter = null, string templateName = null);
-        void LogWarning<T>(T state, Exception exception = null, Func<T, Exception, string> formatter = null, string templateName = null);
-        void LogError<T>(T state, Exception exception = null, Func<T, Exception, string> formatter = null, string templateName = null);
-        void LogCritical<T>(T state, Exception exception = null, Func<T, Exception, string> formatter = null, string templateName = null);
-    }
-
     // Windows高性能日志实现
     public sealed class LoggerInstance : ILogger, IDisposable
     {
@@ -149,6 +56,8 @@ namespace Server.Logger
         private long _mapOffset;
         private readonly bool _useMemoryMappedFile;
         private readonly long _memoryMappedFileSize;
+        private SafeFileHandle _safeFileHandle;
+        private SafeMapHandle _safeMapHandle;
 
         // 性能监控
         private readonly Counter _totalLogsProcessed = new Counter();
@@ -164,6 +73,9 @@ namespace Server.Logger
 
         public LoggerInstance(LoggerConfig config)
         {
+            Console.OutputEncoding = Encoding.UTF8;
+
+            EnsureLogDirectoryExists(config.LogFilePath);
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _writeBuffer = new byte[_config.FileBufferSize];
             _useMemoryMappedFile = _config.UseMemoryMappedFile;
@@ -214,8 +126,7 @@ namespace Server.Logger
                     TaskCreationOptions.LongRunning, TaskScheduler.Default));
             }
         }
-        private SafeFileHandle _safeFileHandle;
-        private SafeMapHandle _safeMapHandle;
+
         // 初始化文件写入器
         private void InitializeFileWriter()
         {
@@ -417,182 +328,6 @@ namespace Server.Logger
             }
             return false;
         }
-
-        // 模板管理方法
-        public void AddTemplate(LogTemplate template)
-        {
-            if (template == null) throw new ArgumentNullException(nameof(template));
-            _templates[template.Name] = template;
-        }
-
-        public void RemoveTemplate(string templateName)
-        {
-            if (string.IsNullOrEmpty(templateName)) return;
-            _templates.TryRemove(templateName, out _);
-        }
-
-        public LogTemplate GetTemplate(string templateName)
-        {
-            if (string.IsNullOrEmpty(templateName)) templateName = "Default";
-            return _templates.TryGetValue(templateName, out var template)
-                ? template
-                : _templates["Default"];
-        }
-
-        // 核心日志方法
-        public void Log(LogLevel level, ReadOnlyMemory<byte> message, Exception exception = null,
-            IReadOnlyDictionary<string, object> properties = null, string templateName = null,
-            [CallerMemberName] string memberName = "",
-            [CallerFilePath] string sourceFilePath = "",
-            [CallerLineNumber] int sourceLineNumber = 0)
-        {
-            if (_isDisposed) return;
-
-            var template = GetTemplate(templateName);
-            if (level < template.Level) return;
-
-            var logMessage = new LogMessage(
-                DateTime.Now,
-                level,
-                message,
-                Environment.CurrentManagedThreadId,
-                Thread.CurrentThread.Name,
-                exception,
-                properties ?? new Dictionary<string, object>
-                {
-                    ["CallerMember"] = memberName,
-                    ["CallerFile"] = Path.GetFileName(sourceFilePath),
-                    ["CallerLine"] = sourceLineNumber
-                });
-
-            if (_isAsyncWrite)
-            {
-                EnqueueLogMessage(logMessage);
-            }
-            else
-            {
-                ProcessLogDirect(logMessage);
-            }
-        }
-
-        // 泛型日志方法
-        public void Log<T>(LogLevel level, T state, Func<T, Exception, string> formatter = null,
-            Exception exception = null, IReadOnlyDictionary<string, object> properties = null,
-            string templateName = null)
-        {
-            if (_isDisposed) return;
-
-            var template = GetTemplate(templateName);
-            if (level < template.Level) return;
-
-            string messageStr;
-            if (formatter != null)
-            {
-                messageStr = formatter(state, exception);
-            }
-            else if (state is string str)
-            {
-                messageStr = str;
-            }
-            else
-            {
-                messageStr = state?.ToString() ?? "";
-            }
-
-            var messageBytes = Encoding.UTF8.GetBytes(messageStr);
-            var logMessage = new LogMessage(
-                DateTime.Now,
-                level,
-                messageBytes,
-                Environment.CurrentManagedThreadId,
-                Thread.CurrentThread.Name,
-                exception,
-                properties);
-
-            if (_isAsyncWrite)
-            {
-                EnqueueLogMessage(logMessage);
-            }
-            else
-            {
-                ProcessLogDirect(logMessage);
-            }
-        }
-
-        // 入队日志消息
-        private void EnqueueLogMessage(LogMessage message)
-        {
-            if (_isDisposed) return;
-
-            if (!_logChannel.Writer.TryWrite(message))
-            {
-                _queueFullCounter.Increment();
-
-                // 队列满时记录警告
-                if (_queueFullCounter.Value % 1000 == 0)
-                {
-                    var warningMsg = new LogMessage(
-                        DateTime.Now,
-                        LogLevel.Warning,
-                        Encoding.UTF8.GetBytes($"日志队列已满，已丢弃 {_queueFullCounter.Value} 条日志"),
-                        Environment.CurrentManagedThreadId,
-                        Thread.CurrentThread.Name);
-
-                    WriteToConsoleDirect(warningMsg);
-                }
-            }
-        }
-
-        private void ProcessLogDirect(LogMessage logMessage)
-        {
-            if (_config.EnableConsoleWriting && logMessage.Level > _config.ConsoleLogLevel)
-            {
-                WriteToConsoleDirect(logMessage);
-            }
-            if (logMessage.Level > _config.FileLogLevel)
-            {
-                WriteToFileStream(logMessage);
-            }
-        }
-        // 处理日志队列
-        private async Task ProcessLogQueueAsync()
-        {
-            try
-            {
-                await foreach (var message in _logChannel.Reader.ReadAllAsync(_cts.Token))
-                {
-                    try
-                    {
-                        if (message.Level >= _config.FileLogLevel)
-                        {
-                            WriteToFile(message);
-                        }
-
-                        if (_config.EnableConsoleWriting && message.Level >= _config.ConsoleLogLevel)
-                        {
-                            EnqueueConsoleMessage(message);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"处理日志消息时发生异常: {ex}");
-                    }
-                    finally
-                    {
-                        _totalLogsProcessed.Increment();
-                    }
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                // 正常终止
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"日志处理任务异常: {ex}");
-            }
-        }
-
         // 写入文件
         private void WriteToFile(LogMessage message)
         {
@@ -736,7 +471,165 @@ namespace Server.Logger
                 Console.WriteLine($"重置日志文件失败: {ex.Message}");
             }
         }
+        // 实现IDisposable
+        public void Dispose()
+        {
+            if (_isDisposed) return;
+            _isDisposed = true;
 
+            try
+            {
+                _cts.Cancel();
+
+                // 等待处理任务完成
+                Task.WaitAll(_allTasks.ToArray(), TimeSpan.FromSeconds(10));
+
+                // 清空队列
+                while (_logChannel.Reader.TryRead(out var message))
+                {
+                    try
+                    {
+                        if (message.Level >= _config.FileLogLevel)
+                        {
+                            if (_useMemoryMappedFile)
+                            {
+                                WriteToMemoryMappedFile(message);
+                            }
+                            else
+                            {
+                                WriteToFileStream(message);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"关闭时处理日志失败: {ex.Message}");
+                    }
+                }
+
+                // 刷新缓冲区
+                if (_useMemoryMappedFile)
+                {
+                    FlushMemoryMappedFile();
+                }
+                else
+                {
+                    _fileStream?.Flush();
+                }
+            }
+            catch (AggregateException ex) when (ex.InnerExceptions.All(e => e is TaskCanceledException))
+            {
+                // 忽略任务取消异常
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"日志系统关闭异常: {ex.Message}");
+            }
+            finally
+            {
+                // 清理资源
+                if (_useMemoryMappedFile)
+                {
+                    if (_mapView != IntPtr.Zero)
+                    {
+                        UnmapViewOfFile(_mapView);
+                        _mapView = IntPtr.Zero;
+                    }
+
+                    if (_mapHandle != IntPtr.Zero)
+                    {
+                        CloseHandle(_mapHandle);
+                        _mapHandle = IntPtr.Zero;
+                    }
+
+                    if (_fileHandle != IntPtr.Zero)
+                    {
+                        CloseHandle(_fileHandle);
+                        _fileHandle = IntPtr.Zero;
+                    }
+                }
+                else
+                {
+                    _fileStream?.Dispose();
+                }
+
+                _consoleQueue.CompleteAdding();
+                _cts.Dispose();
+            }
+        }
+        // 入队日志消息
+        private void EnqueueLogMessage(LogMessage message)
+        {
+            if (_isDisposed) return;
+
+            if (!_logChannel.Writer.TryWrite(message))
+            {
+                _queueFullCounter.Increment();
+
+                // 队列满时记录警告
+                if (_queueFullCounter.Value % 1000 == 0)
+                {
+                    var warningMsg = new LogMessage(
+                        DateTime.Now,
+                        LogLevel.Warning,
+                        Encoding.UTF8.GetBytes($"日志队列已满，已丢弃 {_queueFullCounter.Value} 条日志"),
+                        Environment.CurrentManagedThreadId,
+                        Thread.CurrentThread.Name);
+
+                    WriteToConsoleDirect(warningMsg);
+                }
+            }
+        }
+
+        private void ProcessLogDirect(LogMessage logMessage)
+        {
+            if (_config.EnableConsoleWriting && logMessage.Level > _config.ConsoleLogLevel)
+            {
+                WriteToConsoleDirect(logMessage);
+            }
+            if (logMessage.Level > _config.FileLogLevel)
+            {
+                WriteToFile(logMessage);
+            }
+        }
+        // 处理日志队列
+        private async Task ProcessLogQueueAsync()
+        {
+            try
+            {
+                await foreach (var message in _logChannel.Reader.ReadAllAsync(_cts.Token))
+                {
+                    try
+                    {
+                        if (message.Level >= _config.FileLogLevel)
+                        {
+                            WriteToFile(message);
+                        }
+
+                        if (_config.EnableConsoleWriting && message.Level >= _config.ConsoleLogLevel)
+                        {
+                            EnqueueConsoleMessage(message);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"处理日志消息时发生异常: {ex}");
+                    }
+                    finally
+                    {
+                        _totalLogsProcessed.Increment();
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // 正常终止
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"日志处理任务异常: {ex}");
+            }
+        }
         // 格式化消息
         private Memory<byte> FormatMessage(LogMessage message)
         {
@@ -888,91 +781,111 @@ namespace Server.Logger
                 Console.WriteLine($"性能监控任务异常: {ex}");
             }
         }
+        // 模板管理方法
+        public void AddTemplate(LogTemplate template)
+        {
+            if (template == null) throw new ArgumentNullException(nameof(template));
+            _templates[template.Name] = template;
+        }
+        private void EnsureLogDirectoryExists(string filePath)
+        {
+            var directory = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+        }
+        public void RemoveTemplate(string templateName)
+        {
+            if (string.IsNullOrEmpty(templateName)) return;
+            _templates.TryRemove(templateName, out _);
+        }
 
-        // 实现IDisposable
-        public void Dispose()
+        public LogTemplate GetTemplate(string templateName)
+        {
+            if (string.IsNullOrEmpty(templateName)) templateName = "Default";
+            return _templates.TryGetValue(templateName, out var template)
+                ? template
+                : _templates["Default"];
+        }
+
+        // 核心日志方法
+        public void Log(LogLevel level, ReadOnlyMemory<byte> message, Exception exception = null,
+            IReadOnlyDictionary<string, object> properties = null, string templateName = null,
+            [CallerMemberName] string memberName = "",
+            [CallerFilePath] string sourceFilePath = "",
+            [CallerLineNumber] int sourceLineNumber = 0)
         {
             if (_isDisposed) return;
-            _isDisposed = true;
 
-            try
+            var template = GetTemplate(templateName);
+            if (level < template.Level) return;
+
+            var logMessage = new LogMessage(
+                DateTime.Now,
+                level,
+                message,
+                Environment.CurrentManagedThreadId,
+                Thread.CurrentThread.Name,
+                exception,
+                properties ?? new Dictionary<string, object>
+                {
+                    ["CallerMember"] = memberName,
+                    ["CallerFile"] = Path.GetFileName(sourceFilePath),
+                    ["CallerLine"] = sourceLineNumber
+                });
+
+            if (_isAsyncWrite)
             {
-                _cts.Cancel();
-
-                // 等待处理任务完成
-                Task.WaitAll(_allTasks.ToArray(), TimeSpan.FromSeconds(10));
-
-                // 清空队列
-                while (_logChannel.Reader.TryRead(out var message))
-                {
-                    try
-                    {
-                        if (message.Level >= _config.FileLogLevel)
-                        {
-                            if (_useMemoryMappedFile)
-                            {
-                                WriteToMemoryMappedFile(message);
-                            }
-                            else
-                            {
-                                WriteToFileStream(message);
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"关闭时处理日志失败: {ex.Message}");
-                    }
-                }
-
-                // 刷新缓冲区
-                if (_useMemoryMappedFile)
-                {
-                    FlushMemoryMappedFile();
-                }
-                else
-                {
-                    _fileStream?.Flush();
-                }
+                EnqueueLogMessage(logMessage);
             }
-            catch (AggregateException ex) when (ex.InnerExceptions.All(e => e is TaskCanceledException))
+            else
             {
-                // 忽略任务取消异常
+                ProcessLogDirect(logMessage);
             }
-            catch (Exception ex)
+        }
+
+        // 泛型日志方法
+        public void Log<T>(LogLevel level, T state, Func<T, Exception, string> formatter = null,
+            Exception exception = null, IReadOnlyDictionary<string, object> properties = null,
+            string templateName = null)
+        {
+            if (_isDisposed) return;
+
+            var template = GetTemplate(templateName);
+            if (level < template.Level) return;
+
+            string messageStr;
+            if (formatter != null)
             {
-                Console.WriteLine($"日志系统关闭异常: {ex.Message}");
+                messageStr = formatter(state, exception);
             }
-            finally
+            else if (state is string str)
             {
-                // 清理资源
-                if (_useMemoryMappedFile)
-                {
-                    if (_mapView != IntPtr.Zero)
-                    {
-                        UnmapViewOfFile(_mapView);
-                        _mapView = IntPtr.Zero;
-                    }
+                messageStr = str;
+            }
+            else
+            {
+                messageStr = state?.ToString() ?? "";
+            }
 
-                    if (_mapHandle != IntPtr.Zero)
-                    {
-                        CloseHandle(_mapHandle);
-                        _mapHandle = IntPtr.Zero;
-                    }
+            var messageBytes = Encoding.UTF8.GetBytes(messageStr);
+            var logMessage = new LogMessage(
+                DateTime.Now,
+                level,
+                messageBytes,
+                Environment.CurrentManagedThreadId,
+                Thread.CurrentThread.Name,
+                exception,
+                properties);
 
-                    if (_fileHandle != IntPtr.Zero)
-                    {
-                        CloseHandle(_fileHandle);
-                        _fileHandle = IntPtr.Zero;
-                    }
-                }
-                else
-                {
-                    _fileStream?.Dispose();
-                }
-
-                _consoleQueue.CompleteAdding();
-                _cts.Dispose();
+            if (_isAsyncWrite)
+            {
+                EnqueueLogMessage(logMessage);
+            }
+            else
+            {
+                ProcessLogDirect(logMessage);
             }
         }
 
@@ -1105,4 +1018,98 @@ namespace Server.Logger
             public void Add(long amount) => Interlocked.Add(ref _value, amount);
         }
     }
+}
+
+// 日志配置类
+public sealed class LoggerConfig
+{
+    public LogLevel ConsoleLogLevel { get; set; } = LogLevel.Trace;
+    public LogLevel FileLogLevel { get; set; } = LogLevel.Information;
+    public string LogFilePath { get; set; } = Path.IsPathRooted("application.log") ? "application.log" : Path.GetFullPath("application.log");
+    public bool EnableAsyncWriting { get; set; } = true;
+    public bool EnableConsoleWriting { get; set; } = false;
+    public int MaxQueueSize { get; set; } = 1_000_000;
+    public int BatchSize { get; set; } = 10_000;
+    public int FlushInterval { get; set; } = 500;
+    public bool EnableConsoleColor { get; set; } = true;
+    public int MaxRetryCount { get; set; } = 3;
+    public int RetryDelayMs { get; set; } = 100;
+    public int FileBufferSize { get; set; } = 64 * 1024; // 64KB
+    public int MaxDegreeOfParallelism { get; set; } = Environment.ProcessorCount;
+    public bool UseMemoryMappedFile { get; set; } = true;
+    public long MemoryMappedFileSize { get; set; } = 1024 * 1024 * 1000; // 2000MB
+}
+
+// 日志消息类 - 使用struct减少GC压力
+public readonly struct LogMessage
+{
+    public readonly DateTime Timestamp;
+    public readonly LogLevel Level;
+    public readonly ReadOnlyMemory<byte> Message;
+    public readonly int ThreadId;
+    public readonly string ThreadName;
+    public readonly Exception Exception;
+    public readonly IReadOnlyDictionary<string, object> Properties;
+
+    private readonly byte[] _levelBytes;
+
+    public LogMessage(DateTime timestamp, LogLevel level, ReadOnlyMemory<byte> message, int threadId, string threadName,
+        Exception exception = null, IReadOnlyDictionary<string, object> properties = null)
+    {
+        Timestamp = timestamp;
+        Level = level;
+        Message = message;
+        ThreadId = threadId;
+        ThreadName = threadName;
+        Exception = exception;
+        Properties = properties;
+
+        _levelBytes = Encoding.UTF8.GetBytes(level.ToString().Center(11, " ").ToUpperInvariant());
+    }
+    ReadOnlySpan<byte> LevelMessage => _levelBytes.AsSpan();
+}
+
+// 日志模板配置
+public sealed class LogTemplate
+{
+    public string Name { get; set; }
+    public string Template { get; set; }
+    public LogLevel Level { get; set; }
+    public bool IncludeException { get; set; }
+    public bool IncludeCallerInfo { get; set; }
+}
+
+// 日志接口
+public interface ILogger : IDisposable
+{
+    void AddTemplate(LogTemplate template);
+    void RemoveTemplate(string templateName);
+    LogTemplate GetTemplate(string templateName);
+
+    void Log(LogLevel level, ReadOnlyMemory<byte> message, Exception exception = null,
+        IReadOnlyDictionary<string, object> properties = null, string templateName = null,
+        [CallerMemberName] string memberName = "",
+        [CallerFilePath] string sourceFilePath = "",
+        [CallerLineNumber] int sourceLineNumber = 0);
+
+    // 泛型日志方法
+    void Log<T>(LogLevel level, T state, Func<T, Exception, string> formatter = null,
+        Exception exception = null, IReadOnlyDictionary<string, object> properties = null,
+        string templateName = null);
+
+    // 快捷日志方法
+    void LogTrace(ReadOnlyMemory<byte> message, IReadOnlyDictionary<string, object> properties = null, string templateName = null);
+    void LogDebug(ReadOnlyMemory<byte> message, IReadOnlyDictionary<string, object> properties = null, string templateName = null);
+    void LogInformation(ReadOnlyMemory<byte> message, IReadOnlyDictionary<string, object> properties = null, string templateName = null);
+    void LogWarning(ReadOnlyMemory<byte> message, Exception exception = null, IReadOnlyDictionary<string, object> properties = null, string templateName = null);
+    void LogError(ReadOnlyMemory<byte> message, Exception exception = null, IReadOnlyDictionary<string, object> properties = null, string templateName = null);
+    void LogCritical(ReadOnlyMemory<byte> message, Exception exception = null, IReadOnlyDictionary<string, object> properties = null, string templateName = null);
+
+    // 泛型快捷方法
+    void LogTrace<T>(T state, Func<T, Exception, string> formatter = null, string templateName = null);
+    void LogDebug<T>(T state, Func<T, Exception, string> formatter = null, string templateName = null);
+    void LogInformation<T>(T state, Func<T, Exception, string> formatter = null, string templateName = null);
+    void LogWarning<T>(T state, Exception exception = null, Func<T, Exception, string> formatter = null, string templateName = null);
+    void LogError<T>(T state, Exception exception = null, Func<T, Exception, string> formatter = null, string templateName = null);
+    void LogCritical<T>(T state, Exception exception = null, Func<T, Exception, string> formatter = null, string templateName = null);
 }
