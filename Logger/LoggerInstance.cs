@@ -1024,11 +1024,11 @@ namespace Server.Logger
         private static extern bool SetEndOfFile(IntPtr hFile);
 
         [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)] 
+        [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool CloseHandle(IntPtr hObject);
 
         [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)] 
+        [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool FlushViewOfFile(IntPtr lpBaseAddress, UIntPtr dwNumberOfBytesToFlush);
 
         // Windows API常量
@@ -1060,7 +1060,7 @@ public sealed class LoggerConfig
 {
     public LogLevel ConsoleLogLevel { get; set; } = LogLevel.Trace;
     public LogLevel FileLogLevel { get; set; } = LogLevel.Information;
-    public string LogDirectory { get; set; } = "Logs"; 
+    public string LogDirectory { get; set; } = "Logs";
     public string LogFileNameFormat => "Log_{0:yyyyMMdd}_{1:D3}.dat";
     public bool EnableAsyncWriting { get; set; } = true;
     public bool EnableConsoleWriting { get; set; } = false;
@@ -1068,8 +1068,6 @@ public sealed class LoggerConfig
     public int BatchSize { get; set; } = 10_000;
     public int FlushInterval { get; set; } = 500;
     public bool EnableConsoleColor { get; set; } = true;
-    public int MaxRetryCount { get; set; } = 3;
-    public int RetryDelayMs { get; set; } = 100;
     public int FileBufferSize { get; set; } = 64 * 1024;
     public int MaxDegreeOfParallelism { get; set; } = Environment.ProcessorCount;
     public bool UseMemoryMappedFile { get; set; } = true;
