@@ -1,0 +1,499 @@
+// Validating benchmarks:
+// ***** BenchmarkRunner: Start   *****
+// ***** Found 6 benchmark(s) in total *****
+// ***** Building 1 exe(s) in Parallel: Start   *****
+// start dotnet  restore /p:UseSharedCompilation=false /p:BuildInParallel=false /m:1 /p:Deterministic=true /p:Optimize=true /p:IntermediateOutputPath="D:\code\Server_Client\Server_Client\Server\Test\bin\Release\net8.0\298dbe49-4ecd-49f3-b8b5-c628e3634a98\obj\Release\net8.0/" /p:OutDir="D:\code\Server_Client\Server_Client\Server\Test\bin\Release\net8.0\298dbe49-4ecd-49f3-b8b5-c628e3634a98\bin\Release\net8.0/" /p:OutputPath="D:\code\Server_Client\Server_Client\Server\Test\bin\Release\net8.0\298dbe49-4ecd-49f3-b8b5-c628e3634a98\bin\Release\net8.0/" in D:\code\Server_Client\Server_Client\Server\Test\bin\Release\net8.0\298dbe49-4ecd-49f3-b8b5-c628e3634a98
+// command took 1.42 sec and exited with 0
+// start dotnet  build -c Release --no-restore /p:UseSharedCompilation=false /p:BuildInParallel=false /m:1 /p:Deterministic=true /p:Optimize=true /p:IntermediateOutputPath="D:\code\Server_Client\Server_Client\Server\Test\bin\Release\net8.0\298dbe49-4ecd-49f3-b8b5-c628e3634a98\obj\Release\net8.0/" /p:OutDir="D:\code\Server_Client\Server_Client\Server\Test\bin\Release\net8.0\298dbe49-4ecd-49f3-b8b5-c628e3634a98\bin\Release\net8.0/" /p:OutputPath="D:\code\Server_Client\Server_Client\Server\Test\bin\Release\net8.0\298dbe49-4ecd-49f3-b8b5-c628e3634a98\bin\Release\net8.0/" --output "D:\code\Server_Client\Server_Client\Server\Test\bin\Release\net8.0\298dbe49-4ecd-49f3-b8b5-c628e3634a98\bin\Release\net8.0/" in D:\code\Server_Client\Server_Client\Server\Test\bin\Release\net8.0\298dbe49-4ecd-49f3-b8b5-c628e3634a98
+// command took 8.66 sec and exited with 0
+// ***** Done, took 00:00:10 (10.27 sec)   *****
+// Found 6 benchmarks:
+//   LoggerBenchmark.单线程-小消息: Job-YFXVCW(Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3)
+//   LoggerBenchmark.单线程-混合大小消息: Job-YFXVCW(Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3)
+//   LoggerBenchmark.多线程-小消息: Job-YFXVCW(Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3)
+//   LoggerBenchmark.多线程-混合消息和级别: Job-YFXVCW(Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3)
+//   LoggerBenchmark.极限并发-小消息: Job-YFXVCW(Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3)
+//   LoggerBenchmark.异常日志测试: Job-YFXVCW(Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3)
+
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: LoggerBenchmark.单线程-小消息: Job-YFXVCW(Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 298dbe49-4ecd-49f3-b8b5-c628e3634a98.dll --anonymousPipes 1796 2704 --benchmarkName Test.TestDoc.LoggerBenchmark.SingleThread_SmallMessages --job "Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3" --benchmarkId 0 in D:\code\Server_Client\Server_Client\Server\Test\bin\Release\net8.0\298dbe49-4ecd-49f3-b8b5-c628e3634a98\bin\Release\net8.0
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.0 (8.0.23.53103), X64 RyuJIT AVX2
+// GC=Concurrent Server
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT,AvxVnni,SERIALIZE VectorSize=256
+// Job: Job-ERHTAI(IterationCount=5, LaunchCount=1, WarmupCount=3)
+
+current maxqueue num 2147483647
+预热测试中...
+预热完成
+OverheadJitting  1: 1 op, 132800.00 ns, 132.8000 us/op
+WorkloadJitting  1: 1 op, 895875400.00 ns, 895.8754 ms/op
+
+OverheadJitting  2: 1 op, 1700.00 ns, 1.7000 us/op
+WorkloadJitting  2: 1 op, 656829100.00 ns, 656.8291 ms/op
+
+[性能监控] 吞吐量: 107,069 条/秒 | 队列长度: 1457332 | 总处理量: 566,476 | 丢弃日志: 0
+WorkloadWarmup   1: 1 op, 471365200.00 ns, 471.3652 ms/op
+WorkloadWarmup   2: 1 op, 453639200.00 ns, 453.6392 ms/op
+WorkloadWarmup   3: 1 op, 533643600.00 ns, 533.6436 ms/op
+
+// BeforeActualRun
+[性能监控] 吞吐量: 118,902 条/秒 | 队列长度: 3792234 | 总处理量: 1,227,810 | 丢弃日志: 0
+WorkloadActual   1: 1 op, 753865800.00 ns, 753.8658 ms/op
+WorkloadActual   2: 1 op, 481402200.00 ns, 481.4022 ms/op
+[性能监控] 吞吐量: 123,721 条/秒 | 队列长度: 5072293 | 总处理量: 1,947,711 | 丢弃日志: 0
+WorkloadActual   3: 1 op, 528522700.00 ns, 528.5227 ms/op
+WorkloadActual   4: 1 op, 530005800.00 ns, 530.0058 ms/op
+[性能监控] 吞吐量: 107,289 条/秒 | 队列长度: 6616095 | 总处理量: 2,404,028 | 丢弃日志: 0
+WorkloadActual   5: 1 op, 579088800.00 ns, 579.0888 ms/op
+
+// AfterActualRun
+WorkloadResult   1: 1 op, 481402200.00 ns, 481.4022 ms/op
+WorkloadResult   2: 1 op, 528522700.00 ns, 528.5227 ms/op
+WorkloadResult   3: 1 op, 530005800.00 ns, 530.0058 ms/op
+WorkloadResult   4: 1 op, 579088800.00 ns, 579.0888 ms/op
+测试完成，清理资源...
+// GC:  2 1 0 731942360 1
+// Threading:  2496 6419 1
+
+// AfterAll
+// Benchmark Process 13360 has exited with code 0.
+
+Mean = 529.755 ms, StdErr = 19.945 ms (3.76%), N = 4, StdDev = 39.889 ms
+Min = 481.402 ms, Q1 = 516.743 ms, Median = 529.264 ms, Q3 = 542.277 ms, Max = 579.089 ms
+IQR = 25.534 ms, LowerFence = 478.442 ms, UpperFence = 580.578 ms
+ConfidenceInterval = [271.993 ms; 787.517 ms] (CI 99.9%), Margin = 257.762 ms (48.66% of Mean)
+Skewness = 0.03, Kurtosis = 1.12, MValue = 2
+
+// ** Remained 5 (83.3%) benchmark(s) to run. Estimated finish 2025-05-19 18:14 (0h 2m from now) **
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: LoggerBenchmark.单线程-混合大小消息: Job-YFXVCW(Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 298dbe49-4ecd-49f3-b8b5-c628e3634a98.dll --anonymousPipes 1628 1780 --benchmarkName Test.TestDoc.LoggerBenchmark.SingleThread_MixedMessages --job "Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3" --benchmarkId 1 in D:\code\Server_Client\Server_Client\Server\Test\bin\Release\net8.0\298dbe49-4ecd-49f3-b8b5-c628e3634a98\bin\Release\net8.0
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.0 (8.0.23.53103), X64 RyuJIT AVX2
+// GC=Concurrent Server
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT,AvxVnni,SERIALIZE VectorSize=256
+// Job: Job-XITYVW(IterationCount=5, LaunchCount=1, WarmupCount=3)
+
+current maxqueue num 2147483647
+预热测试中...
+预热完成
+OverheadJitting  1: 1 op, 128500.00 ns, 128.5000 us/op
+WorkloadJitting  1: 1 op, 1044721400.00 ns, 1.0447 s/op
+
+OverheadJitting  2: 1 op, 1900.00 ns, 1.9000 us/op
+WorkloadJitting  2: 1 op, 842123700.00 ns, 842.1237 ms/op
+
+[性能监控] 吞吐量: 54,669 条/秒 | 队列长度: 2552184 | 总处理量: 329,626 | 丢弃日志: 0
+WorkloadWarmup   1: 1 op, 587199900.00 ns, 587.1999 ms/op
+WorkloadWarmup   2: 1 op, 480936900.00 ns, 480.9369 ms/op
+WorkloadWarmup   3: 1 op, 766267400.00 ns, 766.2674 ms/op
+
+// BeforeActualRun
+[性能监控] 吞吐量: 51,829 条/秒 | 队列长度: 4425428 | 总处理量: 594,564 | 丢弃日志: 0
+WorkloadActual   1: 1 op, 520019800.00 ns, 520.0198 ms/op
+WorkloadActual   2: 1 op, 607882100.00 ns, 607.8821 ms/op
+[性能监控] 吞吐量: 43,735 条/秒 | 队列长度: 6272436 | 总处理量: 747,545 | 丢弃日志: 0
+WorkloadActual   3: 1 op, 516019100.00 ns, 516.0191 ms/op
+WorkloadActual   4: 1 op, 573207600.00 ns, 573.2076 ms/op
+[性能监控] 吞吐量: 37,718 条/秒 | 队列长度: 8118830 | 总处理量: 901,155 | 丢弃日志: 0
+WorkloadActual   5: 1 op, 2956090600.00 ns, 2.9561 s/op
+[性能监控] 吞吐量: 31,685 条/秒 | 队列长度: 9055165 | 总处理量: 964,815 | 丢弃日志: 0
+
+// AfterActualRun
+WorkloadResult   1: 1 op, 520019800.00 ns, 520.0198 ms/op
+WorkloadResult   2: 1 op, 607882100.00 ns, 607.8821 ms/op
+WorkloadResult   3: 1 op, 516019100.00 ns, 516.0191 ms/op
+WorkloadResult   4: 1 op, 573207600.00 ns, 573.2076 ms/op
+// GC:  5 1 0 1655134832 1
+// Threading:  12771 1529 1
+
+测试完成，清理资源...
+// AfterAll
+// Benchmark Process 5548 has exited with code 0.
+
+Mean = 554.282 ms, StdErr = 22.115 ms (3.99%), N = 4, StdDev = 44.231 ms
+Min = 516.019 ms, Q1 = 519.020 ms, Median = 546.614 ms, Q3 = 581.876 ms, Max = 607.882 ms
+IQR = 62.857 ms, LowerFence = 424.735 ms, UpperFence = 676.161 ms
+ConfidenceInterval = [268.463 ms; 840.101 ms] (CI 99.9%), Margin = 285.819 ms (51.57% of Mean)
+Skewness = 0.19, Kurtosis = 0.78, MValue = 2
+
+// ** Remained 4 (66.7%) benchmark(s) to run. Estimated finish 2025-05-19 18:15 (0h 2m from now) **
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: LoggerBenchmark.多线程-小消息: Job-YFXVCW(Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 298dbe49-4ecd-49f3-b8b5-c628e3634a98.dll --anonymousPipes 2660 1020 --benchmarkName Test.TestDoc.LoggerBenchmark.MultiThread_SmallMessages --job "Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3" --benchmarkId 2 in D:\code\Server_Client\Server_Client\Server\Test\bin\Release\net8.0\298dbe49-4ecd-49f3-b8b5-c628e3634a98\bin\Release\net8.0
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.0 (8.0.23.53103), X64 RyuJIT AVX2
+// GC=Concurrent Server
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT,AvxVnni,SERIALIZE VectorSize=256
+// Job: Job-AJICYI(IterationCount=5, LaunchCount=1, WarmupCount=3)
+
+current maxqueue num 2147483647
+预热测试中...
+预热完成
+OverheadJitting  1: 1 op, 124900.00 ns, 124.9000 us/op
+WorkloadJitting  1: 1 op, 547212600.00 ns, 547.2126 ms/op
+
+OverheadJitting  2: 1 op, 2100.00 ns, 2.1000 us/op
+WorkloadJitting  2: 1 op, 565462500.00 ns, 565.4625 ms/op
+
+[性能监控] 吞吐量: 93,578 条/秒 | 队列长度: 2536112 | 总处理量: 479,390 | 丢弃日志: 0
+WorkloadWarmup   1: 1 op, 429408500.00 ns, 429.4085 ms/op
+WorkloadWarmup   2: 1 op, 385416200.00 ns, 385.4162 ms/op
+WorkloadWarmup   3: 1 op, 351998700.00 ns, 351.9987 ms/op
+
+// BeforeActualRun
+[性能监控] 吞吐量: 97,330 条/秒 | 队列长度: 4922478 | 总处理量: 1,017,988 | 丢弃日志: 0
+WorkloadActual   1: 1 op, 473949700.00 ns, 473.9497 ms/op
+WorkloadActual   2: 1 op, 525201500.00 ns, 525.2015 ms/op
+[性能监控] 吞吐量: 86,401 条/秒 | 队列长度: 6656679 | 总处理量: 1,363,315 | 丢弃日志: 0
+WorkloadActual   3: 1 op, 536153500.00 ns, 536.1535 ms/op
+WorkloadActual   4: 1 op, 505553800.00 ns, 505.5538 ms/op
+[性能监控] 吞吐量: 74,714 条/秒 | 队列长度: 7465687 | 总处理量: 1,554,335 | 丢弃日志: 0
+WorkloadActual   5: 1 op, 621084300.00 ns, 621.0843 ms/op
+
+// AfterActualRun
+[性能监控] 吞吐量: 91,419 条/秒 | 队列长度: 8659920 | 总处理量: 2,360,575 | 丢弃日志: 0
+WorkloadResult   1: 1 op, 473949700.00 ns, 473.9497 ms/op
+WorkloadResult   2: 1 op, 525201500.00 ns, 525.2015 ms/op
+WorkloadResult   3: 1 op, 536153500.00 ns, 536.1535 ms/op
+WorkloadResult   4: 1 op, 505553800.00 ns, 505.5538 ms/op
+// GC:  3 1 1 2360468472 1
+// Threading:  5676 17855 1
+
+测试完成，清理资源...
+// AfterAll
+// Benchmark Process 36804 has exited with code 0.
+
+Mean = 510.215 ms, StdErr = 13.645 ms (2.67%), N = 4, StdDev = 27.290 ms
+Min = 473.950 ms, Q1 = 497.653 ms, Median = 515.378 ms, Q3 = 527.939 ms, Max = 536.154 ms
+IQR = 30.287 ms, LowerFence = 452.223 ms, UpperFence = 573.370 ms
+ConfidenceInterval = [333.864 ms; 686.565 ms] (CI 99.9%), Margin = 176.350 ms (34.56% of Mean)
+Skewness = -0.33, Kurtosis = 1.01, MValue = 2
+
+// ** Remained 3 (50.0%) benchmark(s) to run. Estimated finish 2025-05-19 18:15 (0h 1m from now) **
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: LoggerBenchmark.多线程-混合消息和级别: Job-YFXVCW(Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 298dbe49-4ecd-49f3-b8b5-c628e3634a98.dll --anonymousPipes 1628 1780 --benchmarkName Test.TestDoc.LoggerBenchmark.MultiThread_Mixed --job "Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3" --benchmarkId 3 in D:\code\Server_Client\Server_Client\Server\Test\bin\Release\net8.0\298dbe49-4ecd-49f3-b8b5-c628e3634a98\bin\Release\net8.0
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.0 (8.0.23.53103), X64 RyuJIT AVX2
+// GC=Concurrent Server
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT,AvxVnni,SERIALIZE VectorSize=256
+// Job: Job-TGXYUM(IterationCount=5, LaunchCount=1, WarmupCount=3)
+
+current maxqueue num 2147483647
+预热测试中...
+预热完成
+OverheadJitting  1: 1 op, 139600.00 ns, 139.6000 us/op
+WorkloadJitting  1: 1 op, 538896500.00 ns, 538.8965 ms/op
+
+OverheadJitting  2: 1 op, 2600.00 ns, 2.6000 us/op
+WorkloadJitting  2: 1 op, 632983200.00 ns, 632.9832 ms/op
+
+[性能监控] 吞吐量: 49,617 条/秒 | 队列长度: 2662266 | 总处理量: 261,686 | 丢弃日志: 0
+WorkloadWarmup   1: 1 op, 395658100.00 ns, 395.6581 ms/op
+WorkloadWarmup   2: 1 op, 370683800.00 ns, 370.6838 ms/op
+WorkloadWarmup   3: 1 op, 705964100.00 ns, 705.9641 ms/op
+[性能监控] 吞吐量: 49,315 条/秒 | 队列长度: 4509403 | 总处理量: 510,587 | 丢弃日志: 0
+
+// BeforeActualRun
+WorkloadActual   1: 1 op, 529214500.00 ns, 529.2145 ms/op
+WorkloadActual   2: 1 op, 409788900.00 ns, 409.7889 ms/op
+[性能监控] 吞吐量: 41,548 条/秒 | 队列长度: 6374801 | 总处理量: 645,179 | 丢弃日志: 0
+WorkloadActual   3: 1 op, 416096700.00 ns, 416.0967 ms/op
+WorkloadActual   4: 1 op, 563183400.00 ns, 563.1834 ms/op
+[性能监控] 吞吐量: 37,653 条/秒 | 队列长度: 8234454 | 总处理量: 785,527 | 丢弃日志: 0
+WorkloadActual   5: 1 op, 988238800.00 ns, 988.2388 ms/op
+[性能监控] 吞吐量: 34,689 条/秒 | 队列长度: 9071021 | 总处理量: 948,959 | 丢弃日志: 0
+
+// AfterActualRun
+WorkloadResult   1: 1 op, 529214500.00 ns, 529.2145 ms/op
+WorkloadResult   2: 1 op, 409788900.00 ns, 409.7889 ms/op
+WorkloadResult   3: 1 op, 416096700.00 ns, 416.0967 ms/op
+WorkloadResult   4: 1 op, 563183400.00 ns, 563.1834 ms/op
+// GC:  3 1 0 1181280824 1
+// Threading:  5133 1676 1
+
+测试完成，清理资源...
+// AfterAll
+// Benchmark Process 3344 has exited with code 0.
+
+Mean = 479.571 ms, StdErr = 39.109 ms (8.15%), N = 4, StdDev = 78.218 ms
+Min = 409.789 ms, Q1 = 414.520 ms, Median = 472.656 ms, Q3 = 537.707 ms, Max = 563.183 ms
+IQR = 123.187 ms, LowerFence = 229.739 ms, UpperFence = 722.487 ms
+ConfidenceInterval = [-25.871 ms; 985.013 ms] (CI 99.9%), Margin = 505.442 ms (105.39% of Mean)
+Skewness = 0.06, Kurtosis = 0.63, MValue = 2
+
+// ** Remained 2 (33.3%) benchmark(s) to run. Estimated finish 2025-05-19 18:15 (0h 1m from now) **
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: LoggerBenchmark.极限并发-小消息: Job-YFXVCW(Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 298dbe49-4ecd-49f3-b8b5-c628e3634a98.dll --anonymousPipes 1780 2760 --benchmarkName Test.TestDoc.LoggerBenchmark.MaxConcurrency_SmallMessages --job "Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3" --benchmarkId 4 in D:\code\Server_Client\Server_Client\Server\Test\bin\Release\net8.0\298dbe49-4ecd-49f3-b8b5-c628e3634a98\bin\Release\net8.0
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.0 (8.0.23.53103), X64 RyuJIT AVX2
+// GC=Concurrent Server
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT,AvxVnni,SERIALIZE VectorSize=256
+// Job: Job-AVQMHZ(IterationCount=5, LaunchCount=1, WarmupCount=3)
+
+current maxqueue num 2147483647
+预热测试中...
+预热完成
+OverheadJitting  1: 1 op, 125400.00 ns, 125.4000 us/op
+WorkloadJitting  1: 1 op, 531742500.00 ns, 531.7425 ms/op
+
+OverheadJitting  2: 1 op, 2100.00 ns, 2.1000 us/op
+[性能监控] 吞吐量: 169,471 条/秒 | 队列长度: 1119772 | 总处理量: 876,108 | 丢弃日志: 0
+WorkloadJitting  2: 1 op, 1821250400.00 ns, 1.8213 s/op
+
+WorkloadWarmup   1: 1 op, 414295800.00 ns, 414.2958 ms/op
+WorkloadWarmup   2: 1 op, 489290100.00 ns, 489.2901 ms/op
+WorkloadWarmup   3: 1 op, 422487000.00 ns, 422.4870 ms/op
+
+// BeforeActualRun
+[性能监控] 吞吐量: 136,483 条/秒 | 队列长度: 3581006 | 总处理量: 1,438,994 | 丢弃日志: 0
+WorkloadActual   1: 1 op, 506590800.00 ns, 506.5908 ms/op
+WorkloadActual   2: 1 op, 420040400.00 ns, 420.0404 ms/op
+[性能监控] 吞吐量: 116,041 条/秒 | 队列长度: 5209949 | 总处理量: 1,810,104 | 丢弃日志: 0
+WorkloadActual   3: 1 op, 502147400.00 ns, 502.1474 ms/op
+WorkloadActual   4: 1 op, 588012900.00 ns, 588.0129 ms/op
+[性能监控] 吞吐量: 102,539 条/秒 | 队列长度: 6864675 | 总处理量: 2,155,323 | 丢弃日志: 0
+WorkloadActual   5: 1 op, 582319400.00 ns, 582.3194 ms/op
+
+// AfterActualRun
+WorkloadResult   1: 1 op, 506590800.00 ns, 506.5908 ms/op
+WorkloadResult   2: 1 op, 420040400.00 ns, 420.0404 ms/op
+WorkloadResult   3: 1 op, 502147400.00 ns, 502.1474 ms/op
+WorkloadResult   4: 1 op, 588012900.00 ns, 588.0129 ms/op
+WorkloadResult   5: 1 op, 582319400.00 ns, 582.3194 ms/op
+测试完成，清理资源...
+// GC:  1 1 0 1694506304 1
+// Threading:  917 4173 1
+
+// AfterAll
+// Benchmark Process 31216 has exited with code 0.
+
+Mean = 519.822 ms, StdErr = 30.822 ms (5.93%), N = 5, StdDev = 68.920 ms
+Min = 420.040 ms, Q1 = 502.147 ms, Median = 506.591 ms, Q3 = 582.319 ms, Max = 588.013 ms
+IQR = 80.172 ms, LowerFence = 381.889 ms, UpperFence = 702.577 ms
+ConfidenceInterval = [254.437 ms; 785.208 ms] (CI 99.9%), Margin = 265.386 ms (51.05% of Mean)
+Skewness = -0.27, Kurtosis = 1.21, MValue = 2
+
+// ** Remained 1 (16.7%) benchmark(s) to run. Estimated finish 2025-05-19 18:14 (0h 0m from now) **
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: LoggerBenchmark.异常日志测试: Job-YFXVCW(Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet 298dbe49-4ecd-49f3-b8b5-c628e3634a98.dll --anonymousPipes 1704 1792 --benchmarkName Test.TestDoc.LoggerBenchmark.ExceptionLogging --job "Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3" --benchmarkId 5 in D:\code\Server_Client\Server_Client\Server\Test\bin\Release\net8.0\298dbe49-4ecd-49f3-b8b5-c628e3634a98\bin\Release\net8.0
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.14.0
+// Runtime=.NET 8.0.0 (8.0.23.53103), X64 RyuJIT AVX2
+// GC=Concurrent Server
+// HardwareIntrinsics=AVX2,AES,BMI1,BMI2,FMA,LZCNT,PCLMUL,POPCNT,AvxVnni,SERIALIZE VectorSize=256
+// Job: Job-KRSGIW(IterationCount=5, LaunchCount=1, WarmupCount=3)
+
+current maxqueue num 2147483647
+预热测试中...
+预热完成
+OverheadJitting  1: 1 op, 120700.00 ns, 120.7000 us/op
+WorkloadJitting  1: 1 op, 178041900.00 ns, 178.0419 ms/op
+
+WorkloadPilot    1: 2 op, 1525808600.00 ns, 762.9043 ms/op
+
+[性能监控] 吞吐量: 86,871 条/秒 | 队列长度: 65095 | 总处理量: 451,187 | 丢弃日志: 0
+WorkloadWarmup   1: 2 op, 1359016800.00 ns, 679.5084 ms/op
+WorkloadWarmup   2: 2 op, 852731300.00 ns, 426.3657 ms/op
+WorkloadWarmup   3: 2 op, 831353200.00 ns, 415.6766 ms/op
+
+// BeforeActualRun
+WorkloadActual   1: 2 op, 545181600.00 ns, 272.5908 ms/op
+WorkloadActual   2: 2 op, 679268200.00 ns, 339.6341 ms/op
+[性能监控] 吞吐量: 104,806 条/秒 | 队列长度: 445552 | 总处理量: 1,074,436 | 丢弃日志: 0
+WorkloadActual   3: 2 op, 694033100.00 ns, 347.0166 ms/op
+WorkloadActual   4: 2 op, 573821600.00 ns, 286.9108 ms/op
+WorkloadActual   5: 2 op, 543160900.00 ns, 271.5805 ms/op
+
+// AfterActualRun
+WorkloadResult   1: 2 op, 545181600.00 ns, 272.5908 ms/op
+WorkloadResult   2: 2 op, 679268200.00 ns, 339.6341 ms/op
+WorkloadResult   3: 2 op, 694033100.00 ns, 347.0166 ms/op
+WorkloadResult   4: 2 op, 573821600.00 ns, 286.9108 ms/op
+WorkloadResult   5: 2 op, 543160900.00 ns, 271.5805 ms/op
+// GC:  0 0 0 1185027136 2
+// Threading:  1088 6408 2
+测试完成，清理资源...
+// Exceptions:  100000
+
+// AfterAll
+// Benchmark Process 33204 has exited with code 0.
+
+Mean = 303.547 ms, StdErr = 16.506 ms (5.44%), N = 5, StdDev = 36.908 ms
+Min = 271.580 ms, Q1 = 272.591 ms, Median = 286.911 ms, Q3 = 339.634 ms, Max = 347.017 ms
+IQR = 67.043 ms, LowerFence = 172.026 ms, UpperFence = 440.199 ms
+ConfidenceInterval = [161.427 ms; 445.666 ms] (CI 99.9%), Margin = 142.119 ms (46.82% of Mean)
+Skewness = 0.25, Kurtosis = 0.79, MValue = 2
+
+// ** Remained 0 (0.0%) benchmark(s) to run. Estimated finish 2025-05-19 18:14 (0h 0m from now) **
+Successfully reverted power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// ***** BenchmarkRunner: Finish  *****
+
+// * Export *
+  BenchmarkDotNet.Artifacts\results\Test.TestDoc.LoggerBenchmark-report.csv
+  BenchmarkDotNet.Artifacts\results\Test.TestDoc.LoggerBenchmark-report-github.md
+  BenchmarkDotNet.Artifacts\results\Test.TestDoc.LoggerBenchmark-report.html
+
+// * Detailed results *
+LoggerBenchmark.异常日志测试: Job-YFXVCW(Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3)
+Runtime = .NET 8.0.0 (8.0.23.53103), X64 RyuJIT AVX2; GC = Concurrent Server
+Mean = 303.547 ms, StdErr = 16.506 ms (5.44%), N = 5, StdDev = 36.908 ms
+Min = 271.580 ms, Q1 = 272.591 ms, Median = 286.911 ms, Q3 = 339.634 ms, Max = 347.017 ms
+IQR = 67.043 ms, LowerFence = 172.026 ms, UpperFence = 440.199 ms
+ConfidenceInterval = [161.427 ms; 445.666 ms] (CI 99.9%), Margin = 142.119 ms (46.82% of Mean)
+Skewness = 0.25, Kurtosis = 0.79, MValue = 2
+-------------------- Histogram --------------------
+[250.917 ms ; 307.575 ms) | @@@
+[307.575 ms ; 375.345 ms) | @@
+---------------------------------------------------
+
+LoggerBenchmark.多线程-混合消息和级别: Job-YFXVCW(Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3)
+Runtime = .NET 8.0.0 (8.0.23.53103), X64 RyuJIT AVX2; GC = Concurrent Server
+Mean = 479.571 ms, StdErr = 39.109 ms (8.15%), N = 4, StdDev = 78.218 ms
+Min = 409.789 ms, Q1 = 414.520 ms, Median = 472.656 ms, Q3 = 537.707 ms, Max = 563.183 ms
+IQR = 123.187 ms, LowerFence = 229.739 ms, UpperFence = 722.487 ms
+ConfidenceInterval = [-25.871 ms; 985.013 ms] (CI 99.9%), Margin = 505.442 ms (105.39% of Mean)
+Skewness = 0.06, Kurtosis = 0.63, MValue = 2
+-------------------- Histogram --------------------
+[404.829 ms ; 534.174 ms) | @@@
+[534.174 ms ; 627.856 ms) | @
+---------------------------------------------------
+
+LoggerBenchmark.多线程-小消息: Job-YFXVCW(Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3)
+Runtime = .NET 8.0.0 (8.0.23.53103), X64 RyuJIT AVX2; GC = Concurrent Server
+Mean = 510.215 ms, StdErr = 13.645 ms (2.67%), N = 4, StdDev = 27.290 ms
+Min = 473.950 ms, Q1 = 497.653 ms, Median = 515.378 ms, Q3 = 527.939 ms, Max = 536.154 ms
+IQR = 30.287 ms, LowerFence = 452.223 ms, UpperFence = 573.370 ms
+ConfidenceInterval = [333.864 ms; 686.565 ms] (CI 99.9%), Margin = 176.350 ms (34.56% of Mean)
+Skewness = -0.33, Kurtosis = 1.01, MValue = 2
+-------------------- Histogram --------------------
+[451.385 ms ; 498.289 ms) | @
+[498.289 ms ; 543.418 ms) | @@@
+---------------------------------------------------
+
+LoggerBenchmark.极限并发-小消息: Job-YFXVCW(Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3)
+Runtime = .NET 8.0.0 (8.0.23.53103), X64 RyuJIT AVX2; GC = Concurrent Server
+Mean = 519.822 ms, StdErr = 30.822 ms (5.93%), N = 5, StdDev = 68.920 ms
+Min = 420.040 ms, Q1 = 502.147 ms, Median = 506.591 ms, Q3 = 582.319 ms, Max = 588.013 ms
+IQR = 80.172 ms, LowerFence = 381.889 ms, UpperFence = 702.577 ms
+ConfidenceInterval = [254.437 ms; 785.208 ms] (CI 99.9%), Margin = 265.386 ms (51.05% of Mean)
+Skewness = -0.27, Kurtosis = 1.21, MValue = 2
+-------------------- Histogram --------------------
+[367.141 ms ; 492.180 ms) | @
+[492.180 ms ; 597.980 ms) | @@@@
+---------------------------------------------------
+
+LoggerBenchmark.单线程-小消息: Job-YFXVCW(Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3)
+Runtime = .NET 8.0.0 (8.0.23.53103), X64 RyuJIT AVX2; GC = Concurrent Server
+Mean = 529.755 ms, StdErr = 19.945 ms (3.76%), N = 4, StdDev = 39.889 ms
+Min = 481.402 ms, Q1 = 516.743 ms, Median = 529.264 ms, Q3 = 542.277 ms, Max = 579.089 ms
+IQR = 25.534 ms, LowerFence = 478.442 ms, UpperFence = 580.578 ms
+ConfidenceInterval = [271.993 ms; 787.517 ms] (CI 99.9%), Margin = 257.762 ms (48.66% of Mean)
+Skewness = 0.03, Kurtosis = 1.12, MValue = 2
+-------------------- Histogram --------------------
+[472.723 ms ; 538.685 ms) | @@@
+[538.685 ms ; 612.070 ms) | @
+---------------------------------------------------
+
+LoggerBenchmark.单线程-混合大小消息: Job-YFXVCW(Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3)
+Runtime = .NET 8.0.0 (8.0.23.53103), X64 RyuJIT AVX2; GC = Concurrent Server
+Mean = 554.282 ms, StdErr = 22.115 ms (3.99%), N = 4, StdDev = 44.231 ms
+Min = 516.019 ms, Q1 = 519.020 ms, Median = 546.614 ms, Q3 = 581.876 ms, Max = 607.882 ms
+IQR = 62.857 ms, LowerFence = 424.735 ms, UpperFence = 676.161 ms
+ConfidenceInterval = [268.463 ms; 840.101 ms] (CI 99.9%), Margin = 285.819 ms (51.57% of Mean)
+Skewness = 0.19, Kurtosis = 0.78, MValue = 2
+-------------------- Histogram --------------------
+[508.042 ms ; 581.184 ms) | @@@
+[581.184 ms ; 644.453 ms) | @
+---------------------------------------------------
+
+// * Summary *
+
+BenchmarkDotNet v0.14.0, Windows 11 (10.0.22631.5189/23H2/2023Update/SunValley3)
+13th Gen Intel Core i7-13700H, 1 CPU, 20 logical and 14 physical cores
+.NET SDK 8.0.100
+  [Host]     : .NET 8.0.0 (8.0.23.53103), X64 RyuJIT AVX2 [AttachedDebugger]
+  Job-YFXVCW : .NET 8.0.0 (8.0.23.53103), X64 RyuJIT AVX2
+
+Runtime=.NET 8.0  IterationCount=5  LaunchCount=1  
+WarmupCount=3  
+
+| Method      | Mean     | Error    | StdDev   | Gen0      | Gen1      | Gen2      | Allocated  |
+|------------ |---------:|---------:|---------:|----------:|----------:|----------:|-----------:|
+| 异常日志测试      | 303.5 ms | 142.1 ms | 36.91 ms |         - |         - |         - |  565.06 MB |
+| 多线程-混合消息和级别 | 479.6 ms | 505.4 ms | 78.22 ms | 3000.0000 | 1000.0000 |         - | 1126.56 MB |
+| 多线程-小消息     | 510.2 ms | 176.4 ms | 27.29 ms | 3000.0000 | 1000.0000 | 1000.0000 | 2251.12 MB |
+| 极限并发-小消息    | 519.8 ms | 265.4 ms | 68.92 ms | 1000.0000 | 1000.0000 |         - | 1616.01 MB |
+| 单线程-小消息     | 529.8 ms | 257.8 ms | 39.89 ms | 2000.0000 | 1000.0000 |         - |  698.03 MB |
+| 单线程-混合大小消息  | 554.3 ms | 285.8 ms | 44.23 ms | 5000.0000 | 1000.0000 |         - | 1578.46 MB |
+
+// * Warnings *
+Environment
+  Summary -> Benchmark was executed with attached debugger
+
+// * Hints *
+Outliers
+  LoggerBenchmark.多线程-混合消息和级别: Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3 -> 1 outlier  was  removed (988.24 ms)
+  LoggerBenchmark.多线程-小消息: Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3     -> 1 outlier  was  removed (621.08 ms)
+  LoggerBenchmark.单线程-小消息: Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3     -> 1 outlier  was  removed (753.87 ms)
+  LoggerBenchmark.单线程-混合大小消息: Runtime=.NET 8.0, IterationCount=5, LaunchCount=1, WarmupCount=3  -> 1 outlier  was  removed (2.96 s)
+
+// * Legends *
+  Mean      : Arithmetic mean of all measurements
+  Error     : Half of 99.9% confidence interval
+  StdDev    : Standard deviation of all measurements
+  Gen0      : GC Generation 0 collects per 1000 operations
+  Gen1      : GC Generation 1 collects per 1000 operations
+  Gen2      : GC Generation 2 collects per 1000 operations
+  Allocated : Allocated memory per single operation (managed only, inclusive, 1KB = 1024B)
+  1 ms      : 1 Millisecond (0.001 sec)
+
+// * Diagnostic Output - MemoryDiagnoser *
+
+
+// ***** BenchmarkRunner: End *****
+Run time: 00:02:53 (173.85 sec), executed benchmarks: 6
+
+Global total time: 00:03:04 (184.43 sec), executed benchmarks: 6
+// * Artifacts cleanup *
+Artifacts cleanup is finished
