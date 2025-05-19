@@ -120,20 +120,23 @@ public class LoggerConfig
 
 public sealed class LoggerConfig
 {
-    public LogLevel ConsoleLogLevel { get; set; } = LogLevel.Information;
+    public LogLevel ConsoleLogLevel { get; set; } = LogLevel.Trace;
     public LogLevel FileLogLevel { get; set; } = LogLevel.Information;
-    public string LogFilePath { get; set; } = "application.log";
+    public string LogDirectory { get; set; } = "Logs"; 
+    public string LogFileNameFormat => "Log_{0:yyyyMMdd}_{1:D3}.dat";
     public bool EnableAsyncWriting { get; set; } = true;
-    public int MaxQueueSize { get; set; } = 1_000_000;
+    public bool EnableConsoleWriting { get; set; } = false;
+    public int MaxQueueSize { get; set; } = int.MaxValue;
     public int BatchSize { get; set; } = 10_000;
     public int FlushInterval { get; set; } = 500;
     public bool EnableConsoleColor { get; set; } = true;
     public int MaxRetryCount { get; set; } = 3;
     public int RetryDelayMs { get; set; } = 100;
-    public int FileBufferSize { get; set; } = 64 * 1024; // 64KB
+    public int FileBufferSize { get; set; } = 64 * 1024;
     public int MaxDegreeOfParallelism { get; set; } = Environment.ProcessorCount;
     public bool UseMemoryMappedFile { get; set; } = true;
-    public long MemoryMappedFileSize { get; set; } = 1024 * 1024 * 100; // 100MB
+    public long MemoryMappedFileSize { get; set; } = 1024 * 1024 * 1000; // 1000MB
+    public long MemoryMappedThreadShould { get; set; } = 100 * 1024 * 1024;  // 100MB
 }
 
 | Method                | Mean       | Error       | StdDev    | Gen0       | Gen1      | Gen2      | Allocated  |

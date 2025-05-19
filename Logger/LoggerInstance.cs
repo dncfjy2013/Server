@@ -343,7 +343,7 @@ namespace Server.Logger
 
         // 内存映射文件空间检查
         private bool IsMemoryMappedFileSpaceLow() =>
-            (_memoryMappedFileSize - _mapOffset) < (100 * 1024 * 1024); // 100MB阈值
+            (_memoryMappedFileSize - _mapOffset) < (_config.MemoryMappedThreadShould);
         /// <summary>
         /// 检查是否有写入指定文件的权限
         /// </summary>
@@ -1060,10 +1060,7 @@ public sealed class LoggerConfig
 {
     public LogLevel ConsoleLogLevel { get; set; } = LogLevel.Trace;
     public LogLevel FileLogLevel { get; set; } = LogLevel.Information;
-    // 移除原 LogFilePath 配置，改为目录路径
-    public string LogDirectory { get; set; } = "Logs";  // 默认日志目录
-
-    // 新增：日志文件名格式（固定为 Log_yyyyMMdd_序号.dat）
+    public string LogDirectory { get; set; } = "Logs"; 
     public string LogFileNameFormat => "Log_{0:yyyyMMdd}_{1:D3}.dat";
     public bool EnableAsyncWriting { get; set; } = true;
     public bool EnableConsoleWriting { get; set; } = false;
@@ -1073,10 +1070,11 @@ public sealed class LoggerConfig
     public bool EnableConsoleColor { get; set; } = true;
     public int MaxRetryCount { get; set; } = 3;
     public int RetryDelayMs { get; set; } = 100;
-    public int FileBufferSize { get; set; } = 64 * 1024; // 64KB
+    public int FileBufferSize { get; set; } = 64 * 1024;
     public int MaxDegreeOfParallelism { get; set; } = Environment.ProcessorCount;
     public bool UseMemoryMappedFile { get; set; } = true;
     public long MemoryMappedFileSize { get; set; } = 1024 * 1024 * 1000; // 1000MB
+    public long MemoryMappedThreadShould { get; set; } = 100 * 1024 * 1024;  // 100MB
 }
 
 // 日志消息类 - 使用struct减少GC压力
