@@ -14,6 +14,10 @@
   <ItemGroup>
     <ProjectReference Include="..\Logger\Logger.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="TestDoc\History\" />
+  </ItemGroup>
 	
   <PropertyGroup>
 	<ServerGarbageCollection>true</ServerGarbageCollection>
