@@ -1,4 +1,5 @@
 ﻿using MySqlX.XDevAPI;
+using Proxy.Common;
 using Server.Proxy.Common;
 using Server.Proxy.Config;
 using System;
@@ -15,6 +16,7 @@ namespace Server.Proxy.Core
     sealed partial class AdvancedPortForwarder
     {
         private readonly ConcurrentDictionary<int, HttpListener> _httpListeners = new(); // HTTP 监听器集合
+        private readonly ConcurrentDictionary<string , TargetServer> _httpServerMap = new();
 
         DefaultIpGeoLocationService.Options _options = new DefaultIpGeoLocationService.Options
         {
@@ -220,7 +222,14 @@ namespace Server.Proxy.Core
                 _logger.LogDebug($"HTTP请求 [{requestId}]：{request.HttpMethod} {request.Url} 来自 {remoteEndPoint}");
 
                 // 负载均衡获取目标服务器
-                target = await SelectServerAsync(ep, context);
+                if (ProxyConstant._isUseHttpMap)
+                {
+                    target = _httpServerMap.GetOrAdd(remoteEndPoint, _ => SelectServerAsync(ep, context).GetAwaiter().GetResult());
+                }
+                else
+                {
+                    target = await SelectServerAsync(ep, context);
+                }
 
                 // 构造目标URI（保留原始URL路径和查询参数）
                 var targetUri = new Uri($"http://{target.Ip}:{target.TargetPort}{request.RawUrl}");

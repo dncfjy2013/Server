@@ -7,12 +7,14 @@ using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
+using Proxy.Common;
 
 namespace Server.Proxy.Core
 {
     sealed partial class AdvancedPortForwarder
     {
         private readonly ConcurrentDictionary<int, UdpClient> _udpClients = new(); // UDP 客户端集合
+        private readonly ConcurrentDictionary<string, TargetServer> _udpMapServer = new();
 
         #region UDP协议处理模块
         /// <summary>
@@ -84,7 +86,17 @@ namespace Server.Proxy.Core
             try
             {
                 // 负载均衡：选择当前连接数最少的目标服务器
-                var target = await SelectServerAsync(ep);
+                // 从缓存获取或选择新的目标服务器
+                var clientKey = result.RemoteEndPoint.ToString();
+                TargetServer target;
+                if (ProxyConstant._isUseUDPMap)
+                {
+                     target = _udpMapServer.GetOrAdd(result.RemoteEndPoint.ToString(), _ => SelectServerAsync(ep).GetAwaiter().GetResult());
+                }
+                else
+                {
+                     target = await SelectServerAsync(ep);
+                }
                 // 使用using确保UdpClient及时释放资源
                 using var client = new UdpClient();
 

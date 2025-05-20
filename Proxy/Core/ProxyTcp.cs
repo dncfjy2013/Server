@@ -1,4 +1,5 @@
-﻿using Server.Proxy.Common;
+﻿using Proxy.Common;
+using Server.Proxy.Common;
 using Server.Proxy.Config;
 using System;
 using System.Collections.Concurrent;
@@ -18,7 +19,7 @@ namespace Server.Proxy.Core
     sealed partial class AdvancedPortForwarder
     {
         private readonly ConcurrentDictionary<int, TcpListener> _tcpListeners = new(); // TCP 监听器集合
-
+        private readonly ConcurrentDictionary<string, TargetServer> _tcpServerMap = new();
         private readonly ConcurrentDictionary<string, Stack<TcpClient>> _connectionPools = new(); // 连接池：键为目标服务器地址+端口，值为连接栈
         private const int MaxPooledConnections = 50; // 单个连接池最大连接数，防止内存占用过高
 
@@ -94,7 +95,14 @@ namespace Server.Proxy.Core
             try
             {
                 // 负载均衡：选择当前压力最小的目标服务器
-                target = await SelectServerAsync(ep);
+                if (ProxyConstant._isUseTCPMap)
+                {
+                    target = _udpMapServer.GetOrAdd(remoteEndPoint.ToString(), _ => SelectServerAsync(ep).GetAwaiter().GetResult());
+                }
+                else
+                {
+                    target = await SelectServerAsync(ep);
+                }
                 // 更新连接指标（活跃连接数+1）
                 UpdateMetrics(target, 1);
 
