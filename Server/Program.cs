@@ -1,10 +1,13 @@
 ﻿using Server;
 using Server.Core.Certification;
-using Utils.SystenDetect;
 using Common.VaribelAttribute;
-using Utils;
+using Server.DataBase.Core.RelateSQL;
 
-HardWareDetect.DisplayAllHardwareInfo();
+var hardwareInfo = HardwareDetector.DetectHardwareInfo();
+Console.WriteLine($"CPU: {hardwareInfo.CpuInfo}");
+Console.WriteLine($"核心数: {hardwareInfo.CpuCores}");
+Console.WriteLine($"内存: {hardwareInfo.TotalMemoryGb} GB");
+Console.WriteLine($"磁盘类型: {hardwareInfo.DiskType}");
 
 //// 获取并输出系统类型的详细信息
 //var systemType = SystemDetector.DetectSystemType();

@@ -1,301 +1,153 @@
-﻿using Common.VaribelAttribute;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
+using System.IO;
 using System.Linq;
-using System.Management;
-using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 
-namespace Utils
+namespace Server.DataBase.Core.RelateSQL
 {
-    public class HardWareDetect
+    public enum DiskType
     {
+        HDD,
+        SSD,
+        NVMe,
+        Unknown
+    }
 
-        // 检测并显示所有硬件信息
-        public static void DisplayAllHardwareInfo()
+    public class HardwareInfo
+    {
+        public string CpuInfo { get; set; } = "Unknown";
+        public int CpuCores { get; set; } = 0;
+        public double TotalMemoryGb { get; set; } = 0;
+        public DiskType DiskType { get; set; } = DiskType.Unknown;
+    }
+
+    public static class HardwareDetector
+    {
+        public static HardwareInfo DetectHardwareInfo()
         {
-            Console.WriteLine("========================================");
-            Console.WriteLine("        系统硬件信息检测报告");
-            Console.WriteLine("========================================");
-            Console.WriteLine();
-
-            DisplaySystemInfo();
-            Console.WriteLine();
-
-            DisplayCpuInfo();
-            Console.WriteLine();
-
-            DisplayMemoryInfo();
-            Console.WriteLine();
-
-            DisplayDiskInfo();
-            Console.WriteLine();
-
-            DisplayNetworkInfo();
-            Console.WriteLine();
-
-            DisplayGraphicsInfo();
-            Console.WriteLine();
-
-            Console.WriteLine("========================================");
-
-        }
-
-        // 显示系统信息
-        private static void DisplaySystemInfo()
-        {
-            Console.WriteLine("【系统信息】");
+            var info = new HardwareInfo();
 
             try
             {
-                // 获取操作系统信息
-                Console.WriteLine($"操作系统: {RuntimeInformation.OSDescription}");
-
-                // 获取系统架构
-                Console.WriteLine($"系统架构: {RuntimeInformation.ProcessArchitecture}");
-
-                // 获取系统启动时间
-                TimeSpan uptime = Process.GetCurrentProcess().StartTime - DateTime.MinValue;
-                Console.WriteLine($"系统已运行时间: {uptime:dd\\.hh\\:mm\\:ss}");
-
-                // 获取系统语言
-                Console.WriteLine($"系统语言: {System.Globalization.CultureInfo.CurrentCulture.DisplayName}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"获取系统信息时出错: {ex.Message}");
-            }
-        }
-
-        // 显示CPU信息
-        private static void DisplayCpuInfo()
-        {
-            Console.WriteLine("【CPU信息】");
-
-            try
-            {
-                using (var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_Processor"))
+                // 检测操作系统
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
-                    foreach (var obj in searcher.Get())
-                    {
-                        Console.WriteLine($"CPU型号: {obj["Name"]}");
-                        Console.WriteLine($"CPU厂商: {obj["Manufacturer"]}");
-                        Console.WriteLine($"CPU核心数: {obj["NumberOfCores"]}");
-                        Console.WriteLine($"CPU逻辑处理器数: {obj["NumberOfLogicalProcessors"]}");
-                        Console.WriteLine($"CPU主频: {obj["MaxClockSpeed"]} MHz");
-                        Console.WriteLine($"CPU状态: {obj["Status"]}");
-                    }
+                    DetectWindowsHardware(info);
+                }
+                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                {
+                    DetectLinuxHardware(info);
+                }
+                else
+                {
+                    info.CpuInfo = "Unsupported OS";
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"获取CPU信息时出错: {ex.Message}");
+                Console.WriteLine($"硬件检测失败: {ex.Message}");
+            }
+
+            return info;
+        }
+
+        private static void DetectWindowsHardware(HardwareInfo info)
+        {
+            // ---------------------- CPU 信息 ----------------------
+            using var searcher = new System.Management.ManagementObjectSearcher("SELECT * FROM Win32_Processor");
+            var processors = searcher.Get().Cast<System.Management.ManagementObject>().ToList();
+
+            if (processors.Any())
+            {
+                var firstProc = processors[0];
+                info.CpuInfo = firstProc["Name"]?.ToString() ?? "Unknown CPU";
+                info.CpuCores = Convert.ToInt32(firstProc["NumberOfCores"]);
+            }
+
+            // ---------------------- 内存信息 ----------------------
+            using var memSearcher = new System.Management.ManagementObjectSearcher("SELECT * FROM Win32_ComputerSystem");
+            var memInfo = memSearcher.Get().Cast<System.Management.ManagementObject>().FirstOrDefault();
+
+            if (memInfo != null)
+            {
+                ulong totalMemoryBytes = Convert.ToUInt64(memInfo["TotalPhysicalMemory"]);
+                info.TotalMemoryGb = Math.Round(totalMemoryBytes / (1024.0 * 1024.0 * 1024.0), 1);
+            }
+
+            // ---------------------- 磁盘类型 ----------------------
+            using var diskSearcher = new System.Management.ManagementObjectSearcher("SELECT * FROM Win32_DiskDrive");
+            foreach (var disk in diskSearcher.Get().Cast<System.Management.ManagementObject>())
+            {
+                string model = disk["Model"]?.ToString() ?? "";
+                if (model.IndexOf("SSD", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    model.IndexOf("NVMe", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    model.IndexOf("Solid State", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    info.DiskType = model.IndexOf("NVMe", StringComparison.OrdinalIgnoreCase) >= 0
+                        ? DiskType.NVMe
+                        : DiskType.SSD;
+                    break;
+                }
+            }
+
+            if (info.DiskType == DiskType.Unknown)
+            {
+                info.DiskType = DiskType.HDD; // 默认设为HDD
             }
         }
 
-        // 显示内存信息
-        private static void DisplayMemoryInfo()
+        private static void DetectLinuxHardware(HardwareInfo info)
         {
-            Console.WriteLine("【内存信息】");
-
-            try
+            // ---------------------- CPU 信息 ----------------------
+            if (File.Exists("/proc/cpuinfo"))
             {
-                using (var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_ComputerSystem"))
-                {
-                    foreach (var obj in searcher.Get())
-                    {
-                        ulong totalMemory = Convert.ToUInt64(obj["TotalPhysicalMemory"]) / (1024 * 1024 * 1024);
-                        Console.WriteLine($"总内存: {totalMemory} GB");
-                    }
-                }
+                var cpuInfo = File.ReadAllText("/proc/cpuinfo");
+                var modelLine = Regex.Match(cpuInfo, @"model name\s+:\s+(.*)").Groups[1].Value.Trim();
+                info.CpuInfo = modelLine.Length > 0 ? modelLine : "Unknown CPU";
+                info.CpuCores = Environment.ProcessorCount;
+            }
 
-                using (var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_PhysicalMemory"))
+            // ---------------------- 内存信息 ----------------------
+            if (File.Exists("/proc/meminfo"))
+            {
+                var memInfo = File.ReadAllText("/proc/meminfo");
+                var memLine = Regex.Match(memInfo, @"MemTotal:\s+(\d+)\s+kB").Groups[1].Value;
+                if (long.TryParse(memLine, out var totalKb))
                 {
-                    int memorySlot = 1;
-                    foreach (var obj in searcher.Get())
-                    {
-                        ulong capacity = Convert.ToUInt64(obj["Capacity"]) / (1024 * 1024 * 1024);
-                        Console.WriteLine($"内存插槽 {memorySlot}: {capacity} GB {obj["Speed"]} MHz {obj["MemoryType"]}");
-                        memorySlot++;
-                    }
+                    info.TotalMemoryGb = Math.Round(totalKb / (1024.0 * 1024), 1);
                 }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"获取内存信息时出错: {ex.Message}");
-            }
-        }
 
-        // 显示磁盘信息
-        private static void DisplayDiskInfo()
-        {
-            Console.WriteLine("【磁盘信息】");
-
-            try
+            // ---------------------- 磁盘类型 ----------------------
+            var diskPath = "/sys/block/";
+            if (Directory.Exists(diskPath))
             {
-                using (var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_DiskDrive"))
+                foreach (var disk in Directory.GetDirectories(diskPath))
                 {
-                    int diskIndex = 1;
-                    foreach (var drive in searcher.Get())
+                    var diskName = Path.GetFileName(disk);
+                    if (diskName.StartsWith("nvme"))
                     {
-                        Console.WriteLine($"磁盘 {diskIndex}: {drive["Model"]}");
-                        Console.WriteLine($"  容量: {BytesToHumanReadable(Convert.ToUInt64(drive["Size"]))}");
-                        Console.WriteLine($"  接口类型: {drive["InterfaceType"]}");
-
-                        // 尝试确定磁盘类型
-                        string driveModel = drive["Model"].ToString().ToLower();
-                        DiskType diskType = DiskType.Unknown;
-
-                        if (driveModel.Contains("nvme") || driveModel.Contains("pcie"))
-                            diskType = DiskType.NVMe;
-                        else if (driveModel.Contains("ssd"))
-                            diskType = DiskType.SSD;
-                        else if (driveModel.Contains("hdd") || driveModel.Contains("disk"))
-                            diskType = DiskType.HDD;
-
-                        Console.WriteLine($"  磁盘类型: {diskType.GetHardwareInfo()?.FullName ?? diskType.ToString()}");
-
-                        // 获取分区信息
-                        string driveIndex = drive["Index"].ToString();
-                        using (var partitionSearcher = new ManagementObjectSearcher(
-                            $"ASSOCIATORS OF {{Win32_DiskDrive.DeviceID='{drive["DeviceID"]}'}} WHERE AssocClass = Win32_DiskDriveToDiskPartition"))
+                        info.DiskType = DiskType.NVMe;
+                        break;
+                    }
+                    else if (File.Exists(Path.Combine(disk, "queue/rotational")))
+                    {
+                        var rotational = File.ReadAllText(Path.Combine(disk, "queue/rotational")).Trim();
+                        if (rotational == "0") // 0表示SSD，1表示HDD
                         {
-                            foreach (var partition in partitionSearcher.Get())
-                            {
-                                using (var logicalDriveSearcher = new ManagementObjectSearcher(
-                                    $"ASSOCIATORS OF {{Win32_DiskPartition.DeviceID='{partition["DeviceID"]}'}} WHERE AssocClass = Win32_LogicalDiskToPartition"))
-                                {
-                                    foreach (var logicalDrive in logicalDriveSearcher.Get())
-                                    {
-                                        Console.WriteLine($"  分区: {logicalDrive["Name"]} - {logicalDrive["VolumeName"]}");
-                                        if (logicalDrive["Size"] != null && logicalDrive["FreeSpace"] != null)
-                                        {
-                                            ulong size = Convert.ToUInt64(logicalDrive["Size"]);
-                                            ulong freeSpace = Convert.ToUInt64(logicalDrive["FreeSpace"]);
-                                            double freePercent = (double)freeSpace / size * 100;
-
-                                            Console.WriteLine($"    容量: {BytesToHumanReadable(size)}, 可用: {BytesToHumanReadable(freeSpace)} ({freePercent:F2}%)");
-                                        }
-                                    }
-                                }
-                            }
+                            info.DiskType = DiskType.SSD;
+                            break;
                         }
-
-                        diskIndex++;
                     }
                 }
             }
-            catch (Exception ex)
+
+            if (info.DiskType == DiskType.Unknown)
             {
-                Console.WriteLine($"获取磁盘信息时出错: {ex.Message}");
+                info.DiskType = DiskType.HDD; // 默认设为HDD
             }
-        }
-
-        // 显示网络信息
-        private static void DisplayNetworkInfo()
-        {
-            Console.WriteLine("【网络信息】");
-
-            try
-            {
-                foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
-                {
-                    if (nic.OperationalStatus == OperationalStatus.Up)
-                    {
-                        Console.WriteLine($"网络适配器: {nic.Name} ({nic.Description})");
-                        Console.WriteLine($"  类型: {nic.NetworkInterfaceType}");
-                        Console.WriteLine($"  状态: {nic.OperationalStatus}");
-                        Console.WriteLine($"  速度: {nic.Speed / (1000 * 1000)} Mbps");
-                        Console.WriteLine($"  MAC地址: {nic.GetPhysicalAddress()}");
-
-                        // 获取IP地址
-                        var ipProperties = nic.GetIPProperties();
-                        Console.WriteLine("  IP地址:");
-
-                        foreach (var unicastIP in ipProperties.UnicastAddresses)
-                        {
-                            Console.WriteLine($"    {unicastIP.Address} ({unicastIP.AddressPreferredLifetime})");
-                        }
-
-                        // 检测网络带宽配置文件
-                        NetworkBandwidthProfile bandwidthProfile = DetectNetworkBandwidthProfile(nic);
-                        Console.WriteLine($"  带宽配置: {bandwidthProfile.GetHardwareInfo()?.FullName ?? bandwidthProfile.ToString()}");
-
-                        Console.WriteLine();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"获取网络信息时出错: {ex.Message}");
-            }
-        }
-
-        // 显示显卡信息
-        private static void DisplayGraphicsInfo()
-        {
-            Console.WriteLine("【显卡信息】");
-
-            try
-            {
-                using (var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController"))
-                {
-                    foreach (var obj in searcher.Get())
-                    {
-                        Console.WriteLine($"显卡: {obj["Name"]}");
-                        Console.WriteLine($"  厂商: {obj["AdapterCompatibility"]}");
-
-                        if (obj["AdapterRAM"] != null)
-                        {
-                            ulong ram = Convert.ToUInt64(obj["AdapterRAM"]) / (1024 * 1024);
-                            Console.WriteLine($"  显存: {ram} MB");
-                        }
-
-                        Console.WriteLine($"  驱动版本: {obj["DriverVersion"]}");
-                        Console.WriteLine($"  分辨率: {obj["CurrentHorizontalResolution"]} x {obj["CurrentVerticalResolution"]}");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"获取显卡信息时出错: {ex.Message}");
-            }
-        }
-
-        // 辅助方法：将字节转换为人类可读的格式
-        private static string BytesToHumanReadable(ulong bytes)
-        {
-            string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
-            int order = 0;
-            double size = bytes;
-
-            while (size >= 1024 && order < suffixes.Length - 1)
-            {
-                order++;
-                size /= 1024;
-            }
-
-            return $"{size:0.##} {suffixes[order]}";
-        }
-
-        // 检测网络带宽配置文件
-        private static NetworkBandwidthProfile DetectNetworkBandwidthProfile(NetworkInterface nic)
-        {
-            long speed = nic.Speed;
-
-            if (speed < 1000000)  // < 1 Mbps
-                return NetworkBandwidthProfile.VeryLow;
-            if (speed < 10000000)  // < 10 Mbps
-                return NetworkBandwidthProfile.Low;
-            if (speed < 100000000)  // < 100 Mbps
-                return NetworkBandwidthProfile.Moderate;
-            if (speed < 1000000000)  // < 1 Gbps
-                return NetworkBandwidthProfile.High;
-
-            return NetworkBandwidthProfile.VeryHigh;
         }
     }
 }
