@@ -2,8 +2,9 @@
 using Server.Core.Certification;
 using Utils.SystenDetect;
 using Common.VaribelAttribute;
+using Utils;
 
-InfoDetect.DisplayAllHardwareInfo();
+HardWareDetect.DisplayAllHardwareInfo();
 
 // 获取并输出系统类型的详细信息
 var systemType = SystemDetector.DetectSystemType();

@@ -9,10 +9,11 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Server
+namespace Utils
 {
-    public class InfoDetect
+    public class HardWareDetect
     {
+
         // 检测并显示所有硬件信息
         public static void DisplayAllHardwareInfo()
         {
@@ -296,6 +297,5 @@ namespace Server
 
             return NetworkBandwidthProfile.VeryHigh;
         }
-
     }
 }
