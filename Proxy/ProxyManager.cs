@@ -1,4 +1,5 @@
-﻿using Server.Logger;
+﻿using Server.DataBase.Core.RelateSQL;
+using Server.Logger;
 using Server.Proxy.Config;
 using Server.Proxy.Core;
 using System;
@@ -19,10 +20,10 @@ namespace Server.Proxy.Common
         private List<EndpointConfig> _endpointConfigs = new();
         private bool _isRunning = false;
 
-        public PortForwardingManager(ILogger logger)
+        public PortForwardingManager(ILogger logger, ILoadBalancer loadBalancer, HardwareInfo hardwareInfo)
         {
             _logger = logger;
-            _forwarder = new AdvancedPortForwarder(logger);
+            _forwarder = new AdvancedPortForwarder(logger, loadBalancer, hardwareInfo);
         }
 
         #region TCP 配置方法

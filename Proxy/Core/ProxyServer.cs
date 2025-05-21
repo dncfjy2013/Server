@@ -1,4 +1,5 @@
-﻿using Server.Logger;
+﻿using Server.DataBase.Core.RelateSQL;
+using Server.Logger;
 using Server.Proxy.Common;
 using Server.Proxy.Config;
 using Server.Proxy.LoadBalance;
@@ -16,6 +17,7 @@ namespace Server.Proxy.Core
         private readonly CancellationTokenSource _cancellationTokenSource = new();
         private bool _isRunning;
         private bool _disposed;
+        private HardwareInfo _hardwareInfo;
 
         // 协议专属转发器
         private readonly TcpPortForwarder _tcpForwarder;
@@ -31,9 +33,10 @@ namespace Server.Proxy.Core
             EnableLogging = true
         };
 
-        public AdvancedPortForwarder(ILogger logger, ILoadBalancer loadBalancer)
+        public AdvancedPortForwarder(ILogger logger, ILoadBalancer loadBalancer, HardwareInfo hardwareInfo)
         {
             _logger = logger;
+            _hardwareInfo = hardwareInfo;
             _tcpForwarder = new TcpPortForwarder(logger, loadBalancer);
             _udpForwarder = new UdpPortForwarder(logger, loadBalancer);
             _httpForwarder = new HttpPortForwarder(logger, loadBalancer);

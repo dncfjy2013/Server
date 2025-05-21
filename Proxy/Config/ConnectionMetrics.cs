@@ -25,13 +25,13 @@ namespace Server.Proxy.Config
         /// 当前与该目标服务器的活跃连接数
         /// 注：TCP连接池中的空闲连接不计入活跃连接（仅处于数据传输中的连接）
         /// </summary>
-        public int ActiveConnections { get; set; }
+        public int ActiveConnections;
 
         /// <summary>
         /// 自转发器启动以来连接到该目标服务器的总次数
         /// 每次成功建立连接（包括从连接池获取的有效连接）均计数+1
         /// </summary>
-        public int TotalConnections { get; set; }
+        public int TotalConnections;
 
         /// <summary>
         /// 该目标服务器最后一次数据传输的时间（UTC时间）

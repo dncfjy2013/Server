@@ -21,7 +21,7 @@ namespace Server.Proxy.Config
         public int MaxConnections { get; set; } = 1000;
         public string PathPrefix { get; set; } = "/";
         public bool ClientCertificateRequired { get; set; }
-        public X509Certificate2 ServerCertificate { get; set; }
+        public string ServerCertificatePath { get; set; }
         public LoadBalancingAlgorithm LoadBalancingAlgorithm { get; set; } = LoadBalancingAlgorithm.LeastConnections;
     }
 }
