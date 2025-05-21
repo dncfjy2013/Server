@@ -55,7 +55,10 @@ namespace DataBase.Implement.RelateSQL.MySQL
             string? tempDirectory = null)
         {
             _connection = connection;
-            _hardwareInfo = hardwareInfo ?? DetectHardwareInfo();
+            if(hardwareInfo == null)
+            {
+                _hardwareInfo = HardwareDetector.DetectHardwareInfo();
+            }
             _useTransaction = useTransaction;
             _optimizeConnection = optimizeConnection;
             _useBatchInsert = useBatchInsert;
@@ -155,99 +158,6 @@ namespace DataBase.Implement.RelateSQL.MySQL
 
             // 最终并行度
             return (int)(baseParallelism * cpuFactor * memoryFactor * diskFactor);
-        }
-
-        private HardwareInfo DetectHardwareInfo()
-        {
-            try
-            {
-                // 获取CPU信息
-                string cpuInfo = "Unknown";
-                int cpuCores = Environment.ProcessorCount;
-
-                try
-                {
-                    using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_Processor");
-                    var processors = searcher.Get();
-                    if (processors.Count > 0)
-                    {
-                        var firstProcessor = processors.Cast<ManagementObject>().First();
-                        cpuInfo = firstProcessor["Name"]?.ToString() ?? "Unknown";
-
-                        // 尝试获取更准确的核心数
-                        object? coreCountObj = firstProcessor["NumberOfCores"];
-                        if (coreCountObj != null)
-                            cpuCores = Convert.ToInt32(coreCountObj);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log($"获取CPU信息失败: {ex.Message}");
-                }
-
-                // 获取内存信息
-                double totalMemoryGb = 8;
-
-                try
-                {
-                    using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_ComputerSystem");
-                    var computerSystem = searcher.Get().Cast<ManagementObject>().FirstOrDefault();
-                    if (computerSystem != null)
-                    {
-                        ulong totalMemoryBytes = Convert.ToUInt64(computerSystem["TotalPhysicalMemory"]);
-                        totalMemoryGb = Math.Round(totalMemoryBytes / (1024.0 * 1024.0 * 1024.0), 1);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log($"获取内存信息失败: {ex.Message}");
-                }
-
-                // 获取磁盘类型
-                DiskType diskType = DiskType.HDD;
-
-                try
-                {
-                    using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_DiskDrive");
-                    foreach (var disk in searcher.Get())
-                    {
-                        string model = disk["Model"]?.ToString() ?? string.Empty;
-                        if (model.IndexOf("SSD", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                            model.IndexOf("Solid", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                            model.IndexOf("NVMe", StringComparison.OrdinalIgnoreCase) >= 0)
-                        {
-                            diskType = model.IndexOf("NVMe", StringComparison.OrdinalIgnoreCase) >= 0
-                                ? DiskType.NVMe
-                                : DiskType.SSD;
-                            break;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log($"获取磁盘信息失败: {ex.Message}");
-                }
-
-                return new HardwareInfo
-                {
-                    CpuInfo = cpuInfo,
-                    CpuCores = cpuCores,
-                    TotalMemoryGb = totalMemoryGb,
-                    DiskType = diskType
-                };
-            }
-            catch (Exception ex)
-            {
-                Log($"硬件检测失败: {ex.Message}");
-                // 返回合理的默认值
-                return new HardwareInfo
-                {
-                    CpuInfo = "Unknown",
-                    CpuCores = Environment.ProcessorCount,
-                    TotalMemoryGb = 16,
-                    DiskType = DiskType.SSD // 假设为SSD以获得更好的默认性能
-                };
-            }
         }
 
         public async Task<WriteResult> WriteAsync<T>(
