@@ -53,6 +53,14 @@ namespace Server.Proxy.Core
             LoadRulesFromFile(_ipGeoLocationService);
         }
 
+        public void Init(List<EndpointConfig> endpoints)
+        {
+            _endpoints = endpoints;
+            _tcpForwarder.Init(endpoints);
+            _udpForwarder.Init(endpoints);
+            _httpForwarder.Init(_endpoints);
+        }
+
         private void AddCustomMappings(DefaultIpGeoLocationService service)
         {
             var customRules = new (string cidr, string zone)[]

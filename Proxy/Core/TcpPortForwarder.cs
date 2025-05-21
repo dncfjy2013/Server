@@ -197,7 +197,16 @@ namespace Server.Proxy.Core
 
                     try
                     {
-                        using var lease = await _portLimiters[ep.ListenPort].AcquireAsync(1, linkedCts.Token);
+                        // 关键修改点：检查限流器是否存在
+                        if (!_portLimiters.TryGetValue(ep.ListenPort, out var limiter))
+                        {
+                            _logger.LogError($"端口 {ep.ListenPort} 没有配置限流器，拒绝新连接");
+                            // 等待一段时间避免CPU占用过高
+                            await Task.Delay(100, ct);
+                            continue;
+                        }
+
+                        using var lease = await limiter.AcquireAsync(1, linkedCts.Token);
                         if (!lease.IsAcquired)
                         {
                             _logger.LogWarning($"端口 {ep.ListenPort} 连接数已满，拒绝新连接");
@@ -312,7 +321,7 @@ namespace Server.Proxy.Core
 
             try
             {
-                var certificate = GetOrLoadCertificate(ep.ServerCertificatePath);
+                var certificate = ep.ServerCertificate;
                 var sslStream = new SslStream(client.GetStream(), false, ValidateClientCertificate);
 
                 await sslStream.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
@@ -331,22 +340,6 @@ namespace Server.Proxy.Core
                 _logger.LogError($"建立客户端SSL连接失败: {ex.Message}", ex);
                 throw;
             }
-        }
-
-        private X509Certificate2 GetOrLoadCertificate(string certificatePath)
-        {
-            return _certificateCache.GetOrAdd(certificatePath, path =>
-            {
-                try
-                {
-                    return new X509Certificate2(path);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogCritical($"加载证书失败: {ex.Message}", ex);
-                    throw;
-                }
-            });
         }
 
         private async Task<TcpClient> GetOrCreateTargetConnectionAsync(TargetServer target, CancellationToken ct)

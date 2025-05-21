@@ -42,7 +42,7 @@ namespace Server.Proxy.Common
                 ListenPort = listenPort,
                 Protocol = ConnectType.Tcp,
                 TargetServers = targetServers.Select(t =>
-                    new TargetServer(t.ip, listenPort, t.port, _forwarder.GetZoneByIP(t.ip))).ToList(),
+                    new TargetServer(t.ip, listenPort, t.port, _forwarder.GetZoneByIp(t.ip))).ToList(),
                 MaxConnections = maxConnections
             });
 
@@ -67,7 +67,7 @@ namespace Server.Proxy.Common
                 Protocol = ConnectType.SslTcp,
                 ServerCertificate = serverCertificate,
                 ClientCertificateRequired = requireClientCertificate,
-                TargetServers = targetServers.Select(t => new TargetServer(t.ip, listenPort, t.port, _forwarder.GetZoneByIP(t.ip))
+                TargetServers = targetServers.Select(t => new TargetServer(t.ip, listenPort, t.port, _forwarder.GetZoneByIp(t.ip))
                 {
                     BackendProtocol = ConnectType.SslTcp  // 目标服务器使用SSL协议
                 }).ToList(),
@@ -92,7 +92,7 @@ namespace Server.Proxy.Common
                 ListenPort = listenPort,
                 Protocol = ConnectType.Udp,
                 TargetServers = targetServers.Select(t =>
-                    new TargetServer(t.ip, listenPort, t.port, _forwarder.GetZoneByIP(t.ip))).ToList(),
+                    new TargetServer(t.ip, listenPort, t.port, _forwarder.GetZoneByIp(t.ip))).ToList(),
                 MaxConnections = maxConnections
             });
 
@@ -114,7 +114,7 @@ namespace Server.Proxy.Common
                 ListenPort = listenPort,
                 Protocol = ConnectType.Http,
                 TargetServers = targetServers.Select(t =>
-                    new TargetServer(t.host, listenPort, t.port, _forwarder.GetZoneByIP(t.host))).ToList(),
+                    new TargetServer(t.host, listenPort, t.port, _forwarder.GetZoneByIp(t.host))).ToList(),
                 MaxConnections = maxConnections
             });
 
