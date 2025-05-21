@@ -14,6 +14,7 @@ namespace Server.Proxy.Common
         Tcp,
         SslTcp,
         Udp,
-        Http
+        Http,
+        Https
     }
 }

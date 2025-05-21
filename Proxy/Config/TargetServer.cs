@@ -1,111 +1,96 @@
 ﻿using Server.Proxy.Common;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
+using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Threading.Tasks;
+using System.Threading;
 
 namespace Server.Proxy.Config
 {
-    /// <summary>
-    /// 目标服务器配置模型
-    /// 作用：定义转发器将流量转发至的后端服务器参数，支持：
-    /// ▶ 多协议后端（TCP/UDP/HTTP/SSL）
-    /// ▶ 端口映射（ListenPort → TargetPort）
-    /// ▶ 安全传输（TLS证书配置）
-    /// ▶ 连接统计（原子操作确保线程安全）
-    /// </summary>
     public class TargetServer
     {
-        /// <summary>
-        /// 当前活跃连接数（使用Interlocked确保线程安全）
-        /// 注意：
-        /// • 仅统计正在进行数据传输的连接
-        /// • 连接池中的空闲连接不计入此数值
-        /// </summary>
         private int _currentConnections;
 
-        /// <summary>
-        /// 目标服务器IP地址
-        /// 支持格式：
-        /// • IPv4：如 "192.168.1.100"
-        /// • IPv6：如 "[2001:db8::1]"（需包含方括号）
-        /// • 域名：如 "api.example.com"（需确保DNS可解析）
-        /// </summary>
         public string Ip { get; }
-
-        /// <summary>
-        /// 目标服务器源端口（通常与ListenPort相同）
-        /// 用途：
-        /// • 负载均衡决策（如按源端口分流）
-        /// • 日志记录（标识不同服务）
-        /// </summary>
         public int Port { get; }
-
-        /// <summary>
-        /// 目标服务器实际监听端口
-        /// 示例：前端监听80端口，后端服务运行在8080，则TargetPort=8080
-        /// </summary>
         public int TargetPort { get; }
-
-        /// <summary>
-        /// 后端服务协议类型
-        /// 影响转发行为：
-        /// • TCP：直接转发TCP流
-        /// • SslTcp：在TCP基础上建立SSL/TLS连接
-        /// • Udp：UDP数据包转发
-        /// • Http：HTTP协议处理（解析请求行、头、体）
-        /// </summary>
         public ConnectType BackendProtocol { get; set; } = ConnectType.Tcp;
-
-        /// <summary>
-        /// 客户端证书（用于SSL/TLS连接）
-        /// 适用场景：
-        /// • 后端服务需要客户端证书验证
-        /// • 双向TLS认证场景
-        /// </summary>
         public X509Certificate2 ClientCertificate { get; set; }
+        public int CurrentConnections { get; set; }
 
-        /// <summary>
-        /// 当前活跃连接数（线程安全获取）
-        /// 注意：此属性为只读，使用Interlocked保证可见性
-        /// </summary>
-        public int CurrentConnections => _currentConnections;
+        // HTTP 专属配置
+        public string HttpPath { get; set; } = "/";
+        public bool StripPath { get; set; } = true;
+        public Dictionary<string, string> RequestHeaders { get; } = new();
+        public TimeoutValue Timeout { get; set; } = new TimeoutValue(TimeSpan.FromSeconds(30));
 
-        public int Weight {  get; set; }
-        public double AverageResponseTimeMs { get; set; } // 平均响应时间（最小响应时间策略用）
-        public string Zone { get; set; }             // 区域（亲和性策略用）
-        public bool IsHealthy { get; set; } = true;   // 健康状态（健康检查用）
+        // 负载均衡相关属性
+        public int Weight { get; set; } = 5;
+        public double AverageResponseTimeMs { get; set; }
+        public string Zone { get; set; }
+        public bool IsHealthy { get; set; } = true;
 
-        public int RequestCount {  get; set; }
-        /// <summary>
-        /// 初始化目标服务器配置
-        /// </summary>
-        /// <param name="ip">目标服务器IP地址或域名</param>
-        /// <param name="port">源端口（通常与ListenPort相同）</param>
-        /// <param name="targetPort">目标服务器实际监听端口</param>
+        // 统计指标
+        private int _Http2xxCount;
+        private int _Http3xxCount;
+        private int _Http4xxCount;
+        private int _Http5xxCount;
+        public int RequestCount { get; private set; }
+        public int Http2xxCount => _Http2xxCount;
+        public int Http3xxCount => _Http3xxCount;
+        public int Http4xxCount => _Http4xxCount;
+        public int Http5xxCount => _Http5xxCount;
+
         public TargetServer(string ip, int port, int targetPort, string zone, int weight = 5)
         {
             Ip = ip;
             Port = port;
             TargetPort = targetPort;
-            Weight = weight;
             Zone = zone;
+            Weight = weight;
         }
 
-        /// <summary>
-        /// 原子操作：增加活跃连接数
-        /// 线程安全实现：使用Interlocked避免竞态条件
-        /// 调用时机：每次成功建立到目标服务器的连接时
-        /// </summary>
-        public void Increment() => Interlocked.Increment(ref _currentConnections);
+        public TargetServer(string ip, int port, int targetPort, string zone, string httpPath, int weight = 5)
+            : this(ip, port, targetPort, zone, weight)
+        {
+            HttpPath = httpPath;
+        }
 
-        /// <summary>
-        /// 原子操作：减少活跃连接数
-        /// 线程安全实现：使用Interlocked确保操作的原子性
-        /// 调用时机：每次关闭到目标服务器的连接时
-        /// </summary>
+        public void Increment() => Interlocked.Increment(ref _currentConnections);
         public void Decrement() => Interlocked.Decrement(ref _currentConnections);
+        public void Increment(int delta) => Interlocked.Add(ref _currentConnections, delta);
+
+        public void UpdateResponseTime(long elapsedMs)
+        {
+            // 指数加权平均计算响应时间
+            if (RequestCount == 0)
+            {
+                AverageResponseTimeMs = elapsedMs;
+            }
+            else
+            {
+                AverageResponseTimeMs = (AverageResponseTimeMs * 0.8) + (elapsedMs * 0.2);
+            }
+            RequestCount++;
+        }
+
+        public void UpdateHttpStatus(int statusCode)
+        {
+            switch (statusCode / 100)
+            {
+                case 2: Interlocked.Increment(ref _Http2xxCount); break;
+                case 3: Interlocked.Increment(ref _Http3xxCount); break;
+                case 4: Interlocked.Increment(ref _Http4xxCount); break;
+                case 5: Interlocked.Increment(ref _Http5xxCount); break;
+            }
+        }
+    }
+
+    public class TimeoutValue
+    {
+        public TimeSpan TimeSpan { get; }
+        public TimeoutValue(TimeSpan timeSpan) => TimeSpan = timeSpan;
+        public TimeoutValue(string timeSpanString) => TimeSpan = TimeSpan.Parse(timeSpanString);
     }
 }

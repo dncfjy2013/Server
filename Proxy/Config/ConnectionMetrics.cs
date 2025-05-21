@@ -40,5 +40,10 @@ namespace Server.Proxy.Config
         /// • 实现连接超时机制（如空闲连接自动关闭）
         /// </summary>
         public DateTime LastActivity { get; set; }
+
+        public int Http2xxCount { get; set; }
+        public int Http3xxCount { get; set; }
+        public int Http4xxCount { get; set; }
+        public int Http5xxCount { get; set; }
     }
 }
