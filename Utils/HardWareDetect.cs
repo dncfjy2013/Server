@@ -21,6 +21,7 @@ namespace Server.DataBase.Core.RelateSQL
         public int CpuCores { get; set; } = 0;
         public double TotalMemoryGb { get; set; } = 0;
         public DiskType DiskType { get; set; } = DiskType.Unknown;
+        public string System { get; set; } = "Windows";
     }
 
     public static class HardwareDetector
@@ -35,10 +36,12 @@ namespace Server.DataBase.Core.RelateSQL
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
                     DetectWindowsHardware(info);
+                    info.System = "Windows";
                 }
                 else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
                     DetectLinuxHardware(info);
+                    info.System = "Linux";
                 }
                 else
                 {

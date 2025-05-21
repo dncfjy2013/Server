@@ -1,5 +1,7 @@
-﻿using Server.Logger;
+﻿using Server.DataBase.Core.RelateSQL;
+using Server.Logger;
 using Server.Proxy.Common;
+using Server.Proxy.Core;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,8 +17,9 @@ namespace Server.Test
         {
             ILogger logger = LoggerInstance.Instance;
             X509Certificate2 serverCertificate = new X509Certificate2("server.pfx", "password"); ; // 加载证书逻辑同原代码
-
-            await using var manager = new PortForwardingManager(logger)
+            ILoadBalancer loadBalancer = new LoadBalancerSelect(logger);
+            HardwareInfo hardwareInfo = HardwareDetector.DetectHardwareInfo();
+            await using var manager = new PortForwardingManager(logger, loadBalancer, hardwareInfo)
 
                 // ---------------------- TCP 1对多 ----------------------
                 .AddTcpForwarding(
