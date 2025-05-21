@@ -36,10 +36,10 @@ namespace Server.Proxy.Core
         private bool _isRunning;
         private bool _disposed;
         private readonly ILoadBalancer _loadBalancer;
-        public UdpPortForwarder(ILogger logger)
+        public UdpPortForwarder(ILogger logger, ILoadBalancer loadBalancer)
         {
             _logger = logger;
-            _loadBalancer = new LoadBalancerSelect(logger);
+            _loadBalancer = loadBalancer;
         }
 
         public void Init(IEnumerable<EndpointConfig> endpoints)

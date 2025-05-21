@@ -1,4 +1,5 @@
 ﻿using Server.Logger;
+using Server.Proxy.Common;
 using Server.Proxy.Config;
 using Server.Proxy.LoadBalance;
 using System;
@@ -21,21 +22,84 @@ namespace Server.Proxy.Core
         private readonly UdpPortForwarder _udpForwarder;
         private readonly HttpPortForwarder _httpForwarder;
 
+        // 新增 IP 相关成员
+        private readonly DefaultIpGeoLocationService _ipGeoLocationService;
+        private readonly DefaultIpGeoLocationService.Options _ipOptions = new()
+        {
+            CacheSize = 2000,
+            CacheExpiry = TimeSpan.FromMinutes(15),
+            EnableLogging = true
+        };
+
         public AdvancedPortForwarder(ILogger logger, ILoadBalancer loadBalancer)
         {
             _logger = logger;
             _tcpForwarder = new TcpPortForwarder(logger, loadBalancer);
-            _udpForwarder = new UdpPortForwarder(logger);
+            _udpForwarder = new UdpPortForwarder(logger, loadBalancer);
             _httpForwarder = new HttpPortForwarder(logger, loadBalancer);
-            InitIpZone(); // 如有全局IP策略可在此初始化
+
+            // 初始化 IP 策略（主控制器统一管理）
+            _ipGeoLocationService = new DefaultIpGeoLocationService(_ipOptions, logger);
+            InitIpZone();
         }
 
-        public void Init(IEnumerable<EndpointConfig> endpoints)
+        private void InitIpZone()
         {
-            _endpoints = endpoints.ToList();
-            _tcpForwarder.Init(endpoints);
-            _udpForwarder.Init(endpoints);
-            _httpForwarder.Init(endpoints);
+            _logger.LogInformation("初始化 IP 区域策略...");
+            AddCustomMappings(_ipGeoLocationService);
+            LoadRulesFromFile(_ipGeoLocationService);
+        }
+
+        private void AddCustomMappings(DefaultIpGeoLocationService service)
+        {
+            var customRules = new (string cidr, string zone)[]
+            {
+            // IPv4 规则
+            ("103.21.0.0/13", "cloudflare"),
+            ("202.96.0.0/11", "telecom-cn"),
+            ("221.130.0.0/16", "unicom-cn"),
+            
+            // IPv6 规则
+            ("2606:4700::/32", "cloudflare"),
+            ("240e:0:0:0::/20", "telecom-cn"),
+            ("2408:0:0:0::/20", "unicom-cn"),
+            
+            // 特殊案例
+            ("192.0.2.0/24", "example-net"), // RFC 5737
+            ("2001:db8::/32", "example-net")  // RFC 3849
+            };
+
+            foreach (var (cidr, zone) in customRules)
+            {
+                if (service.TryAddMapping(cidr, zone))
+                {
+                    _logger.LogDebug($"添加 IP 规则：{cidr} → {zone}");
+                }
+                else
+                {
+                    _logger.LogWarning($"添加 IP 规则失败：{cidr}");
+                }
+            }
+        }
+
+        private void LoadRulesFromFile(DefaultIpGeoLocationService service)
+        {
+            string configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ip-rules.txt");
+            if (File.Exists(configPath))
+            {
+                _logger.LogInformation($"从文件加载 IP 规则：{configPath}");
+                service.LoadFromConfig(configPath);
+            }
+            else
+            {
+                _logger.LogWarning($"未找到 IP 规则文件：{configPath}");
+            }
+        }
+
+        // 公开 IP 解析方法供各协议调用
+        public string GetZoneByIp(string ipAddress)
+        {
+            return _ipGeoLocationService.GetZoneByIp(ipAddress);
         }
 
         public async Task StartAsync()
@@ -101,11 +165,6 @@ namespace Server.Proxy.Core
                 await _udpForwarder.DisposeAsync();
                 await _httpForwarder.DisposeAsync();
             }
-        }
-
-        private void InitIpZone()
-        {
-            // 如有全局IP策略初始化逻辑可放置此处
         }
     }
 }

@@ -288,7 +288,7 @@ namespace Server.Proxy.Core
         private void UpdateMetrics(TargetServer target, int delta)
         {
             var key = $"{target.Ip}:{target.TargetPort}";
-            target.Increment(); // 假设TargetServer包含原子操作
+            target.Increment(delta); // 假设TargetServer包含原子操作
             _connectionMetrics.AddOrUpdate(key,
                 _ => new ConnectionMetrics
                 {
