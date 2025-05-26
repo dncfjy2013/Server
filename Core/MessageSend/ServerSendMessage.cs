@@ -79,7 +79,7 @@ namespace Server.Core
                 }
 
                 // 发送消息
-                bool sent = await SendDate(client, msg.Data);
+                bool sent = await SendInfoDate(client, msg.Data);
                 if (!sent) throw new Exception("Send failed");
 
                 msg.SentTime = DateTime.Now;

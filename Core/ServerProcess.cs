@@ -365,7 +365,7 @@ namespace Server.Core
                                 if (!_isRealTimeTransferAllowed)
                                 {
                                     _logger.LogDebug("Data RealTime transfer is paused");
-                                    await SendDate(targetClient, packet.Data);
+                                    await SendInfoDate(targetClient, packet.Data);
                                     continue;
                                 }
                                 else

@@ -57,8 +57,15 @@ namespace Server.Test
                     ("192.168.2.13", 20)
                     })
                 ;
-
-            await manager.StartAsync();
+            manager.StartAsync();
+            Task.Run(() =>
+            {
+                while (true)
+                {
+                    manager.GetMetrics();
+                    Thread.Sleep(10000);
+                }
+            });
             await Task.Delay(TimeSpan.FromMinutes(5));
             await manager.StopAsync(TimeSpan.FromSeconds(10));
         }

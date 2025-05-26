@@ -46,7 +46,7 @@ namespace Server.Proxy.Common
                 MaxConnections = maxConnections
             });
 
-            _logger.LogInformation($"添加TCP转发配置: {listenIp}:{listenPort} → 多目标服务器");
+            _logger.LogInformation($"添加TCP转发配置: {listenIp}:{listenPort} → {string.Join(", ", targetServers)}");
             return this;
         }
         #endregion
@@ -165,7 +165,39 @@ namespace Server.Proxy.Common
         /// </summary>
         public PortForwarderMetrics GetMetrics()
         {
-            return _forwarder.GetMetrics();
+            var metrics = _forwarder.GetMetrics();
+
+            // 打印总览信息（简化表格）
+            Console.WriteLine("+--------------------------------------+");
+            Console.WriteLine("|           端口转发器指标             |");
+            Console.WriteLine("+----------------------+---------------+");
+            Console.WriteLine($"| 总活动连接数         | {metrics.ActiveConnections,-13} |");
+            Console.WriteLine("+--------------------------------------+");
+
+            // 打印目标服务器连接指标（简化表格）
+            Console.WriteLine("\n+------------------------------+--------------+--------------+-------------------+");
+            Console.WriteLine("|         目标服务器           |  活动连接    |  累计连接    |    最后活动时间    |");
+            Console.WriteLine("+------------------------------+--------------+--------------+-------------------+");
+
+            foreach (var metric in metrics.ConnectionMetrics)
+            {
+                Console.WriteLine($"| {metric.Target,-30} | {metric.ActiveConnections,-12} | {metric.TotalConnections,-12} | {metric.LastActivity:yyyy-MM-dd HH:mm:ss} |");
+                Console.WriteLine("+------------------------------+--------------+--------------+-------------------+");
+            }
+
+            // 打印端点状态（简化表格）
+            Console.WriteLine("\n+------------+------------+-------------+");
+            Console.WriteLine("|    端口    |    协议    |    状态     |");
+            Console.WriteLine("+------------+------------+-------------+");
+
+            foreach (var status in metrics.EndpointStatus)
+            {
+                string statusText = status.IsActive ? "活动中" : "已停止";
+                Console.WriteLine($"| {status.ListenPort,-10} | {status.Protocol,-10} | {statusText,-11} |");
+                Console.WriteLine("+------------+------------+-------------+");
+            }
+
+            return metrics;
         }
 
         /// <summary>
