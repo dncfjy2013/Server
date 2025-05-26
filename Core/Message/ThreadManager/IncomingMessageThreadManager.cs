@@ -1,10 +1,11 @@
 ﻿using Protocol;
+using Server.Core;
 using Server.Core.Common;
 using Server.Core.Config;
 using Server.Logger;
 using System.Threading.Channels;
 
-namespace Server.Core.ThreadManager
+namespace Core.Message.ThreadManager
 {
     // 处理客户端接收消息的线程管理器（适配ProcessMessages）
     public class IncomingMessageThreadManager : DynamicThreadManagerBase<ClientMessage>
