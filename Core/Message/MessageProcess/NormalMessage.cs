@@ -3,9 +3,9 @@ using Server.Core.Config;
 using Server.Entity;
 using Server.Utils;
 
-namespace Server.Core
+namespace Core.Message
 {
-    partial class ServerInstance
+    partial class MessageManager
     {
 
         // 普通消息处理方法，用于处理客户端发送的普通消息，并返回确认消息

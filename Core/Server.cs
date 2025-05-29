@@ -1,4 +1,5 @@
-﻿using Server.Core.Certification;
+﻿using Core.Message;
+using Server.Core.Certification;
 using Server.Core.Common;
 using Server.Core.Extend;
 using Server.Logger;
@@ -45,10 +46,13 @@ namespace Server.Core
 
         private SSLManager _SSLManager;
 
+        private MessageManager _messageManager;
+
         public ServerInstance(int port, int sslPort, int udpport, string host, X509Certificate2 certf = null)
         {
             _logger = LoggerInstance.Instance;
             _ClientConnectionManager = new ConnectionManager(_logger);
+            _messageManager = new MessageManager(_clients, _logger);
 
             _logger.LogTrace($"Server constructor called with port: {port}, sslPort: {sslPort}, certf: {certf}");
 
@@ -242,13 +246,13 @@ namespace Server.Core
                 {
                     // Trace 等级：记录开始消息处理的详细信息
                     _logger.LogTrace("Commencing Incoming message processing.");
-                    StartProcessing();
+                    _messageManager.StartInComingProcessing();
                     // Trace 等级：记录消息处理已成功开始的详细信息
                     _logger.LogTrace("Incoming Message processing has been successfully started.");
                 }
                 // Trace 等级：记录开始消息处理的详细信息
                 _logger.LogTrace("Commencing Outcoming message processing.");
-                StartOutgoingMessageProcessing();
+                _messageManager.StartOutgoingMessageProcessing();
                 // Trace 等级：记录消息处理已成功开始的详细信息
                 _logger.LogTrace("Outcoming Message processing has been successfully started.");
             }
@@ -270,11 +274,7 @@ namespace Server.Core
                 _cts.Cancel();
                 _logger.LogDebug("Successfully canceled the primary cancellation token source _cts.");
 
-                // 取消消息处理取消令牌源，同样是关键操作步骤，使用Debug记录
-                _logger.LogDebug("Canceling the message - processing cancellation token source _processingCts.");
-                _processingCts.Cancel();
-                _logger.LogDebug("Successfully canceled the message - processing cancellation token source _processingCts.");
-
+                
                 // 停止心跳定时器，属于系统定时任务的操作，使用Debug记录
                 _logger.LogDebug("Halting the heartbeat timer by setting its interval to infinite.");
                 _heartbeatTimer.Change(Timeout.Infinite, Timeout.Infinite);
@@ -351,27 +351,7 @@ namespace Server.Core
                     _logger.LogTrace("The _udpListener listener is null, no disposal operation is required.");
                 }
 
-                _incomingLowManager.Shutdown();
-                _logger.LogDebug("All incoming low-priority message processing threads have been shut down.");
-
-                _incomingMediumManager.Shutdown();
-                _logger.LogDebug("All incoming medium-priority message processing threads have been shut down.");
-
-                _incomingHighManager.Shutdown();
-                _logger.LogDebug("All incoming high-priority message processing threads have been shut down.");
-
-                _logger.LogInformation("All incoming message processing threads have been shut down.");
-
-                _highPriorityManager.Shutdown();
-                _logger.LogDebug("All outgoing high-priority message processing threads have been shut down.");
-
-                _mediumPriorityManager.Shutdown();
-                _logger.LogDebug("All outgoing medium-priority message processing threads have been shut down.");
-
-                _lowPriorityManager.Shutdown();
-                _logger.LogDebug("All outgoing low-priority message processing threads have been shut down.");
-
-                _logger.LogInformation("All outgoing message processing threads have been shut down.");
+                _messageManager.ShutDown();
             }
             catch (Exception ex)
             {

@@ -220,7 +220,81 @@ namespace Server.Core
 
             _logger.LogTrace("Exited AcceptUdpClients loop (server stopped)");
         }
+        /// <summary>
+        /// 异步读取指定数量的字节到缓冲区中，确保读取的字节数达到指定的数量。
+        /// </summary>
+        /// <param name="stream">要读取数据的流。</param>
+        /// <param name="buffer">用于存储读取数据的缓冲区。</param>
+        /// <param name="count">需要读取的字节数。</param>
+        /// <returns>如果成功读取指定数量的字节，返回 true；否则返回 false。</returns>
+        private async Task<bool> ReadFullAsync(Stream stream, byte[] buffer, int count)
+        {
+            // 初始化偏移量，用于记录已经读取的字节数
+            int offset = 0;
+            _logger.LogTrace($"Starting to read {count} bytes from the stream.");
 
+            // 循环读取数据，直到读取的字节数达到指定数量
+            while (offset < count)
+            {
+                // 异步读取数据到缓冲区中
+                int read = await stream.ReadAsync(buffer, offset, count - offset);
+                _logger.LogTrace($"Read {read} bytes from the stream at offset {offset}.");
+
+                // 如果读取的字节数为 0，说明连接已经关闭
+                if (read == 0)
+                {
+                    _logger.LogWarning($"Connection closed while reading. Expected: {count} bytes, Read: {offset} bytes.");
+                    return false;
+                }
+
+                // 更新偏移量
+                offset += read;
+                _logger.LogTrace($"Read progress: {offset}/{count} bytes.");
+            }
+
+            _logger.LogTrace($"Successfully read {count} bytes from the stream.");
+            return true;
+        }
+        /// <summary>
+        /// 定期检查客户端心跳状态（超时断开无效连接）
+        /// </summary>
+        private void CheckHeartbeats()
+        {
+            var now = DateTime.Now;
+            var timeout = TimeSpan.FromSeconds(ConstantsConfig.TimeoutSeconds);
+            _logger.LogTrace($"Heartbeat check started (Timeout={ConstantsConfig.TimeoutSeconds}s)");
+
+            // 遍历所有客户端连接
+            foreach (var client in _clients.ToList()) // 复制列表避免迭代时修改集合
+            {
+                var clientId = client.Key;
+                var clientConfig = client.Value;
+
+                // 计算客户端最后活动时间差
+                var elapsed = now - clientConfig.LastActivity;
+                _logger.LogDebug($"Client {clientId} last activity: {clientConfig.LastActivity} ({elapsed.TotalSeconds:F1}s ago)");
+
+                if (elapsed > timeout)
+                {
+                    // 心跳超时，断开客户端连接
+                    _logger.LogWarning($"Client {clientId} heartbeat timeout ({elapsed.TotalSeconds:F1}s > {ConstantsConfig.TimeoutSeconds}s)");
+                    DisconnectClient(clientId);
+
+                    // 从客户端列表移除
+                    if (_clients.TryRemove(clientId, out _))
+                    {
+                        _logger.LogInformation($"Client {clientId} removed due to heartbeat timeout");
+                    }
+                    else
+                    {
+                        _logger.LogError($"Failed to remove client {clientId} after timeout");
+                    }
+                }
+            }
+
+            _logger.LogTrace("Heartbeat check completed");
+        }
+    
         private async void DisconnectClient(uint clientId)
         {
             _logger.LogTrace($"Disconnecting client {clientId}...");

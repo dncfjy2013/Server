@@ -5,16 +5,16 @@ using Server.Core.Config;
 using Server.Logger;
 using System.Threading.Channels;
 
-namespace Core.Message.ThreadManager
+namespace Core.Message
 {
     // 处理客户端接收消息的线程管理器（适配ProcessMessages）
     public class IncomingMessageThreadManager : DynamicThreadManagerBase<ClientMessage>
     {
         private readonly DataPriority _priority;
-        private readonly ServerInstance _server; // 添加 _server 字段
+        private readonly MessageManager _server; // 添加 _server 字段
 
         public IncomingMessageThreadManager(
-            ServerInstance server, // 构造函数添加 server 参数
+            MessageManager server, // 构造函数添加 server 参数
             Channel<ClientMessage> channel,
             ILogger logger,
             DataPriority priority,

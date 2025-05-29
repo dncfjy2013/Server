@@ -1,12 +1,13 @@
-﻿using Protocol;
+﻿using Google.Protobuf;
+using Protocol;
 using Server.Core.Config;
 using Server.Utils;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 
-namespace Server.Core
+namespace Core.Message
 {
-    partial class ServerInstance
+    partial class MessageManager
     {
         // 文件传输处理优化相关代码
 
@@ -313,7 +314,51 @@ namespace Server.Core
             _logger.LogInformation($"Generated unique path: {newPath} (Original path conflicted)");
             return newPath;
         }
+        public async Task SendFileAsync(uint clientId, string filePath, DataPriority priority = DataPriority.High)
+        {
+            if (!_clients.TryGetValue(clientId, out var client)) return;
+            var fileInfo = new FileInfo(filePath);
+            if (!fileInfo.Exists) return;
 
+            // 拆分文件块（示例：每块1MB）
+            const int chunkSize = 1024 * 1024;
+            var fileId = Guid.NewGuid().ToString();
+            var totalChunks = (int)Math.Ceiling((double)fileInfo.Length / chunkSize);
+
+            using var fs = fileInfo.OpenRead();
+            var buffer = new byte[chunkSize];
+            int chunkIndex = 0;
+
+            while (chunkIndex < totalChunks)
+            {
+                int read = await fs.ReadAsync(buffer, 0, chunkSize);
+                var chunkData = buffer.AsMemory(0, read);
+
+                var data = new CommunicationData
+                {
+                    InfoType = InfoType.StcFile,
+                    FileId = fileId,
+                    FileSize = fileInfo.Length,
+                    TotalChunks = totalChunks,
+                    ChunkIndex = chunkIndex,
+                    ChunkData = ByteString.CopyFrom(chunkData.ToArray()),
+                    ChunkMd5 = CalculateChunkHash(chunkData.ToArray()), // 计算块MD5
+                    Priority = priority // 高优先级确保及时传输
+                };
+
+                SendToClient(clientId, data, priority);
+                chunkIndex++;
+            }
+
+            // 发送文件完成标记（高优先级）
+            SendToClient(clientId, new CommunicationData
+            {
+                InfoType = InfoType.StcFile,
+                FileId = fileId,
+                Message = "FILE_COMPLETE",
+                Priority = priority
+            }, priority);
+        }
         /// <summary>
         /// 计算文件分块的MD5哈希值
         /// </summary>

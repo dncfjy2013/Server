@@ -2,7 +2,7 @@
 using Server.Logger;
 using System.Threading.Channels;
 
-namespace Core.Message.ThreadManager
+namespace Core.Message
 {
     /// <summary>
     /// 动态线程管理器抽象基类，用于管理不同优先级的消息处理线程
