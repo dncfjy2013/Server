@@ -32,8 +32,4 @@
     </Protobuf>
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="TcpService\" />
-  </ItemGroup>
-
 </Project>
