@@ -24,24 +24,15 @@ namespace Server.Core
         /// 客户端连接字典（线程安全），键为客户端ID，值为客户端配置对象
         /// </summary>
         private readonly ConcurrentDictionary<uint, ClientConfig> _clients = new();
-
         private readonly ConcurrentDictionary<uint, ClientConfig> _historyclients = new();
-
         /// <summary>
         /// 客户端ID生成器（原子递增）
         /// </summary>
         private uint _nextClientId;
-
         // 服务器运行状态标志，当为 true 时表示服务器正在运行，可接受客户端连接；为 false 时则停止服务
         private bool _isRunning;
-
-        // 用于线程安全的日志记录操作的锁对象，确保在多线程环境下日志记录操作的线程安全性
-        private readonly object _lock = new();
-
         private int _connectSocket, _connectSSL, _connectUDP, _connectHTTP;
-
         private ConnectionManager _ClientConnectionManager;
-
         private MessageManager _messageManager;
         private TcpServiceInstance _tcpServiceInstance;
         private UdpServiceInstance _udpServiceInstance;
@@ -96,25 +87,24 @@ namespace Server.Core
             {
                 // Debug：关键操作开始（获取锁）
                 _logger.LogDebug("Acquiring lock for thread-safe interval modification");
-                lock (_lock)
+
+                double time = _trafficMonitor.GetMonitorInterval();
+
+                // Trace：锁内变量检查（细粒度调试）
+                _logger.LogTrace($"Current interval before update: {time} ms");
+
+                // Information：配置变更通知（影响系统行为的操作）
+                _logger.LogDebug($"Updating traffic monitor interval from {time} ms to {interval} ms");
+
+                // Debug：定时器操作（关键功能调整）
+                _logger.LogDebug($"Updating traffic monitor timer to interval: from {time} ms {interval} ms");
+                if (!_trafficMonitor.SetMonitorInterval(interval))
                 {
-                    double time = _trafficMonitor.GetMonitorInterval();
-
-                    // Trace：锁内变量检查（细粒度调试）
-                    _logger.LogTrace($"Current interval before update: {time} ms");
-
-                    // Information：配置变更通知（影响系统行为的操作）
-                    _logger.LogDebug($"Updating traffic monitor interval from {time} ms to {interval} ms");
-
-                    // Debug：定时器操作（关键功能调整）
-                    _logger.LogDebug($"Updating traffic monitor timer to interval: from {time} ms {interval} ms");
-                    if (!_trafficMonitor.SetMonitorInterval(interval))
-                    {
-                        _logger.LogError($"traffic monitor timer to interval from {time} ms to {interval}");
-                    }
-                    else
-                        _logger.LogCritical($"Traffic monitor interval changed from {time} ms to {interval} ms");
+                    _logger.LogError($"traffic monitor timer to interval from {time} ms to {interval}");
                 }
+                else
+                    _logger.LogCritical($"Traffic monitor interval changed from {time} ms to {interval} ms");
+                
                 // Debug：锁释放（线程安全相关）
                 _logger.LogDebug("Lock released after interval modification");
             }
