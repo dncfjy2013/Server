@@ -69,14 +69,15 @@ namespace Core.ProtocalService.TcpService
             _clients = clients;
             _historyclients = historyclients;
 
+            // Debug 等级：记录创建心跳定时器的操作
+            _logger.LogDebug("Creating the heartbeat timer.");
+            _heartbeatTimer = new Timer(_ => CheckHeartbeats(), null, Timeout.Infinite, Timeout.Infinite);
+
+
             // 启动心跳定时器，属于关键操作步骤，使用Debug记录
             _logger.LogDebug($"Starting the heartbeat timer with an immediate start and interval of {ConstantsConfig.HeartbeatInterval} ms.");
             _heartbeatTimer.Change(0, ConstantsConfig.HeartbeatInterval);
             _logger.LogDebug("Heartbeat timer has been successfully started.");
-
-            // Debug 等级：记录创建心跳定时器的操作
-            _logger.LogDebug("Creating the heartbeat timer.");
-            _heartbeatTimer = new Timer(_ => CheckHeartbeats(), null, Timeout.Infinite, Timeout.Infinite);
         }
 
         public void Start()
