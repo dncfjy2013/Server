@@ -80,37 +80,23 @@ namespace Server.Core
 
         public void SetMonitorInterval(int interval)
         {
-            // Trace：方法调用细节（仅开发环境有用）
             _logger.LogTrace($"Enter SetMonitorInterval, new interval: {interval} ms");
 
             try
             {
-                // Debug：关键操作开始（获取锁）
-                _logger.LogDebug("Acquiring lock for thread-safe interval modification");
-
                 double time = _trafficMonitor.GetMonitorInterval();
 
-                // Trace：锁内变量检查（细粒度调试）
                 _logger.LogTrace($"Current interval before update: {time} ms");
-
-                // Information：配置变更通知（影响系统行为的操作）
-                _logger.LogDebug($"Updating traffic monitor interval from {time} ms to {interval} ms");
-
-                // Debug：定时器操作（关键功能调整）
-                _logger.LogDebug($"Updating traffic monitor timer to interval: from {time} ms {interval} ms");
+                ;
                 if (!_trafficMonitor.SetMonitorInterval(interval))
                 {
                     _logger.LogError($"traffic monitor timer to interval from {time} ms to {interval}");
                 }
                 else
                     _logger.LogCritical($"Traffic monitor interval changed from {time} ms to {interval} ms");
-                
-                // Debug：锁释放（线程安全相关）
-                _logger.LogDebug("Lock released after interval modification");
             }
             catch (Exception ex)
             {
-                // Error：可恢复的异常（如无效的时间间隔）
                 _logger.LogError($"Failed to set monitor interval: {ex.Message}");
             }
         }
@@ -121,13 +107,11 @@ namespace Server.Core
 
             try
             {
-                // 设置服务器运行状态为开启，属于重要状态变更，使用Information记录
                 _logger.LogInformation("Server is now accepting connections.");
                 _isRunning = true;
 
                 if (enableMonitoring)
                 {
-                    // 启用流量监控，属于功能开启操作，使用Debug记录
                     _logger.LogDebug($"Starting the traffic monitor timer with an immediate start and interval of {ConstantsConfig.MonitorInterval} ms.");
                     _trafficMonitor.ModifyEnable(true);
                 }
@@ -138,16 +122,12 @@ namespace Server.Core
 
                 if (ConstantsConfig.IsUnityServer)
                 {
-                    // Trace 等级：记录开始消息处理的详细信息
                     _logger.LogTrace("Commencing Incoming message processing.");
                     _messageManager.StartInComingProcessing();
-                    // Trace 等级：记录消息处理已成功开始的详细信息
                     _logger.LogTrace("Incoming Message processing has been successfully started.");
                 }
-                // Trace 等级：记录开始消息处理的详细信息
                 _logger.LogTrace("Commencing Outcoming message processing.");
                 _messageManager.StartOutgoingMessageProcessing();
-                // Trace 等级：记录消息处理已成功开始的详细信息
                 _logger.LogTrace("Outcoming Message processing has been successfully started.");
 
                 _tcpServiceInstance.Start();
@@ -156,7 +136,6 @@ namespace Server.Core
             }
             catch (Exception ex)
             {
-                // 启动过程中出现异常，使用Critical记录
                 _logger.LogCritical($"A critical error occurred while starting the server: {ex.Message} ");
             }
         }
@@ -167,7 +146,6 @@ namespace Server.Core
 
             try
             {
-                // 停止流量监控定时器，也是系统定时任务的操作，使用Debug记录
                 _logger.LogDebug("Stopping the traffic monitor timer.");
                 _trafficMonitor.Dispose();
                 _logger.LogDebug("The traffic monitor timer has been successfully stopped.");
@@ -184,24 +162,20 @@ namespace Server.Core
             }
             catch (Exception ex)
             {
-                // 整个停止过程中出现异常，使用Critical记录
                 _logger.LogCritical($"A critical error occurred during server shutdown: {ex.Message}");
             }
 
             _isRunning = false;
-            // 服务器停止，是重要的系统状态变更，使用Critical记录
             _logger.LogCritical("Server has been stopped.");
 
             try
             {
-                // 释放日志记录器，属于资源清理操作，使用Debug记录
                 _logger.LogDebug("Disposing of the _logger.");
                 _logger.Dispose();
                 _logger.LogDebug("The _logger has been disposed of.");
             }
             catch (Exception ex)
             {
-                // 释放日志记录器时出现异常，使用Error记录
                 _logger.LogError($"An error occurred while disposing of the _logger: {ex.Message}");
             }
         }
