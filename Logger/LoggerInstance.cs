@@ -1,6 +1,5 @@
 ﻿using Microsoft.Win32.SafeHandles;
 using Server.Common.Extensions;
-using Server.Logger;
 using Server.Logger.Common;
 using System;
 using System.Buffers;
@@ -26,14 +25,16 @@ namespace Server.Logger
     // Windows高性能日志实现
     public sealed class LoggerInstance : ILogger, IDisposable
     {
+        #region 单例模式
         // 单例模式实现，使用Lazy<T>确保线程安全的延迟初始化
         private static readonly Lazy<LoggerInstance> _instance = new Lazy<LoggerInstance>(
             () => new LoggerInstance(), LazyThreadSafetyMode.ExecutionAndPublication);
 
         // 提供全局访问点的静态属性
         public static LoggerInstance Instance => _instance.Value;
+        #endregion
 
-        // 配置和状态相关成员
+        #region 配置和状态相关成员
         private readonly LoggerConfig _config;                          // 日志记录器配置
         private readonly ConcurrentDictionary<string, LogTemplate> _templates = new ConcurrentDictionary<string, LogTemplate>(); // 日志模板缓存
         private readonly Channel<LogMessage> _logChannel;               // 用于异步日志处理的通道
@@ -42,15 +43,17 @@ namespace Server.Logger
         private readonly List<Task> _allTasks = new List<Task>();      // 所有运行中任务的集合
         private bool _isDisposed;                                        // 资源释放状态标志
         private volatile bool _isAsyncWrite;                             // 异步写入标志，使用volatile确保多线程可见性
+        #endregion
 
-        // 文件写入相关成员
+        #region 文件写入相关成员
         private FileStream _fileStream;                                  // 用于写入日志的文件流
         private readonly byte[] _writeBuffer;                            // 写入缓冲区
         private int _bufferOffset;                                       // 缓冲区偏移量
         private readonly SemaphoreSlim _writeLock = new SemaphoreSlim(1, 1); // 写入操作的信号量锁
         private readonly object _mmfSwitchLock = new object();           // 内存映射文件切换锁
+        #endregion
 
-        // 内存映射文件相关成员
+        #region 内存映射文件相关成员
         private IntPtr _mapView = IntPtr.Zero;                           // 内存映射视图指针
         private long _mapOffset;                                         // 内存映射偏移量
         private volatile bool _useMemoryMappedFile;                      // 是否使用内存映射文件标志
@@ -60,17 +63,21 @@ namespace Server.Logger
         private Task _createNewFileTask = Task.CompletedTask;            // 记录当前创建新文件的任务
         private int _currentFileIndex = 0;                               // 当前文件索引
         private DateTime _lastFileDate = DateTime.MinValue;              // 最后一个文件的日期
+        #endregion
 
-        // 性能监控相关成员
+        #region 性能监控相关成员
         private readonly Counter _totalLogsProcessed = new Counter();    // 处理的日志总数计数器
         private readonly Counter _queueFullCounter = new Counter();      // 队列满计数器
         private readonly System.Diagnostics.Stopwatch _performanceWatch = System.Diagnostics.Stopwatch.StartNew(); // 性能计时器
+        #endregion
 
-        // 控制台输出相关成员
+        #region 控制台输出相关成员
         private readonly BlockingCollection<LogMessage> _consoleQueue = new BlockingCollection<LogMessage>(); // 控制台输出队列
         private readonly Thread _consoleThread;                              // 控制台输出线程
+        #endregion
 
-        // 初始化
+        #region 构造函数
+        // 私有构造函数
         private LoggerInstance() : this(new LoggerConfig()) { }
 
         public LoggerInstance(LoggerConfig config)
@@ -130,7 +137,9 @@ namespace Server.Logger
                     TaskCreationOptions.LongRunning, TaskScheduler.Default));
             }
         }
+        #endregion
 
+        #region 文件写入器初始化
         // 初始化文件写入器（核心逻辑）
         private void InitializeFileWriter()
         {
@@ -184,6 +193,89 @@ namespace Server.Logger
             }
         }
 
+        // 初始化内存映射文件
+        private void InitializeMemoryMappedFile(string filePath, long size)
+        {
+            try
+            {
+                // 确保日志目录存在
+                EnsureLogDirectoryExists(filePath);
+
+                // 检查文件写入权限
+                if (!CheckFileWritePermission(filePath))
+                    throw new InvalidOperationException($"无写入权限: {filePath}");
+
+                // 创建并设置文件大小（预先分配空间）
+                using (FileStream fs = new FileStream(filePath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.ReadWrite))
+                {
+                    fs.SetLength(size);
+                }
+
+                // 创建文件句柄（使用Win32 API）
+                IntPtr fileHandle = CreateFile(
+                    filePath,
+                    GENERIC_READ | GENERIC_WRITE,         // 读写权限
+                    FILE_SHARE_READ | FILE_SHARE_WRITE,  // 允许多进程共享读写
+                    IntPtr.Zero,
+                    OPEN_EXISTING,                       // 打开已存在的文件
+                    FILE_ATTRIBUTE_NORMAL,
+                    IntPtr.Zero);
+
+                // 检查文件句柄是否创建成功
+                if (fileHandle == INVALID_HANDLE_VALUE)
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), $"创建文件句柄失败: {filePath}");
+
+                // 封装为安全句柄以便自动资源管理
+                _safeFileHandle = new SafeFileHandle(fileHandle, true);
+
+                // 创建文件映射对象
+                IntPtr mapHandle = CreateFileMapping(
+                    _safeFileHandle.DangerousGetHandle(),
+                    IntPtr.Zero,
+                    PAGE_READWRITE,                     // 读写访问权限
+                    (uint)(size >> 32),                 // 文件大小高位
+                    (uint)(size & 0xFFFFFFFF),          // 文件大小低位
+                    null);
+
+                // 检查映射对象是否创建成功
+                if (mapHandle == IntPtr.Zero)
+                {
+                    _safeFileHandle.Dispose();
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), $"创建内存映射失败: {filePath}");
+                }
+
+                // 初始化安全映射句柄
+                _safeMapHandle = new SafeMapHandle();
+                _safeMapHandle.Initialize(mapHandle);
+
+                // 映射视图（获取可直接访问的内存指针）
+                _mapView = MapViewOfFile(
+                    _safeMapHandle.DangerousGetHandle(),
+                    FILE_MAP_WRITE,                     // 写入访问权限
+                    0,                                  // 文件偏移高位
+                    0,                                  // 文件偏移低位
+                    (UIntPtr)size);                     // 映射大小
+
+                // 检查视图映射是否成功
+                if (_mapView == IntPtr.Zero)
+                {
+                    _safeMapHandle.Dispose();
+                    _safeFileHandle.Dispose();
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), $"映射视图失败: {filePath}");
+                }
+
+                // 初始化映射偏移量（从文件起始位置开始写入）
+                _mapOffset = 0;
+            }
+            catch (Exception ex)
+            {
+                // 记录错误并清理资源
+                Console.WriteLine($"初始化内存映射文件失败: {ex}");
+                CleanupMemoryMappedResources();
+                throw;
+            }
+        }
+
         // 初始化文件流
         private void InitializeFileStream(string filePath)
         {
@@ -212,7 +304,9 @@ namespace Server.Logger
 
             _bufferOffset = 0;                   // 重置缓冲区偏移量（从0开始写入）
         }
+        #endregion
 
+        #region 日志写入方法
         // 写入文件
         private void WriteToFile(LogMessage message)
         {
@@ -403,129 +497,12 @@ namespace Server.Logger
         // 内存映射文件空间检查
         private bool IsMemoryMappedFileSpaceLow() =>
             (_memoryMappedFileSize - _mapOffset) < (_config.MemoryMappedThreadShould);
-        /// <summary>
-        /// 检查是否有写入指定文件的权限
-        /// </summary>
-        private bool CheckFileWritePermission(string filePath)
-        {
-            try
-            {
-                // 检查目录是否存在且可写
-                var directory = Path.GetDirectoryName(filePath);
-                if (!Directory.Exists(directory))
-                {
-                    // 尝试创建目录
-                    Directory.CreateDirectory(directory);
-                }
 
-                // 尝试创建一个临时文件进行权限测试
-                string testFilePath = Path.Combine(directory, $"test_permission_{Guid.NewGuid()}.tmp");
-                using (FileStream stream = File.Create(testFilePath, 1, FileOptions.DeleteOnClose))
-                {
-                    // 文件创建并关闭成功，说明有写入权限
-                }
-
-                return true;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                Console.WriteLine($"没有写入权限: {filePath}");
-                return false;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"检查文件权限时出错: {ex.Message}");
-                return false;
-            }
-        }
         // 确保内存映射空间足够
         private bool EnsureMemoryMappedSpace(int requiredSize)
         {
             // 检查当前内存映射文件剩余空间是否足够写入消息
             return (_mapOffset + requiredSize < _memoryMappedFileSize);
-        }
-
-        // 初始化内存映射文件
-        private void InitializeMemoryMappedFile(string filePath, long size)
-        {
-            try
-            {
-                // 确保日志目录存在
-                EnsureLogDirectoryExists(filePath);
-
-                // 检查文件写入权限
-                if (!CheckFileWritePermission(filePath))
-                    throw new InvalidOperationException($"无写入权限: {filePath}");
-
-                // 创建并设置文件大小（预先分配空间）
-                using (FileStream fs = new FileStream(filePath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.ReadWrite))
-                {
-                    fs.SetLength(size);
-                }
-
-                // 创建文件句柄（使用Win32 API）
-                IntPtr fileHandle = CreateFile(
-                    filePath,
-                    GENERIC_READ | GENERIC_WRITE,         // 读写权限
-                    FILE_SHARE_READ | FILE_SHARE_WRITE,  // 允许多进程共享读写
-                    IntPtr.Zero,
-                    OPEN_EXISTING,                       // 打开已存在的文件
-                    FILE_ATTRIBUTE_NORMAL,
-                    IntPtr.Zero);
-
-                // 检查文件句柄是否创建成功
-                if (fileHandle == INVALID_HANDLE_VALUE)
-                    throw new Win32Exception(Marshal.GetLastWin32Error(), $"创建文件句柄失败: {filePath}");
-
-                // 封装为安全句柄以便自动资源管理
-                _safeFileHandle = new SafeFileHandle(fileHandle, true);
-
-                // 创建文件映射对象
-                IntPtr mapHandle = CreateFileMapping(
-                    _safeFileHandle.DangerousGetHandle(),
-                    IntPtr.Zero,
-                    PAGE_READWRITE,                     // 读写访问权限
-                    (uint)(size >> 32),                 // 文件大小高位
-                    (uint)(size & 0xFFFFFFFF),          // 文件大小低位
-                    null);
-
-                // 检查映射对象是否创建成功
-                if (mapHandle == IntPtr.Zero)
-                {
-                    _safeFileHandle.Dispose();
-                    throw new Win32Exception(Marshal.GetLastWin32Error(), $"创建内存映射失败: {filePath}");
-                }
-
-                // 初始化安全映射句柄
-                _safeMapHandle = new SafeMapHandle();
-                _safeMapHandle.Initialize(mapHandle);
-
-                // 映射视图（获取可直接访问的内存指针）
-                _mapView = MapViewOfFile(
-                    _safeMapHandle.DangerousGetHandle(),
-                    FILE_MAP_WRITE,                     // 写入访问权限
-                    0,                                  // 文件偏移高位
-                    0,                                  // 文件偏移低位
-                    (UIntPtr)size);                     // 映射大小
-
-                // 检查视图映射是否成功
-                if (_mapView == IntPtr.Zero)
-                {
-                    _safeMapHandle.Dispose();
-                    _safeFileHandle.Dispose();
-                    throw new Win32Exception(Marshal.GetLastWin32Error(), $"映射视图失败: {filePath}");
-                }
-
-                // 初始化映射偏移量（从文件起始位置开始写入）
-                _mapOffset = 0;
-            }
-            catch (Exception ex)
-            {
-                // 记录错误并清理资源
-                Console.WriteLine($"初始化内存映射文件失败: {ex}");
-                CleanupMemoryMappedResources();
-                throw;
-            }
         }
 
         // 清理内存映射资源
@@ -648,7 +625,9 @@ namespace Server.Logger
                 InitializeFileWriter();
             }
         }
+        #endregion
 
+        #region 资源释放
         // IDisposable 实现
         public void Dispose()
         {
@@ -711,7 +690,9 @@ namespace Server.Logger
             _consoleQueue.CompleteAdding();
             _cts.Dispose();
         }
+        #endregion
 
+        #region 日志处理
         // 入队日志消息
         private void EnqueueLogMessage(LogMessage message)
         {
@@ -751,6 +732,7 @@ namespace Server.Logger
                 WriteToFile(logMessage);
             }
         }
+
         // 处理日志队列
         private async Task ProcessLogQueueAsync()
         {
@@ -789,6 +771,9 @@ namespace Server.Logger
                 Console.WriteLine($"日志处理任务异常: {ex}");
             }
         }
+        #endregion
+
+        #region 消息格式化
         // 格式化消息
         private Memory<byte> FormatMessage(LogMessage message)
         {
@@ -848,7 +833,9 @@ namespace Server.Logger
             // 返回内存流的内容
             return ms.ToArray();
         }
+        #endregion
 
+        #region 控制台输出
         // 控制台输出相关
         private void EnqueueConsoleMessage(LogMessage message)
         {
@@ -914,7 +901,9 @@ namespace Server.Logger
                 _ => ConsoleColor.White,
             };
         }
+        #endregion
 
+        #region 性能监控
         // 性能监控
         private async Task MonitorPerformance()
         {
@@ -940,21 +929,16 @@ namespace Server.Logger
                 Console.WriteLine($"性能监控任务异常: {ex}");
             }
         }
+        #endregion
 
+        #region 模板管理
         // 模板管理方法
         public void AddTemplate(LogTemplate template)
         {
             if (template == null) throw new ArgumentNullException(nameof(template));
             _templates[template.Name] = template;
         }
-        private void EnsureLogDirectoryExists(string filePath)
-        {
-            var directory = Path.GetDirectoryName(filePath);
-            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-        }
+
         public void RemoveTemplate(string templateName)
         {
             if (string.IsNullOrEmpty(templateName)) return;
@@ -968,7 +952,9 @@ namespace Server.Logger
                 ? template
                 : _templates["Default"];
         }
+        #endregion
 
+        #region 核心日志方法
         // 核心日志方法
         public void Log(LogLevel level, ReadOnlyMemory<byte> message, Exception exception = null,
             IReadOnlyDictionary<string, object> properties = null, string templateName = null,
@@ -1048,7 +1034,9 @@ namespace Server.Logger
                 ProcessLogDirect(logMessage);
             }
         }
+        #endregion
 
+        #region 快捷日志方法
         // 快捷日志方法
         public void LogTrace(ReadOnlyMemory<byte> message, IReadOnlyDictionary<string, object> properties = null, string templateName = null)
             => Log(LogLevel.Trace, message, null, properties, templateName);
@@ -1086,7 +1074,10 @@ namespace Server.Logger
 
         public void LogCritical<T>(T state, Exception exception = null, Func<T, Exception, string> formatter = null, string templateName = null)
             => Log(LogLevel.Critical, state, formatter, exception, null, templateName);
+        #endregion
 
+        #region Win32 API封装
+        // 安全句柄封装类
         private sealed class SafeMapHandle : SafeHandleZeroOrMinusOneIsInvalid
         {
             // 导入Win32 API函数，用于关闭内核对象句柄
@@ -1113,9 +1104,8 @@ namespace Server.Logger
                 return CloseHandle(handle);
             }
         }
-        // Windows API P/Invoke
-        // Win32 API P/Invoke声明（用于内存映射文件和文件操作）
 
+        // Win32 API P/Invoke声明（用于内存映射文件和文件操作）
         /// <summary>
         /// 创建或打开文件/设备，并返回可用于访问该文件/设备的句柄
         /// </summary>
@@ -1203,7 +1193,9 @@ namespace Server.Logger
         private const uint PAGE_READWRITE = 0x04;          // 内存页保护属性：允许读写访问（内存映射标志）
         private const uint FILE_MAP_WRITE = 0x0002;        // 内存映射访问权限：允许写入映射区域
         private static readonly IntPtr INVALID_HANDLE_VALUE = new IntPtr(-1); // 无效句柄值（用于错误判断）
+        #endregion
 
+        #region 辅助类
         // 原子计数器
         private sealed class Counter
         {
@@ -1213,39 +1205,52 @@ namespace Server.Logger
             public void Increment() => Interlocked.Increment(ref _value);
             public void Add(long amount) => Interlocked.Add(ref _value, amount);
         }
+        #endregion
+
+        #region 路径权限检查
+        private void EnsureLogDirectoryExists(string filePath)
+        {
+            var directory = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+        }
+        /// <summary>
+        /// 检查是否有写入指定文件的权限
+        /// </summary>
+        private bool CheckFileWritePermission(string filePath)
+        {
+            try
+            {
+                // 检查目录是否存在且可写
+                var directory = Path.GetDirectoryName(filePath);
+                if (!Directory.Exists(directory))
+                {
+                    // 尝试创建目录
+                    Directory.CreateDirectory(directory);
+                }
+
+                // 尝试创建一个临时文件进行权限测试
+                string testFilePath = Path.Combine(directory, $"test_permission_{Guid.NewGuid()}.tmp");
+                using (FileStream stream = File.Create(testFilePath, 1, FileOptions.DeleteOnClose))
+                {
+                    // 文件创建并关闭成功，说明有写入权限
+                }
+
+                return true;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                Console.WriteLine($"没有写入权限: {filePath}");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"检查文件权限时出错: {ex.Message}");
+                return false;
+            }
+        }
+        #endregion
     }
-}
-
-// 日志消息类 - 使用struct减少GC压力
-public readonly struct LogMessage
-{
-    public readonly DateTime Timestamp;
-    public readonly LogLevel Level;
-    public readonly ReadOnlyMemory<byte> Message;
-    public readonly int ThreadId;
-    public readonly string ThreadName;
-    public readonly Exception Exception;
-    public readonly IReadOnlyDictionary<string, object> Properties;
-
-    public LogMessage(DateTime timestamp, LogLevel level, ReadOnlyMemory<byte> message, int threadId, string threadName,
-        Exception exception = null, IReadOnlyDictionary<string, object> properties = null)
-    {
-        Timestamp = timestamp;
-        Level = level;
-        Message = message;
-        ThreadId = threadId;
-        ThreadName = threadName;
-        Exception = exception;
-        Properties = properties;
-    }
-}
-
-// 日志模板配置
-public sealed class LogTemplate
-{
-    public string Name { get; set; }
-    public string Template { get; set; }
-    public LogLevel Level { get; set; }
-    public bool IncludeException { get; set; }
-    public bool IncludeCallerInfo { get; set; }
 }
