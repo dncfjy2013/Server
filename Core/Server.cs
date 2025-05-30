@@ -33,7 +33,8 @@ namespace Server.Core
         private bool _isRunning;
         private int _connectSocket, _connectSSL, _connectUDP, _connectHTTP;
         private ConnectionManager _ClientConnectionManager;
-        private MessageManager _messageManager;
+        private InMessage _InmessageManager;
+        private OutMessage _outMessageManager;
         private TcpServiceInstance _tcpServiceInstance;
         private UdpServiceInstance _udpServiceInstance;
         public HttpServiceInstance _HttpServiceInstance;
@@ -49,8 +50,9 @@ namespace Server.Core
                 _logger.LogInformation("Server has begining initialization process.");
 
                 _ClientConnectionManager = new ConnectionManager(_logger);
-                _messageManager = new MessageManager(_clients, _logger);
-                _tcpServiceInstance = new TcpServiceInstance(port, sslPort, certf, ref _isRunning, _logger, _ClientConnectionManager, _messageManager, ref _nextClientId, ref _connectSocket, ref _connectSSL, _clients, _historyclients);
+                _outMessageManager = new OutMessage(_logger, _clients);
+                _InmessageManager = new InMessage(_clients, _logger, _outMessageManager);
+                _tcpServiceInstance = new TcpServiceInstance(port, sslPort, certf, ref _isRunning, _logger, _ClientConnectionManager, _InmessageManager, _outMessageManager, ref _nextClientId, ref _connectSocket, ref _connectSSL, _clients, _historyclients);
                 _udpServiceInstance = new UdpServiceInstance(ref _isRunning, _logger, udpport, ref _nextClientId, _ClientConnectionManager);
                 _HttpServiceInstance = new HttpServiceInstance(_logger, ref _isRunning, host, ref _nextClientId, _ClientConnectionManager);
 
@@ -123,11 +125,11 @@ namespace Server.Core
                 if (ConstantsConfig.IsUnityServer)
                 {
                     _logger.LogTrace("Commencing Incoming message processing.");
-                    _messageManager.StartInComingProcessing();
+                    _InmessageManager.Start();
                     _logger.LogTrace("Incoming Message processing has been successfully started.");
                 }
                 _logger.LogTrace("Commencing Outcoming message processing.");
-                _messageManager.StartOutgoingMessageProcessing();
+                _InmessageManager.Start();
                 _logger.LogTrace("Outcoming Message processing has been successfully started.");
 
                 _tcpServiceInstance.Start();
@@ -158,7 +160,8 @@ namespace Server.Core
                 _ClientConnectionManager.Dispose();
                 _logger.LogDebug("The client state Manager has been disposed of.");
 
-                _messageManager.ShutDown();
+                _InmessageManager?.Stop();
+                _outMessageManager.Stop();
             }
             catch (Exception ex)
             {

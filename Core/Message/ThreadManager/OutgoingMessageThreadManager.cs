@@ -9,11 +9,11 @@ namespace Core.Message
     // 处理服务器主动消息的线程管理器（适配ProcessOutgoingMessages）
     public class OutgoingMessageThreadManager : DynamicThreadManagerBase<ServerOutgoingMessage>
     {
-        private readonly MessageManager _server;
+        private readonly OutMessage _server;
         private readonly DataPriority _priority;
 
         public OutgoingMessageThreadManager(
-            MessageManager server,
+            OutMessage server,
             Channel<ServerOutgoingMessage> channel,
             ILogger logger,
             DataPriority priority,

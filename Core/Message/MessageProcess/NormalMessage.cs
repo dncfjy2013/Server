@@ -5,11 +5,18 @@ using Server.Utils;
 
 namespace Core.Message
 {
-    partial class MessageManager
+    public class NormalMessage
     {
+        private ILogger _logger;
+        private OutMessage _outMessage;
+        public NormalMessage(ILogger logger, OutMessage outMessage)
+        {
+            _logger = logger;
+            _outMessage = outMessage;
+        }
 
         // 普通消息处理方法，用于处理客户端发送的普通消息，并返回确认消息
-        private async Task HandleNormalMessage(ClientConfig client, CommunicationData data)
+        public async Task HandleNormalMessage(ClientConfig client, CommunicationData data)
         {
             // 记录方法开始处理，使用Trace级别日志，用于开发调试时跟踪流程
             _logger.LogTrace($"Start handling normal message from client {client.Id}, SeqNum: {data.SeqNum}");
@@ -32,7 +39,7 @@ namespace Core.Message
             try
             {
                 // 异步发送确认消息给客户端
-                await SendInfoDate(client, ack);
+                await _outMessage.SendInfoDate(client, ack);
 
                 // 开始处理客户端请求内容
                 EntityManager.ProcessNormalCommand(data.Message);

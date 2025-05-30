@@ -7,10 +7,8 @@ using System.Security.Cryptography;
 
 namespace Core.Message
 {
-    partial class MessageManager
+    public class FileMessage
     {
-        // 文件传输处理优化相关代码
-
         // 用于存储正在进行的文件传输信息的并发字典
         // 键为文件传输的唯一标识（通常是文件名或文件ID），值为包含文件传输详细信息的对象
         // 采用 ConcurrentDictionary 是为了保证在多线程环境下对字典的操作是线程安全的，避免数据竞争问题
@@ -21,18 +19,30 @@ namespace Core.Message
         // 主要用于确保在文件传输过程中对文件的读写操作不会出现冲突，保证文件数据的完整性
         private SemaphoreSlim _fileLock = new SemaphoreSlim(1, 1);
 
+        private OutMessage _outMessage;
+
         // 定义一个事件，当文件传输完成时触发
         // 事件的订阅者可以通过注册一个接收字符串类型参数（通常是完成传输的文件的标识）的方法
         // 来处理文件传输完成的通知，实现模块间的解耦和消息传递
         // 例如，当文件传输完成后，可以通知其他模块进行文件的存储、处理或展示等操作
         public event Action<string> OnFileTransferCompleted;
 
+        private ILogger _logger;
+        private readonly ConcurrentDictionary<uint, ClientConfig> _clients;
+
+        public FileMessage(ILogger logger, ConcurrentDictionary<uint, ClientConfig> clients, OutMessage outMessage) 
+        {
+            _logger = logger;
+            _clients = clients;
+            _outMessage = outMessage;
+        }
+
         /// <summary>
         /// 处理文件传输请求（支持大文件分块传输、完整性校验、重传处理）
         /// </summary>
         /// <param name="client">客户端配置对象</param>
         /// <param name="data">文件传输数据（包含分块信息或完成通知）</param>
-        private async Task HandleFileTransfer(ClientConfig client, CommunicationData data)
+        public async Task HandleFileTransfer(ClientConfig client, CommunicationData data)
         {
             // 记录文件传输处理开始（细粒度调试）
             _logger.LogTrace($"Client {client.Id} handling file transfer: FileId={data.FileId}, ChunkIndex={data.ChunkIndex}");
@@ -72,7 +82,7 @@ namespace Core.Message
                         };
 
                         _logger.LogDebug($"Sending file complete ACK for FileId={data.FileId}");
-                        await SendInfoDate(client, completionAck);
+                        await _outMessage.SendInfoDate(client, completionAck);
                         _logger.LogInformation($"Client {client.Id} sent file complete ACK for {transferInfo.FileName}");
 
                         // 3. 统计发送数据量
@@ -158,7 +168,7 @@ namespace Core.Message
                 };
 
                 _logger.LogInformation($"Client {client.Id} received chunk {data.ChunkIndex}/{transferInfo.TotalChunks} for {transferInfo.FileName}");
-                await SendInfoDate(client, ack);
+                await _outMessage.SendInfoDate(client, ack);
                 _logger.LogDebug($"Sent chunk ACK for ChunkIndex={data.ChunkIndex}, FileId={data.FileId}");
 
                 // 检查是否所有块已接收
@@ -346,12 +356,12 @@ namespace Core.Message
                     Priority = priority // 高优先级确保及时传输
                 };
 
-                SendToClient(clientId, data, priority);
+                _outMessage.SendToClient(clientId, data, priority);
                 chunkIndex++;
             }
 
             // 发送文件完成标记（高优先级）
-            SendToClient(clientId, new CommunicationData
+            _outMessage.SendToClient(clientId, new CommunicationData
             {
                 InfoType = InfoType.StcFile,
                 FileId = fileId,

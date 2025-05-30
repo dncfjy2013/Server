@@ -37,7 +37,8 @@ namespace Core.ProtocalService.TcpService
         private ILogger _logger;
         private SSLManager _SSLManager;
         private ConnectionManager _ClientConnectionManager;
-        private MessageManager _messageManager;
+        private InMessage _InmessageManager;
+        private OutMessage _outMessageManager;
         /// <summary>
         /// 客户端ID生成器（原子递增）
         /// </summary>
@@ -54,7 +55,7 @@ namespace Core.ProtocalService.TcpService
         // 心跳定时器，用于定期检查客户端的心跳情况，确保客户端连接正常
         private readonly Timer _heartbeatTimer;
 
-        public TcpServiceInstance(int port, int sslPort, X509Certificate2 serverCert, ref bool isRunning, ILogger logger, ConnectionManager clientConnectionManager, MessageManager messageManager, ref uint nextClientId, ref int connectSocket, ref int connectSSL, ConcurrentDictionary<uint, ClientConfig> clients, ConcurrentDictionary<uint, ClientConfig> historyclients)
+        public TcpServiceInstance(int port, int sslPort, X509Certificate2 serverCert, ref bool isRunning, ILogger logger, ConnectionManager clientConnectionManager, InMessage messageManager, OutMessage outMessage, ref uint nextClientId, ref int connectSocket, ref int connectSSL, ConcurrentDictionary<uint, ClientConfig> clients, ConcurrentDictionary<uint, ClientConfig> historyclients)
         {
             _port = port;
             _sslPort = sslPort;
@@ -62,12 +63,13 @@ namespace Core.ProtocalService.TcpService
             _isRunning = isRunning;
             _logger = logger;
             _ClientConnectionManager = clientConnectionManager;
-            _messageManager = messageManager;
+            _InmessageManager = messageManager;
             _nextClientId = nextClientId;
             _connectSocket = connectSocket;
             _connectSSL = connectSSL;
             _clients = clients;
             _historyclients = historyclients;
+            _outMessageManager = outMessage;
 
             // Debug 等级：记录创建心跳定时器的操作
             _logger.LogDebug("Creating the heartbeat timer.");
@@ -425,7 +427,7 @@ namespace Core.ProtocalService.TcpService
                                 if (!_isRealTimeTransferAllowed)
                                 {
                                     _logger.LogDebug("Data RealTime transfer is paused");
-                                    await _messageManager.SendInfoDate(targetClient, packet.Data);
+                                    await _outMessageManager.SendInfoDate(targetClient, packet.Data);
                                     continue;
                                 }
                                 else
@@ -454,13 +456,13 @@ namespace Core.ProtocalService.TcpService
                         {
 
                             // 背压策略：丢弃低优先级消息（队列积压时）
-                            bool isQueueFull = _messageManager._messageHighQueue.Reader.Count > ConstantsConfig.MaxQueueSize ||
-                                               _messageManager._messageMediumQueue.Reader.Count > ConstantsConfig.MaxQueueSize ||
-                                               _messageManager._messagelowQueue.Reader.Count > ConstantsConfig.MaxQueueSize;
+                            bool isQueueFull = _InmessageManager._messageHighQueue.Reader.Count > ConstantsConfig.MaxQueueSize ||
+                                               _InmessageManager._messageMediumQueue.Reader.Count > ConstantsConfig.MaxQueueSize ||
+                                               _InmessageManager._messagelowQueue.Reader.Count > ConstantsConfig.MaxQueueSize;
 
                             if (isQueueFull && message.Data.Priority == DataPriority.Low)
                             {
-                                _logger.LogCritical($"Client {client.Id} discarded low-priority message (queue full: High={_messageManager._messageHighQueue.Reader.Count}, Medium={_messageManager._messageMediumQueue.Reader.Count}, Low={_messageManager._messagelowQueue.Reader.Count})");
+                                _logger.LogCritical($"Client {client.Id} discarded low-priority message (queue full: High={_InmessageManager._messageHighQueue.Reader.Count}, Medium={_InmessageManager._messageMediumQueue.Reader.Count}, Low={_InmessageManager._messagelowQueue.Reader.Count})");
                                 continue;
                             }
 
@@ -468,15 +470,15 @@ namespace Core.ProtocalService.TcpService
                             switch (packet.Data.Priority)
                             {
                                 case DataPriority.Low:
-                                    await _messageManager._messagelowQueue.Writer.WriteAsync(message);
+                                    await _InmessageManager._messagelowQueue.Writer.WriteAsync(message);
                                     _logger.LogDebug($"Client {client.Id} low-priority message enqueued (Id={message.Client.Id})");
                                     break;
                                 case DataPriority.High:
-                                    await _messageManager._messageHighQueue.Writer.WriteAsync(message);
+                                    await _InmessageManager._messageHighQueue.Writer.WriteAsync(message);
                                     _logger.LogDebug($"Client {client.Id} high-priority message enqueued (Id={message.Client.Id})");
                                     break;
                                 case DataPriority.Medium:
-                                    await _messageManager._messageMediumQueue.Writer.WriteAsync(message);
+                                    await _InmessageManager._messageMediumQueue.Writer.WriteAsync(message);
                                     _logger.LogDebug($"Client {client.Id} medium-priority message enqueued (Id={message.Client.Id})");
                                     break;
                             }
@@ -486,7 +488,7 @@ namespace Core.ProtocalService.TcpService
                         }
                         else
                         {
-                            _messageManager.ProcessMessageWithPriority(message, message.Data.Priority);
+                            _InmessageManager.ProcessMessageWithPriority(message, message.Data.Priority);
                         }
                     }
                     catch (Exception ex)
@@ -511,31 +513,31 @@ namespace Core.ProtocalService.TcpService
             switch (priority)
             {
                 case DataPriority.Low:
-                    if (_messageManager._messagelowQueue.Reader.Count > ConstantsConfig.MaxQueueSize)
+                    if (_InmessageManager._messagelowQueue.Reader.Count > ConstantsConfig.MaxQueueSize)
                     {
-                        _logger.LogCritical($"Client {client.Id} LOW QUEUE BACKPRESSURE: {_messageManager._messagelowQueue.Reader.Count} messages积压");
+                        _logger.LogCritical($"Client {client.Id} LOW QUEUE BACKPRESSURE: {_InmessageManager._messagelowQueue.Reader.Count} messages积压");
                         await ImplementBackpressure(client, TimeSpan.FromSeconds(1)); // 低优先级暂停1秒
                     }
                     break;
                 case DataPriority.Medium:
-                    if (_messageManager._messageMediumQueue.Reader.Count > ConstantsConfig.MaxQueueSize * 0.9) // 90%阈值预警
+                    if (_InmessageManager._messageMediumQueue.Reader.Count > ConstantsConfig.MaxQueueSize * 0.9) // 90%阈值预警
                     {
-                        _logger.LogWarning($"Client {client.Id} MEDIUM QUEUE NEAR BACKPRESSURE: {_messageManager._messageMediumQueue.Reader.Count}/{ConstantsConfig.MaxQueueSize}");
+                        _logger.LogWarning($"Client {client.Id} MEDIUM QUEUE NEAR BACKPRESSURE: {_InmessageManager._messageMediumQueue.Reader.Count}/{ConstantsConfig.MaxQueueSize}");
                     }
-                    if (_messageManager._messageMediumQueue.Reader.Count > ConstantsConfig.MaxQueueSize)
+                    if (_InmessageManager._messageMediumQueue.Reader.Count > ConstantsConfig.MaxQueueSize)
                     {
-                        _logger.LogCritical($"Client {client.Id} MEDIUM QUEUE BACKPRESSURE: {_messageManager._messageMediumQueue.Reader.Count} messages积压");
+                        _logger.LogCritical($"Client {client.Id} MEDIUM QUEUE BACKPRESSURE: {_InmessageManager._messageMediumQueue.Reader.Count} messages积压");
                         await ImplementBackpressure(client, TimeSpan.FromMilliseconds(600)); // 中等优先级暂停600ms
                     }
                     break;
                 case DataPriority.High:
-                    if (_messageManager._messageHighQueue.Reader.Count > ConstantsConfig.MaxQueueSize * 0.9) // 90%阈值预警
+                    if (_InmessageManager._messageHighQueue.Reader.Count > ConstantsConfig.MaxQueueSize * 0.9) // 90%阈值预警
                     {
-                        _logger.LogWarning($"Client {client.Id} HIGH QUEUE NEAR BACKPRESSURE: {_messageManager._messageHighQueue.Reader.Count}/{ConstantsConfig.MaxQueueSize}");
+                        _logger.LogWarning($"Client {client.Id} HIGH QUEUE NEAR BACKPRESSURE: {_InmessageManager._messageHighQueue.Reader.Count}/{ConstantsConfig.MaxQueueSize}");
                     }
-                    if (_messageManager._messageHighQueue.Reader.Count > ConstantsConfig.MaxQueueSize)
+                    if (_InmessageManager._messageHighQueue.Reader.Count > ConstantsConfig.MaxQueueSize)
                     {
-                        _logger.LogCritical($"Client {client.Id} HIGH QUEUE BACKPRESSURE: {_messageManager._messageHighQueue.Reader.Count} messages积压");
+                        _logger.LogCritical($"Client {client.Id} HIGH QUEUE BACKPRESSURE: {_InmessageManager._messageHighQueue.Reader.Count} messages积压");
                         await ImplementBackpressure(client, TimeSpan.FromMilliseconds(200)); // 高优先级暂停200ms
                     }
                     break;

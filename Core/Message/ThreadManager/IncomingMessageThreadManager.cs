@@ -11,10 +11,10 @@ namespace Core.Message
     public class IncomingMessageThreadManager : DynamicThreadManagerBase<ClientMessage>
     {
         private readonly DataPriority _priority;
-        private readonly MessageManager _server; // 添加 _server 字段
+        private readonly InMessage _server; // 添加 _server 字段
 
         public IncomingMessageThreadManager(
-            MessageManager server, // 构造函数添加 server 参数
+            InMessage server, // 构造函数添加 server 参数
             Channel<ClientMessage> channel,
             ILogger logger,
             DataPriority priority,

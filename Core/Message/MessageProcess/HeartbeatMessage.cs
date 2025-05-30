@@ -2,17 +2,25 @@
 using Server.Core.Common;
 using Server.Core.Config;
 using Server.Utils;
+using System.Collections.Concurrent;
 
 namespace Core.Message
 {
-    partial class MessageManager
+    public class HeartbeatMessage
     {
+        private ILogger _logger;
+        private OutMessage _outMessage;
+        public HeartbeatMessage(ILogger logger, OutMessage outMessage)
+        {
+            _logger = logger;
+            _outMessage = outMessage;
+        }
         /// <summary>
         /// 处理客户端心跳消息（接收并返回ACK）
         /// </summary>
         /// <param name="client">客户端配置对象</param>
         /// <param name="data">心跳消息数据</param>
-        private async Task HandleHeartbeat(ClientConfig client, CommunicationData data)
+        public async Task HandleHeartbeat(ClientConfig client, CommunicationData data)
         {
             // 统计接收数据量
             long receivedSize = MemoryCalculator.CalculateObjectSize(data);
@@ -37,7 +45,7 @@ namespace Core.Message
             _logger.LogDebug($"Client {client.Id} sent heartbeat ACK (Size={sentSize} bytes)");
 
             // 发送心跳响应
-            await SendInfoDate(client, ack);
+            await _outMessage.SendInfoDate(client, ack);
             _logger.LogTrace($"Client {client.Id} heartbeat ACK sent successfully");
         }
 
