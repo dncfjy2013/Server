@@ -1,37 +1,35 @@
-﻿//using Server.Common.Extensions;
+﻿// 日志消息类 - 使用struct减少GC压力
+using Server.Logger.Common;
 
-//namespace Server.Logger.Common
-//{
-//    #region Log Message Structure
-//        public class LogMessage
-//        {
-//            public DateTime Timestamp { get; set; }       // 日志时间戳
-//            public LogLevel Level { get; set; }           // 日志级别
-//            public string Message { get; set; }           // 日志内容
-//            public int ThreadId { get; set; }             // 线程ID
-//            public string ThreadName { get; set; }        // 线程名称
-//            public Exception Exception { get; set; }      // 异常信息（可选）
+public readonly struct LogMessage
+{
+    public readonly DateTime Timestamp;
+    public readonly LogLevel Level;
+    public readonly ReadOnlyMemory<byte> Message;
+    public readonly int ThreadId;
+    public readonly string ThreadName;
+    public readonly Exception Exception;
+    public readonly IReadOnlyDictionary<string, object> Properties;
 
-//            // 构造函数
-//            public LogMessage(
-//                DateTime timestamp,
-//                LogLevel level,
-//                string message,
-//                int threadId,
-//                string threadName,
-//                Exception exception = null)
-//            {
-//                Timestamp = timestamp;
-//                Level = level;
-//                Message = message;
-//                ThreadId = threadId;
-//                ThreadName = threadName;
-//                Exception = exception;
-//            }
+    public LogMessage(DateTime timestamp, LogLevel level, ReadOnlyMemory<byte> message, int threadId, string threadName,
+        Exception exception = null, IReadOnlyDictionary<string, object> properties = null)
+    {
+        Timestamp = timestamp;
+        Level = level;
+        Message = message;
+        ThreadId = threadId;
+        ThreadName = threadName;
+        Exception = exception;
+        Properties = properties;
+    }
+}
 
-//            // 可选：将日志级别转换为字符串（如"ERROR"/"INFO"）
-//            public string LevelMessage => Level.ToString().ToUpperInvariant();
-//        }
-    
-//    #endregion
-//}
+// 日志模板配置
+public sealed class LogTemplate
+{
+    public string Name { get; set; }
+    public string Template { get; set; }
+    public LogLevel Level { get; set; }
+    public bool IncludeException { get; set; }
+    public bool IncludeCallerInfo { get; set; }
+}
