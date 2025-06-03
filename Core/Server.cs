@@ -37,9 +37,9 @@ namespace Server.Core
         private OutMessage _outMessageManager;
         private TcpServiceInstance _tcpServiceInstance;
         private UdpServiceInstance _udpServiceInstance;
-        public HttpServiceInstance _HttpServiceInstance;
+        public HttpServiceManager _HttpServiceInstance;
 
-        public ServerInstance(int port, int sslPort, int udpport, string host, X509Certificate2 certf = null)
+        public ServerInstance(int port, int sslPort, int udpport, List<string> host, X509Certificate2 certf = null)
         {
             _logger = LoggerInstance.Instance;
             
@@ -54,7 +54,7 @@ namespace Server.Core
                 _InmessageManager = new InMessage(_clients, _logger, _outMessageManager);
                 _tcpServiceInstance = new TcpServiceInstance(port, sslPort, certf, ref _isRunning, _logger, _ClientConnectionManager, _InmessageManager, _outMessageManager, ref _nextClientId, ref _connectSocket, ref _connectSSL, _clients, _historyclients);
                 _udpServiceInstance = new UdpServiceInstance(ref _isRunning, _logger, udpport, ref _nextClientId, _ClientConnectionManager);
-                _HttpServiceInstance = new HttpServiceInstance(_logger, ref _isRunning, host, ref _nextClientId, _ClientConnectionManager);
+                _HttpServiceInstance = new HttpServiceManager(_logger, ref _nextClientId, host, _ClientConnectionManager);
 
                 // Information 等级：记录开始初始化流量监控器的操作
                 _logger.LogInformation("Starting the initialization of the traffic monitor.");
@@ -134,7 +134,7 @@ namespace Server.Core
 
                 _tcpServiceInstance.Start();
                 _udpServiceInstance.Start();
-                _HttpServiceInstance.Start();
+                _HttpServiceInstance.StartAll();
             }
             catch (Exception ex)
             {
@@ -154,7 +154,7 @@ namespace Server.Core
 
                 _tcpServiceInstance.Stop();
                 _udpServiceInstance.Stop();
-                _HttpServiceInstance.Stop();
+                _HttpServiceInstance.StopAll();
 
                 _logger.LogDebug("Disposing of the client state Manager.");
                 _ClientConnectionManager.Dispose();
