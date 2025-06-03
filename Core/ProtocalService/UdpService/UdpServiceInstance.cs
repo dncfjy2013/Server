@@ -26,14 +26,16 @@ namespace Core.ProtocalService.UdpService
         private readonly CancellationTokenSource _cancellationTokenSource = new();
         private readonly Timer _cleanupTimer;
         private readonly int _maxConnections;
+        private readonly ConnectionManager _connectionManager;
 
         private UdpClient? _udpListener;
         private uint _nextClientId;
         private bool _isDisposed;
 
-        public UdpServiceInstance(ILogger logger, int udpPort, ref uint nextClientId, byte[]? masterKey = null)
+        public UdpServiceInstance(ILogger logger, int udpPort, ref uint nextClientId, ConnectionManager connectionManager, byte[]? masterKey = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _connectionManager = connectionManager;
             _udpPort = udpPort;
             _nextClientId = nextClientId;
             _maxConnections = 100;

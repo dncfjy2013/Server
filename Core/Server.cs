@@ -53,7 +53,7 @@ namespace Server.Core
                 _outMessageManager = new OutMessage(_logger, _clients);
                 _InmessageManager = new InMessage(_clients, _logger, _outMessageManager);
                 _tcpServiceInstance = new TcpServiceInstance(port, sslPort, certf, ref _isRunning, _logger, _ClientConnectionManager, _InmessageManager, _outMessageManager, ref _nextClientId, ref _connectSocket, ref _connectSSL, _clients, _historyclients);
-                _udpServiceInstance = new UdpServiceInstance(ref _isRunning, _logger, udpport, ref _nextClientId, _ClientConnectionManager);
+                _udpServiceInstance = new UdpServiceInstance(_logger, udpport, ref _nextClientId, _ClientConnectionManager);
                 _HttpServiceInstance = new HttpServiceManager(_logger, ref _nextClientId, host, _ClientConnectionManager);
 
                 // Information 等级：记录开始初始化流量监控器的操作
