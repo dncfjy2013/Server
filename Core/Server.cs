@@ -129,7 +129,7 @@ namespace Server.Core
                     _logger.LogTrace("Incoming Message processing has been successfully started.");
                 }
                 _logger.LogTrace("Commencing Outcoming message processing.");
-                _InmessageManager.Start();
+                _outMessageManager.Start();
                 _logger.LogTrace("Outcoming Message processing has been successfully started.");
 
                 _tcpServiceInstance.Start();

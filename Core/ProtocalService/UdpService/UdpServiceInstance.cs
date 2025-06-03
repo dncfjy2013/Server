@@ -19,14 +19,14 @@ namespace Core.ProtocalService.UdpService
     {
         private readonly ILogger _logger;                  // 日志记录器，用于记录服务运行状态和异常
         private readonly int _udpPort;                     // UDP服务监听的端口号
-        private readonly ConcurrentDictionary<uint, ClientEncryptionContext> _clientContexts;
+        private readonly ConcurrentDictionary<uint, ClientEncryptionContext> _clientContexts = new ConcurrentDictionary<uint, ClientEncryptionContext>();
         // 存储客户端上下文的并发字典，键为客户端ID
         private readonly SemaphoreSlim _connectionSemaphore;
         // 连接信号量，限制最大并发连接数
         private readonly Dictionary<EncryptionProtocol, Func<byte[], IEncryptionService>> _encryptionFactories;
         // 加密协议工厂字典，根据协议类型创建加密服务实例
         private readonly byte[] _masterKey;                // 主加密密钥，用于生成客户端加密密钥
-        private readonly CancellationTokenSource _cancellationTokenSource;
+        private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
         // 用于取消异步操作的令牌源
         private readonly Timer _cleanupTimer;              // 清理过期客户端上下文的定时器
         private readonly int _maxConnections;              // 最大允许的客户端连接数
