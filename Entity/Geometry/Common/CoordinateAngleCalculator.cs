@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
-namespace Entity.Geometry
+namespace Entity.Geometry.Common
 {
     public class Coordinate2DAngel()
     {
@@ -59,12 +59,12 @@ namespace Entity.Geometry
             {
                 double yX = p.X - cX;
                 double tX = sumX + yX;
-                cX = (tX - sumX) - yX;
+                cX = tX - sumX - yX;
                 sumX = tX;
 
                 double yY = p.Y - cY;
                 double tY = sumY + yY;
-                cY = (tY - sumY) - yY;
+                cY = tY - sumY - yY;
                 sumY = tY;
             }
 
@@ -176,19 +176,19 @@ namespace Entity.Geometry
                 // X轴累加
                 double yX = p.X - cX;
                 double tX = sumX + yX;
-                cX = (tX - sumX) - yX;
+                cX = tX - sumX - yX;
                 sumX = tX;
 
                 // Y轴累加
                 double yY = p.Y - cY;
                 double tY = sumY + yY;
-                cY = (tY - sumY) - yY;
+                cY = tY - sumY - yY;
                 sumY = tY;
 
                 // Z轴累加
                 double yZ = p.Z - cZ;
                 double tZ = sumZ + yZ;
-                cZ = (tZ - sumZ) - yZ;
+                cZ = tZ - sumZ - yZ;
                 sumZ = tZ;
             }
 
@@ -612,12 +612,12 @@ namespace Entity.Geometry
             {
                 double yX = p.X - cX;
                 double tX = sumX + yX;
-                cX = (tX - sumX) - yX;
+                cX = tX - sumX - yX;
                 sumX = tX;
 
                 double yY = p.Y - cY;
                 double tY = sumY + yY;
-                cY = (tY - sumY) - yY;
+                cY = tY - sumY - yY;
                 sumY = tY;
             }
 

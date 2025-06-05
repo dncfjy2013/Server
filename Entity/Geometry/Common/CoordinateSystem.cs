@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Numerics;
 
-namespace Entity.Geometry
+namespace Entity.Geometry.Common
 {
     /// <summary>
     /// 表示三维空间中的自定义坐标系，支持坐标转换、旋转、平移等几何操作
@@ -406,7 +406,7 @@ namespace Entity.Geometry
         /// </summary>
         /// <param name="localDirection">局部方向向量</param>
         /// <returns>世界方向向量</returns>
-        private Vector3 LocalToWorldDirection(Vector3 localDirection)
+        public Vector3 LocalToWorldDirection(Vector3 localDirection)
         {
             return Vector3.TransformNormal(localDirection, _rotationMatrix);
         }
@@ -416,7 +416,7 @@ namespace Entity.Geometry
         /// </summary>
         /// <param name="worldDirection">世界方向向量</param>
         /// <returns>局部方向向量</returns>
-        private Vector3 WorldToLocalDirection(Vector3 worldDirection)
+        public Vector3 WorldToLocalDirection(Vector3 worldDirection)
         {
             if (Matrix4x4.Invert(_rotationMatrix, out var invRotation))
                 return Vector3.TransformNormal(worldDirection, invRotation);
