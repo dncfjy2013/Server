@@ -259,68 +259,6 @@ namespace Entity.Geometry
         }
 
         /// <summary>
-        /// 判断线段与球是否相交
-        /// </summary>
-        /// <param name="sphere">球</param>
-        /// <param name="intersectionPoints">交点数组（最多两个）</param>
-        /// <param name="tolerance">容差值（默认0.0001）</param>
-        /// <returns>相交返回true，否则false</returns>
-        public bool IntersectsSphere(Sphere sphere, out Vector3[] intersectionPoints, float tolerance = 0.0001f)
-        {
-            intersectionPoints = Array.Empty<Vector3>();
-
-            // 将球转换到当前坐标系
-            Sphere sphereInThisSystem = sphere.ToCoordinateSystem(_coordinateSystem);
-
-            Vector3 center = sphereInThisSystem.Center;
-            float radius = sphereInThisSystem.Radius;
-
-            Vector3 d = _endPoint - _startPoint;
-            Vector3 m = _startPoint - center;
-
-            float a = Vector3.Dot(d, d);
-            float b = 2 * Vector3.Dot(m, d);
-            float c = Vector3.Dot(m, m) - radius * radius;
-
-            // 计算判别式
-            float discriminant = b * b - 4 * a * c;
-
-            // 无交点
-            if (discriminant < 0)
-                return false;
-
-            // 计算交点参数
-            float sqrtDiscriminant = MathF.Sqrt(discriminant);
-            float t1 = (-b + sqrtDiscriminant) / (2 * a);
-            float t2 = (-b - sqrtDiscriminant) / (2 * a);
-
-            // 检查参数是否在[0,1]范围内
-            bool hasT1 = t1 >= -tolerance && t1 <= 1 + tolerance;
-            bool hasT2 = t2 >= -tolerance && t2 <= 1 + tolerance;
-
-            if (hasT1 && hasT2)
-            {
-                intersectionPoints = new Vector3[2] {
-                    _startPoint + t1 * d,
-                    _startPoint + t2 * d
-                };
-                return true;
-            }
-            else if (hasT1)
-            {
-                intersectionPoints = new Vector3[1] { _startPoint + t1 * d };
-                return true;
-            }
-            else if (hasT2)
-            {
-                intersectionPoints = new Vector3[1] { _startPoint + t2 * d };
-                return true;
-            }
-
-            return false;
-        }
-
-        /// <summary>
         /// 将线段转换到世界坐标系下
         /// </summary>
         /// <returns>世界坐标系下的线段</returns>
