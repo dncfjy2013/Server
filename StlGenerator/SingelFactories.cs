@@ -1,6 +1,7 @@
 ﻿using OpenTK.Mathematics;
 using StlGenerator.Core;
 using StlGenerator.Models;
+using StlGenerator.Processing;
 using StlGenerator.Rendering;
 using StlGenerator.Shapes;
 using StlGenerator.Shapes.MatrixGenerator;
@@ -30,6 +31,12 @@ namespace StlGenerator
 
             CuboidMatrix = 0x00FF,
             SphereMatrix = 0x01FF,
+        }
+
+        public enum CombinedShapeType
+        {
+            House,
+            Car,
         }
 
         /// <summary>
@@ -73,10 +80,10 @@ namespace StlGenerator
                     throw new ArgumentException("创建Cone需要半径和高度参数");
 
                 case ShapeType.Pyramid:
-                    if (parameters.Length >= 3 && parameters[0] is float PyramidbaseWidth &&
-                        parameters[1] is float PyramidbaseLength && parameters[2] is float Pyramidheight)
+                    if (parameters.Length >= 3 && parameters[0] is float PyramidbaseLength &&
+                        parameters[1] is float PyramidbaseWidth && parameters[2] is float Pyramidheight)
                     {
-                        return new PyramidGenerator(PyramidbaseWidth, PyramidbaseLength, Pyramidheight);
+                        return new PyramidGenerator(PyramidbaseLength, PyramidbaseWidth, Pyramidheight);
                     }
                     throw new ArgumentException("创建Pyramid需要底面宽度、底面长度和高度参数");
 
@@ -129,6 +136,59 @@ namespace StlGenerator
 
                 default:
                     throw new ArgumentException($"未知的形状类型: {shapeType}");
+            }
+        }
+
+        /// <summary>
+        /// 创建预定义的组合形状
+        /// </summary>
+        public static Model CreateCombinedShape(CombinedShapeType shapeType, params object[] parameters)
+        {
+            ModelMerger merger = new ModelMerger();
+
+            switch (shapeType)
+            {
+                case CombinedShapeType.House:
+                    float houseLength = parameters.Length > 0 ? (float)parameters[0] : 3.0f;
+                    float houseWidth = parameters.Length > 1 ? (float)parameters[1] : 2.0f;
+                    float houseHeight = parameters.Length > 2 ? (float)parameters[2] : 1.5f;
+                    float roofHeight = parameters.Length > 3 ? (float)parameters[3] : 1.0f;
+
+                    // 创建房子主体（Y轴为高度方向）
+                    Model baseModel = CreateGenerator(
+                        ShapeType.Cuboid,
+                        houseLength,  // X方向
+                        houseHeight,  // Y方向（高度）
+                        houseWidth    // Z方向
+                    ).GenerateModel();
+
+                    // 创建屋顶（Y轴为高度方向）
+                    Model roofModel = CreateGenerator(
+                        ShapeType.Pyramid,
+                        houseLength,  // X方向
+                        houseWidth,   // Z方向
+                        roofHeight    // Y方向（高度）
+                    ).GenerateModel();
+
+                    merger.AddModel(baseModel, Vector3.Zero, Quaternion.Identity, Vector3.One);
+
+                    // 正确放置屋顶（Y轴方向）
+                    merger.AddModel(
+                        roofModel,
+                        new Vector3(0, houseHeight, 0),  // 屋顶底部与主体顶部对齐
+                        Quaternion.Identity,
+                        Vector3.One
+                    );
+
+                    return merger.Merge();
+
+
+                case CombinedShapeType.Car:
+                    // 实现汽车组合形状...
+                    throw new NotImplementedException("汽车形状尚未实现");
+
+                default:
+                    throw new ArgumentException($"未知的组合形状类型: {shapeType}");
             }
         }
 

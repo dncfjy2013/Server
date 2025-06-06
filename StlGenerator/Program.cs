@@ -5,6 +5,24 @@ using System;
 using StlGenerator.Models;
 using System.Xml;
 using StlGenerator.Parsers;
+using StlGenerator;
+
+// 使用组合形状工厂方法创建房子
+Model houseModel = ShapeGeneratorFactory.CreateCombinedShape(
+    ShapeGeneratorFactory.CombinedShapeType.House,
+    3.0f,  // 房子长度
+    2.0f,  // 房子宽度
+    1.5f,  // 房子高度
+    1.0f   // 屋顶高度
+);
+
+StlFileWriter.SaveModelToStl(houseModel, "factory_house.stl", true);
+
+using (StlViewer viewer = new StlViewer(houseModel))
+{
+    viewer.Title = "工厂生成的房子模型";
+    viewer.Run();
+}
 
 namespace StlGenerator
 {

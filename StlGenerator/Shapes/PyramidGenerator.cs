@@ -17,7 +17,7 @@ namespace StlGenerator.Shapes
         private readonly float _baseLength;
         private readonly float _height;
 
-        public PyramidGenerator(float baseWidth, float baseLength, float height)
+        public PyramidGenerator(float baseLength, float baseWidth, float height)
         {
             _baseWidth = baseWidth;
             _baseLength = baseLength;
@@ -28,29 +28,28 @@ namespace StlGenerator.Shapes
 
         protected override void GenerateShapeGeometry()
         {
-            float halfWidth = _baseWidth / 2;
-            float halfLength = _baseLength / 2;
+            // 定义底面四个顶点（中心在原点，Y=0）
+            Vector3 v0 = new Vector3(-_baseLength / 2, 0, -_baseWidth / 2);  // 左下
+            Vector3 v1 = new Vector3(_baseLength / 2, 0, -_baseWidth / 2);   // 右下
+            Vector3 v2 = new Vector3(_baseLength / 2, 0, _baseWidth / 2);    // 右上
+            Vector3 v3 = new Vector3(-_baseLength / 2, 0, _baseWidth / 2);   // 左上
 
-            // 定义底面四个顶点
-            Vector3 v0 = new Vector3(-halfWidth, -halfLength, 0);
-            Vector3 v1 = new Vector3(halfWidth, -halfLength, 0);
-            Vector3 v2 = new Vector3(halfWidth, halfLength, 0);
-            Vector3 v3 = new Vector3(-halfWidth, halfLength, 0);
+            // 定义顶点（Y轴正方向为高度）
+            Vector3 apex = new Vector3(0, _height, 0);
 
-            // 定义顶点
-            Vector3 apex = new Vector3(0, 0, _height);
+            // 生成底面（Y轴负方向为法线）
+            Vector3 baseNormal = -Vector3.UnitY;
 
-            // 生成底面
-            Vector3 baseNormal = new Vector3(0, 0, -1);
             Color4 baseColor = GenerateColorBasedOnNormal(baseNormal);
+
             AddTriangle(baseNormal, v0, v1, v2, baseColor);
             AddTriangle(baseNormal, v0, v2, v3, baseColor);
 
             // 生成四个侧面
-            GenerateSide(v0, v1, apex);
-            GenerateSide(v1, v2, apex);
-            GenerateSide(v2, v3, apex);
-            GenerateSide(v3, v0, apex);
+            AddTriangle(Vector3.Normalize(Vector3.Cross(v1 - apex, v0 - apex)), apex, v1, v0, baseColor);
+            AddTriangle(Vector3.Normalize(Vector3.Cross(v2 - apex, v1 - apex)), apex, v2, v1, baseColor);
+            AddTriangle(Vector3.Normalize(Vector3.Cross(v3 - apex, v2 - apex)), apex, v3, v2, baseColor);
+            AddTriangle(Vector3.Normalize(Vector3.Cross(v0 - apex, v3 - apex)), apex, v0, v3, baseColor);
         }
 
         private void GenerateSide(Vector3 v1, Vector3 v2, Vector3 apex)
