@@ -26,6 +26,7 @@ namespace StlGenerator
             Pyramid = 0x0004,
             Ellipse = 0x0005,
             Prism = 0x0006,  // 新增多棱柱形状
+            PolyPyramid = 0x0007, // 新增多棱锥形状
 
             CuboidMatrix = 0x00FF,
             SphereMatrix = 0x01FF,
@@ -96,6 +97,15 @@ namespace StlGenerator
                     }
                     throw new ArgumentException("创建Prism需要边数、底面半径和高度参数");
 
+                case ShapeType.PolyPyramid:
+                    if (parameters.Length >= 3 && parameters[0] is int PolyPyramidsides &&
+                        parameters[1] is float PolyPyramidradius && parameters[2] is float PolyPyramidheight)
+                    {
+                        return new PolyPyramidGenerator(PolyPyramidsides, PolyPyramidradius, PolyPyramidheight);
+                    }
+                    throw new ArgumentException("创建PolyPyramid需要边数、底面半径和高度参数");
+
+
                 case ShapeType.CuboidMatrix:
                     if (parameters.Length >= 5 && parameters[0] is int CuboidMatrixrows &&
                         parameters[1] is int CuboidMatrixcolumns && parameters[2] is float CuboidMatrixlength &&
@@ -160,6 +170,8 @@ namespace StlGenerator
                     return "多棱柱";
                 case ShapeType.SphereMatrix:
                     return "球体矩阵";
+                case ShapeType.PolyPyramid:
+                    return "多棱锥";
                 default:
                     return "未知形状";
             }
@@ -190,6 +202,8 @@ namespace StlGenerator
                     return "边数, 底面半径, 高度";
                 case ShapeType.SphereMatrix:
                     return "行数, 列数, 半径, [间距], [切片数], [堆叠数]";
+                case ShapeType.PolyPyramid:
+                    return "边数, 底面半径, 高度";
                 default:
                     return "未知参数";
             }

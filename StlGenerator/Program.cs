@@ -86,7 +86,8 @@ namespace StlGenerator
             Console.WriteLine("4. 圆锥体");
             Console.WriteLine("5. 金字塔");
             Console.WriteLine("6. 椭圆");
-            Console.WriteLine("7. 多棱柱");
+            Console.WriteLine("7. 多棱柱"); 
+            Console.WriteLine("8. 多棱锥");  // 新增多棱锥选项
 
             Console.WriteLine("100. 长方体矩阵");
             Console.WriteLine("101. 球体矩阵");
@@ -102,6 +103,8 @@ namespace StlGenerator
                 5 => ShapeGeneratorFactory.ShapeType.Pyramid,
                 6 => ShapeGeneratorFactory.ShapeType.Ellipse,
                 7 => ShapeGeneratorFactory.ShapeType.Prism,
+                8 => ShapeGeneratorFactory.ShapeType.PolyPyramid,
+
                 100 => ShapeGeneratorFactory.ShapeType.CuboidMatrix,
                 101 => ShapeGeneratorFactory.ShapeType.SphereMatrix,
                 _ => throw new ArgumentException("无效的形状选择")
