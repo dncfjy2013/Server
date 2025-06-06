@@ -3,6 +3,7 @@ using StlGenerator.Core;
 using StlGenerator.Models;
 using StlGenerator.Rendering;
 using StlGenerator.Shapes;
+using StlGenerator.Shapes.MatrixGenerator;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,14 +19,16 @@ namespace StlGenerator
     {
         public enum ShapeType
         {
-            Cuboid,
-            CuboidMatrix,
-            Sphere,
-            Cylinder,
-            Cone,
-            Pyramid,
-            Ellipse,
-            Prism  // 新增多棱柱形状
+            Cuboid = 0x0000,
+            Sphere = 0x0001,
+            Cylinder = 0x0002,
+            Cone = 0x0003,
+            Pyramid = 0x0004,
+            Ellipse = 0x0005,
+            Prism = 0x0006,  // 新增多棱柱形状
+
+            CuboidMatrix = 0x00FF,
+            SphereMatrix = 0x01FF,
         }
 
         /// <summary>
@@ -36,72 +39,83 @@ namespace StlGenerator
             switch (shapeType)
             {
                 case ShapeType.Cuboid:
-                    if (parameters.Length >= 3 && parameters[0] is float length &&
-                        parameters[1] is float width && parameters[2] is float height)
+                    if (parameters.Length >= 3 && parameters[0] is float Cuboidlength &&
+                        parameters[1] is float Cuboidwidth && parameters[2] is float Cuboidheight)
                     {
-                        return new CuboidGenerator(length, width, height);
+                        return new CuboidGenerator(Cuboidlength, Cuboidwidth, Cuboidheight);
                     }
                     throw new ArgumentException("创建Cuboid需要长度、宽度和高度参数");
 
-                case ShapeType.CuboidMatrix:
-                    if (parameters.Length >= 5 && parameters[0] is int rows &&
-                        parameters[1] is int columns && parameters[2] is float length1 &&
-                        parameters[3] is float width1 && parameters[4] is float height1)
-                    {
-                        float spacing = parameters.Length > 5 && parameters[5] is float ? (float)parameters[5] : 0.1f;
-                        return new CuboidMatrixGenerator(rows, columns, length1, width1, height1, spacing);
-                    }
-                    throw new ArgumentException("创建CuboidMatrix需要行数、列数、长度、宽度和高度参数");
-
                 case ShapeType.Sphere:
-                    if (parameters.Length >= 1 && parameters[0] is float radius)
+                    if (parameters.Length >= 1 && parameters[0] is float Sphereradius)
                     {
-                        int slices = parameters.Length > 1 && parameters[1] is int ? (int)parameters[1] : 32;
-                        int stacks = parameters.Length > 2 && parameters[2] is int ? (int)parameters[2] : 16;
-                        return new SphereGenerator(radius, slices, stacks);
+                        int Sphereslices = parameters.Length > 1 && parameters[1] is int ? (int)parameters[1] : 32;
+                        int Spherestacks = parameters.Length > 2 && parameters[2] is int ? (int)parameters[2] : 16;
+                        return new SphereGenerator(Sphereradius, Sphereslices, Spherestacks);
                     }
                     throw new ArgumentException("创建Sphere需要半径参数");
 
                 case ShapeType.Cylinder:
-                    if (parameters.Length >= 2 && parameters[0] is float radius1 && parameters[1] is float height2)
+                    if (parameters.Length >= 2 && parameters[0] is float Cylinderradius && parameters[1] is float Cylinderheight)
                     {
-                        int sides = parameters.Length > 2 && parameters[2] is int ? (int)parameters[2] : 32;
-                        return new CylinderGenerator(radius1, height2, sides);
+                        int Cylindersides = parameters.Length > 2 && parameters[2] is int ? (int)parameters[2] : 32;
+                        return new CylinderGenerator(Cylinderradius, Cylinderheight, Cylindersides);
                     }
                     throw new ArgumentException("创建Cylinder需要半径和高度参数");
 
                 case ShapeType.Cone:
-                    if (parameters.Length >= 2 && parameters[0] is float radius2 && parameters[1] is float height3)
+                    if (parameters.Length >= 2 && parameters[0] is float Coneradius && parameters[1] is float Coneheight)
                     {
-                        int sides1 = parameters.Length > 2 && parameters[2] is int ? (int)parameters[2] : 32;
-                        return new ConeGenerator(radius2, height3, sides1);
+                        int Conesides = parameters.Length > 2 && parameters[2] is int ? (int)parameters[2] : 32;
+                        return new ConeGenerator(Coneradius, Coneheight, Conesides);
                     }
                     throw new ArgumentException("创建Cone需要半径和高度参数");
 
                 case ShapeType.Pyramid:
-                    if (parameters.Length >= 3 && parameters[0] is float baseWidth &&
-                        parameters[1] is float baseLength && parameters[2] is float height4)
+                    if (parameters.Length >= 3 && parameters[0] is float PyramidbaseWidth &&
+                        parameters[1] is float PyramidbaseLength && parameters[2] is float Pyramidheight)
                     {
-                        return new PyramidGenerator((float)parameters[0], (float)parameters[1], (float)parameters[2]);
+                        return new PyramidGenerator(PyramidbaseWidth, PyramidbaseLength, Pyramidheight);
                     }
                     throw new ArgumentException("创建Pyramid需要底面宽度、底面长度和高度参数");
 
                 case ShapeType.Ellipse:
-                    if (parameters.Length >= 2 && parameters[0] is float radiusX && parameters[1] is float radiusY)
+                    if (parameters.Length >= 2 && parameters[0] is float EllipseradiusX && parameters[1] is float EllipseradiusY)
                     {
-                        float thickness = parameters.Length > 2 && parameters[2] is float ? (float)parameters[2] : 0.1f;
-                        int segments = parameters.Length > 3 && parameters[3] is int ? (int)parameters[3] : 32;
-                        return new EllipseGenerator(radiusX, radiusY, thickness, segments);
+                        float Ellipsethickness = parameters.Length > 2 && parameters[2] is float ? (float)parameters[2] : 0.1f;
+                        int Ellipsesegments = parameters.Length > 3 && parameters[3] is int ? (int)parameters[3] : 32;
+                        return new EllipseGenerator(EllipseradiusX, EllipseradiusY, Ellipsethickness, Ellipsesegments);
                     }
                     throw new ArgumentException("创建Ellipse需要X半径和Y半径参数");
 
                 case ShapeType.Prism:
-                    if (parameters.Length >= 3 && parameters[0] is int sides2 &&
-                        parameters[1] is float radius3 && parameters[2] is float height5)
+                    if (parameters.Length >= 3 && parameters[0] is int Prismsides &&
+                        parameters[1] is float Prismradius && parameters[2] is float Prismheight)
                     {
-                        return new PrismGenerator(sides2, radius3, height5);
+                        return new PrismGenerator(Prismsides, Prismradius, Prismheight);
                     }
                     throw new ArgumentException("创建Prism需要边数、底面半径和高度参数");
+
+                case ShapeType.CuboidMatrix:
+                    if (parameters.Length >= 5 && parameters[0] is int CuboidMatrixrows &&
+                        parameters[1] is int CuboidMatrixcolumns && parameters[2] is float CuboidMatrixlength &&
+                        parameters[3] is float CuboidMatrixwidth && parameters[4] is float CuboidMatrixheight)
+                    {
+                        float CuboidMatrixspacing = parameters.Length > 5 && parameters[5] is float ? (float)parameters[5] : 0.1f;
+                        return new CuboidMatrixGenerator(CuboidMatrixrows, CuboidMatrixcolumns, CuboidMatrixlength, CuboidMatrixwidth, CuboidMatrixheight, CuboidMatrixspacing);
+                    }
+                    throw new ArgumentException("创建CuboidMatrix需要行数、列数、长度、宽度和高度参数");
+
+                case ShapeType.SphereMatrix:
+                    if (parameters.Length >= 3 && parameters[0] is int SphereMatrixrows &&
+                        parameters[1] is int SphereMatrixcolumns && parameters[2] is float SphereMatrixradius)
+                    {
+                        float SphereMatrixspacing = parameters.Length > 3 && parameters[3] is float ? (float)parameters[3] : 0.1f;
+                        int SphereMatrixslices = parameters.Length > 4 && parameters[4] is int ? (int)parameters[4] : 32;
+                        int SphereMatrixstacks = parameters.Length > 5 && parameters[5] is int ? (int)parameters[5] : 16;
+                        return new SphereMatrixGenerator(SphereMatrixrows, SphereMatrixcolumns, SphereMatrixradius, SphereMatrixspacing, SphereMatrixslices, SphereMatrixstacks);
+                    }
+                    throw new ArgumentException("创建SphereMatrix需要行数、列数和半径参数");
 
                 default:
                     throw new ArgumentException($"未知的形状类型: {shapeType}");
@@ -144,6 +158,8 @@ namespace StlGenerator
                     return "椭圆";
                 case ShapeType.Prism:
                     return "多棱柱";
+                case ShapeType.SphereMatrix:
+                    return "球体矩阵";
                 default:
                     return "未知形状";
             }
@@ -172,6 +188,8 @@ namespace StlGenerator
                     return "X半径, Y半径, [厚度], [分段数]";
                 case ShapeType.Prism:
                     return "边数, 底面半径, 高度";
+                case ShapeType.SphereMatrix:
+                    return "行数, 列数, 半径, [间距], [切片数], [堆叠数]";
                 default:
                     return "未知参数";
             }

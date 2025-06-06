@@ -78,18 +78,34 @@ namespace StlGenerator
             int operation = int.Parse(Console.ReadLine());
 
             // 选择形状类型
+            // 交互式菜单选择形状类型
             Console.WriteLine("请选择形状类型:");
             Console.WriteLine("1. 长方体");
-            Console.WriteLine("2. 长方体矩阵");
-            Console.WriteLine("3. 球体");
-            Console.WriteLine("4. 圆柱体");
-            Console.WriteLine("5. 圆锥体");
-            Console.WriteLine("6. 金字塔");
-            Console.WriteLine("7. 椭圆");  // 新增椭圆选项
-                Console.WriteLine("8. 多棱柱");  // 新增多棱柱选项
+            Console.WriteLine("2. 球体");
+            Console.WriteLine("3. 圆柱体");
+            Console.WriteLine("4. 圆锥体");
+            Console.WriteLine("5. 金字塔");
+            Console.WriteLine("6. 椭圆");
+            Console.WriteLine("7. 多棱柱");
+
+            Console.WriteLine("100. 长方体矩阵");
+            Console.WriteLine("101. 球体矩阵");
             int shapeChoice = int.Parse(Console.ReadLine());
 
-            ShapeGeneratorFactory.ShapeType shapeType = (ShapeGeneratorFactory.ShapeType)(shapeChoice - 1);
+            // 根据用户选择映射到正确的枚举值
+            ShapeGeneratorFactory.ShapeType shapeType = shapeChoice switch
+            {
+                1 => ShapeGeneratorFactory.ShapeType.Cuboid,
+                2 => ShapeGeneratorFactory.ShapeType.Sphere,
+                3 => ShapeGeneratorFactory.ShapeType.Cylinder,
+                4 => ShapeGeneratorFactory.ShapeType.Cone,
+                5 => ShapeGeneratorFactory.ShapeType.Pyramid,
+                6 => ShapeGeneratorFactory.ShapeType.Ellipse,
+                7 => ShapeGeneratorFactory.ShapeType.Prism,
+                100 => ShapeGeneratorFactory.ShapeType.CuboidMatrix,
+                101 => ShapeGeneratorFactory.ShapeType.SphereMatrix,
+                _ => throw new ArgumentException("无效的形状选择")
+            };
 
             try
             {
