@@ -2,20 +2,17 @@
 using StlGenerator.Core;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace StlGenerator.Shapes
 {
     /// <summary>
-    /// 多棱柱生成器
+    /// 多棱柱生成器（Y轴向上，右手坐标系）
     /// </summary>
     public class PrismGenerator : ShapeGenerator
     {
-        private readonly int _sides;
-        private readonly float _radius;
-        private readonly float _height;
+        private readonly int _sides;        // 底面边数
+        private readonly float _radius;     // 底面半径
+        private readonly float _height;     // Y轴方向高度
 
         public PrismGenerator(int sides, float radius, float height)
         {
@@ -31,41 +28,66 @@ namespace StlGenerator.Shapes
 
         protected override void GenerateShapeGeometry()
         {
-            // 生成底面和顶面
-            GenerateFace(-Vector3.UnitZ, 0);  // 底面
-            GenerateFace(Vector3.UnitZ, _height);  // 顶面
-
-            // 生成侧面
-            GenerateSides();
+            GenerateBottomFace();   // 生成底面（Y=0平面）
+            GenerateTopFace();      // 生成顶面（Y=height平面）
+            GenerateSideFaces();    // 生成侧面
         }
 
-        private void GenerateFace(Vector3 normal, float zOffset)
+        private void GenerateBottomFace()
         {
+            // 底面位于Y=0平面，法向量朝Y轴负方向
+            Vector3 normal = -Vector3.UnitY;
             Color4 color = GenerateColorBasedOnNormal(normal);
 
-            // 计算多边形顶点
+            // 计算底面多边形顶点（XZ平面上的正多边形）
+            Vector3[] vertices = new Vector3[_sides];
+            for (int i = 0; i < _sides; i++)
+            {
+                float angle = i * 2 * MathHelper.Pi / _sides;
+                vertices[i] = new Vector3(
+                    _radius * (float)Math.Cos(angle),  // X坐标
+                    0,                                 // Y坐标（底面在Y=0）
+                    _radius * (float)Math.Sin(angle)   // Z坐标
+                );
+            }
+
+            // 生成底面扇形三角形（中心-顶点i-顶点i+1）
+            for (int i = 0; i < _sides; i++)
+            {
+                int nextIndex = (i + 1) % _sides;
+                AddTriangle(normal, Vector3.Zero, vertices[i], vertices[nextIndex], color);
+            }
+        }
+
+        private void GenerateTopFace()
+        {
+            // 顶面位于Y=height平面，法向量朝Y轴正方向
+            Vector3 normal = Vector3.UnitY;
+            Color4 color = GenerateColorBasedOnNormal(normal);
+
+            // 计算顶面多边形顶点（XZ平面上的正多边形，Y=height）
             Vector3[] vertices = new Vector3[_sides];
             for (int i = 0; i < _sides; i++)
             {
                 float angle = i * 2 * MathHelper.Pi / _sides;
                 vertices[i] = new Vector3(
                     _radius * (float)Math.Cos(angle),
-                    _radius * (float)Math.Sin(angle),
-                    zOffset
+                    _height,                           // Y坐标（顶面在Y=height）
+                    _radius * (float)Math.Sin(angle)
                 );
             }
 
-            // 生成扇形三角形
+            // 生成顶面扇形三角形（中心-顶点i-顶点i+1）
             for (int i = 0; i < _sides; i++)
             {
                 int nextIndex = (i + 1) % _sides;
-                AddTriangle(normal, Vector3.Zero + new Vector3(0, 0, zOffset), vertices[i], vertices[nextIndex], color);
+                AddTriangle(normal, new Vector3(0, _height, 0), vertices[i], vertices[nextIndex], color);
             }
         }
 
-        private void GenerateSides()
+        private void GenerateSideFaces()
         {
-            // 计算多边形顶点
+            // 计算底面和顶面的多边形顶点
             Vector3[] bottomVertices = new Vector3[_sides];
             Vector3[] topVertices = new Vector3[_sides];
 
@@ -74,11 +96,15 @@ namespace StlGenerator.Shapes
                 float angle = i * 2 * MathHelper.Pi / _sides;
                 bottomVertices[i] = new Vector3(
                     _radius * (float)Math.Cos(angle),
-                    _radius * (float)Math.Sin(angle),
-                    0
+                    0,
+                    _radius * (float)Math.Sin(angle)
                 );
 
-                topVertices[i] = bottomVertices[i] + new Vector3(0, 0, _height);
+                topVertices[i] = new Vector3(
+                    _radius * (float)Math.Cos(angle),
+                    _height,
+                    _radius * (float)Math.Sin(angle)
+                );
             }
 
             // 生成侧面
@@ -86,16 +112,19 @@ namespace StlGenerator.Shapes
             {
                 int nextIndex = (i + 1) % _sides;
 
-                // 计算侧面法向量
-                Vector3 v1 = bottomVertices[i];
-                Vector3 v2 = bottomVertices[nextIndex];
-                Vector3 normal = Vector3.Normalize(Vector3.Cross(v2 - v1, Vector3.UnitZ));
+                // 计算侧面法向量（径向向外，XZ平面方向）
+                float midAngle = (i * 2 * MathHelper.Pi / _sides + (i + 1) * 2 * MathHelper.Pi / _sides) / 2;
+                Vector3 normal = new Vector3(
+                    (float)Math.Cos(midAngle),  // X分量
+                    0,                          // Y分量（侧面法向量在XZ平面）
+                    (float)Math.Sin(midAngle)   // Z分量
+                ).Normalized();
 
                 Color4 color = GenerateColorBasedOnNormal(normal);
 
                 // 生成两个三角形组成侧面矩形
-                AddTriangle(normal, bottomVertices[i], bottomVertices[nextIndex], topVertices[nextIndex], color);
-                AddTriangle(normal, bottomVertices[i], topVertices[nextIndex], topVertices[i], color);
+                AddTriangle(normal, bottomVertices[i], topVertices[i], topVertices[nextIndex], color);
+                AddTriangle(normal, bottomVertices[i], topVertices[nextIndex], bottomVertices[nextIndex], color);
             }
         }
     }

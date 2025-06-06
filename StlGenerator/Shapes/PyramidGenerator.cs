@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 namespace StlGenerator.Shapes
 {
     /// <summary>
-    /// 金字塔生成器（四棱锥）
+    /// 金字塔生成器（四棱锥 Y轴向上，右手坐标系）
     /// </summary>
     public class PyramidGenerator : ShapeGenerator
     {
