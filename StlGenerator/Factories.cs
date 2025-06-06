@@ -23,7 +23,9 @@ namespace StlGenerator
             Sphere,
             Cylinder,
             Cone,
-            Pyramid
+            Pyramid,
+            Ellipse,
+            Prism  // 新增多棱柱形状
         }
 
         /// <summary>
@@ -71,8 +73,8 @@ namespace StlGenerator
                 case ShapeType.Cone:
                     if (parameters.Length >= 2 && parameters[0] is float radius2 && parameters[1] is float height3)
                     {
-                        int sides = parameters.Length > 2 && parameters[2] is int ? (int)parameters[2] : 32;
-                        return new ConeGenerator(radius2, height3, sides);
+                        int sides1 = parameters.Length > 2 && parameters[2] is int ? (int)parameters[2] : 32;
+                        return new ConeGenerator(radius2, height3, sides1);
                     }
                     throw new ArgumentException("创建Cone需要半径和高度参数");
 
@@ -83,6 +85,23 @@ namespace StlGenerator
                         return new PyramidGenerator((float)parameters[0], (float)parameters[1], (float)parameters[2]);
                     }
                     throw new ArgumentException("创建Pyramid需要底面宽度、底面长度和高度参数");
+
+                case ShapeType.Ellipse:
+                    if (parameters.Length >= 2 && parameters[0] is float radiusX && parameters[1] is float radiusY)
+                    {
+                        float thickness = parameters.Length > 2 && parameters[2] is float ? (float)parameters[2] : 0.1f;
+                        int segments = parameters.Length > 3 && parameters[3] is int ? (int)parameters[3] : 32;
+                        return new EllipseGenerator(radiusX, radiusY, thickness, segments);
+                    }
+                    throw new ArgumentException("创建Ellipse需要X半径和Y半径参数");
+
+                case ShapeType.Prism:
+                    if (parameters.Length >= 3 && parameters[0] is int sides2 &&
+                        parameters[1] is float radius3 && parameters[2] is float height5)
+                    {
+                        return new PrismGenerator(sides2, radius3, height5);
+                    }
+                    throw new ArgumentException("创建Prism需要边数、底面半径和高度参数");
 
                 default:
                     throw new ArgumentException($"未知的形状类型: {shapeType}");
@@ -121,6 +140,10 @@ namespace StlGenerator
                     return "圆锥体";
                 case ShapeType.Pyramid:
                     return "金字塔";
+                case ShapeType.Ellipse:
+                    return "椭圆";
+                case ShapeType.Prism:
+                    return "多棱柱";
                 default:
                     return "未知形状";
             }
@@ -145,6 +168,10 @@ namespace StlGenerator
                     return "半径, 高度, [边数]";
                 case ShapeType.Pyramid:
                     return "底面宽度, 底面长度, 高度";
+                case ShapeType.Ellipse:
+                    return "X半径, Y半径, [厚度], [分段数]";
+                case ShapeType.Prism:
+                    return "边数, 底面半径, 高度";
                 default:
                     return "未知参数";
             }

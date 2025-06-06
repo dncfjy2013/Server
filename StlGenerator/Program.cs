@@ -12,6 +12,7 @@ namespace StlGenerator
     {
         static void Main(string[] args)
         {
+            InteractiveMain();
             try
             {
                 // 1. 直接创建并渲染长方体
@@ -84,6 +85,8 @@ namespace StlGenerator
             Console.WriteLine("4. 圆柱体");
             Console.WriteLine("5. 圆锥体");
             Console.WriteLine("6. 金字塔");
+            Console.WriteLine("7. 椭圆");  // 新增椭圆选项
+                Console.WriteLine("8. 多棱柱");  // 新增多棱柱选项
             int shapeChoice = int.Parse(Console.ReadLine());
 
             ShapeGeneratorFactory.ShapeType shapeType = (ShapeGeneratorFactory.ShapeType)(shapeChoice - 1);
@@ -180,7 +183,8 @@ namespace StlGenerator
                 }
                 else if ((shapeType == ShapeGeneratorFactory.ShapeType.Sphere && i < 2) ||
                          (shapeType == ShapeGeneratorFactory.ShapeType.Cylinder && i < 3) ||
-                         (shapeType == ShapeGeneratorFactory.ShapeType.Cone && i < 3))
+                         (shapeType == ShapeGeneratorFactory.ShapeType.Cone && i < 3)||
+                         (shapeType == ShapeGeneratorFactory.ShapeType.Prism && i < 1))
                 {
                     parameters[i] = int.Parse(inputs[i]); // 细分参数为整数
                 }
