@@ -23,6 +23,8 @@ namespace StlGenerator.Shapes
                 throw new ArgumentException("多面体面数至少为4，每个面边数至少为3");
 
             _faces = faces;
+            _radius = radius;
+            _isRegular = isRegular;
         }
 
         public override string ShapeName => $"{_faces}面体({_edgesPerFace}边/面)";

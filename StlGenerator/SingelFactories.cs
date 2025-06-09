@@ -28,6 +28,7 @@ namespace StlGenerator
             Ellipse = 0x0005,
             Prism = 0x0006,  // 新增多棱柱形状
             PolyPyramid = 0x0007, // 新增多棱锥形状
+            Polyhedron = 0x0008,
 
             CuboidMatrix = 0x00FF,
             SphereMatrix = 0x01FF,
@@ -112,6 +113,14 @@ namespace StlGenerator
                     }
                     throw new ArgumentException("创建PolyPyramid需要边数、底面半径和高度参数");
 
+                case ShapeType.Polyhedron:
+                    if (parameters.Length >= 4 && parameters[0] is int Polyhedronface &&
+                        parameters[1] is int Polyhedronedgeperface && parameters[2] is float Polyhedronradius 
+                        && parameters[1] is bool PolyhedronisRegular)
+                    {
+                        return new PolyhedronGenerator(Polyhedronface, Polyhedronedgeperface, Polyhedronradius, PolyhedronisRegular);
+                    }
+                    throw new ArgumentException("创建PolyPyramid需要边数、底面半径和高度参数");
 
                 case ShapeType.CuboidMatrix:
                     if (parameters.Length >= 5 && parameters[0] is int CuboidMatrixrows &&
@@ -152,12 +161,9 @@ namespace StlGenerator
                     
                     return HouseModel.CreateHouseModel(parameters);
 
-
                 case CombinedShapeType.Car:
                     CarModel carModel = new CarModel();
                     return carModel.GenerateModel();
-                    // 实现汽车组合形状...
-                    throw new NotImplementedException("汽车形状尚未实现");
 
                 default:
                     throw new ArgumentException($"未知的组合形状类型: {shapeType}");
@@ -204,6 +210,8 @@ namespace StlGenerator
                     return "球体矩阵";
                 case ShapeType.PolyPyramid:
                     return "多棱锥";
+                case ShapeType.Polyhedron:
+                    return "多面体";
                 default:
                     return "未知形状";
             }
@@ -236,6 +244,8 @@ namespace StlGenerator
                     return "行数, 列数, 半径, [间距], [切片数], [堆叠数]";
                 case ShapeType.PolyPyramid:
                     return "边数, 底面半径, 高度";
+                case ShapeType.Polyhedron:
+                    return "边数，面数量，半径，是否正多面体";
                 default:
                     return "未知参数";
             }
