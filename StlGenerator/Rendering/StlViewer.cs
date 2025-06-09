@@ -40,7 +40,7 @@ namespace StlGenerator.Rendering
         public StlViewer(string stlFilePath)
             : base(GameWindowSettings.Default, new NativeWindowSettings()
             {
-                Size = new Vector2i(1280, 720),
+                ClientSize = new Vector2i(1280, 720),
                 Title = "STL文件查看器",
                 APIVersion = new Version(4, 6)
             })
@@ -63,7 +63,7 @@ namespace StlGenerator.Rendering
         public StlViewer(Model model)
             : base(GameWindowSettings.Default, new NativeWindowSettings()
             {
-                Size = new Vector2i(1280, 720),
+                ClientSize = new Vector2i(1280, 720),
                 Title = "STL模型查看器",
                 APIVersion = new Version(4, 6)
             })
@@ -88,7 +88,7 @@ namespace StlGenerator.Rendering
             GL.ClearColor(0.1f, 0.1f, 0.1f, 1.0f);
             GL.Enable(EnableCap.DepthTest);
             GL.Enable(EnableCap.CullFace);
-            GL.CullFace(CullFaceMode.Back);
+            GL.CullFace(TriangleFace.Back);
 
             _renderer = new OpenGLRenderer();
             _renderer.Initialize(_model);

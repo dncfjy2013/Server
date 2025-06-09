@@ -154,6 +154,8 @@ namespace StlGenerator
 
 
                 case CombinedShapeType.Car:
+                    CarModel carModel = new CarModel();
+                    return carModel.GenerateModel();
                     // 实现汽车组合形状...
                     throw new NotImplementedException("汽车形状尚未实现");
 
