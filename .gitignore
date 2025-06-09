@@ -1,0 +1,11 @@
+# 忽略所有层级的bin和obj文件夹
+**/bin/
+**/obj/
+
+# 可选：补充其他.NET项目常见忽略规则
+*.user
+*.suo
+*.cache
+*.vs/
+.vs/
+TestResults/
