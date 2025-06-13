@@ -11,7 +11,23 @@
   <ItemGroup>
     <PackageReference Include="ImGui.NET" Version="1.91.6.1" />
     <PackageReference Include="OpenTK" Version="4.9.4" />
+    <PackageReference Include="Silk.NET.OpenGL" Version="2.22.0" />
     <PackageReference Include="System.Drawing.Common" Version="9.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Dll\ImGuiNETGLFW\glfw3.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Dll\ImGuiNETGLFW\glfw3.lib">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Dll\ImGuiNETGLFW\glfw3dll.lib">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Dll\ImGuiNETGLFW\glfw3_mt.lib">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>
