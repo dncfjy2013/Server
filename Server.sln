@@ -27,6 +27,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "3dObjGenerator", "3dObjGene
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "StlGenerator", "3dObjGenerator\StlGenerator\StlGenerator.csproj", "{AA61A682-D9FF-4733-AF92-D851B1A0B059}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FbxGenerator", "3dObjGenerator\FbxGenerator\FbxGenerator.csproj", "{B4A67081-12AB-4F57-9374-711437262A38}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -77,12 +79,17 @@ Global
 		{AA61A682-D9FF-4733-AF92-D851B1A0B059}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AA61A682-D9FF-4733-AF92-D851B1A0B059}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AA61A682-D9FF-4733-AF92-D851B1A0B059}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B4A67081-12AB-4F57-9374-711437262A38}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B4A67081-12AB-4F57-9374-711437262A38}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B4A67081-12AB-4F57-9374-711437262A38}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B4A67081-12AB-4F57-9374-711437262A38}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{AA61A682-D9FF-4733-AF92-D851B1A0B059} = {E6B3656B-FFDA-4363-9264-9069C4351D91}
+		{B4A67081-12AB-4F57-9374-711437262A38} = {E6B3656B-FFDA-4363-9264-9069C4351D91}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {30FE5B5C-114C-4B05-BBCD-6702AAED92E0}
