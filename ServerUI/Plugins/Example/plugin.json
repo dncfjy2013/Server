@@ -1,0 +1,8 @@
+﻿{
+  "id": "6F9619FF-8B86-D011-B42D-00C04FC964FF",
+  "name": "ExamplePlugin",
+  "version": "1.0.0",
+  "description": "这是一个示例插件，演示基本的插件功能",
+  "entryType": "ExamplePlugin.ExamplePlugin",
+  "dependencies": []
+}    
