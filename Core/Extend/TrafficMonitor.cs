@@ -1,4 +1,5 @@
-﻿using Server.Core.Config;
+﻿using Logger;
+using Server.Core.Config;
 using Server.Logger;
 using Server.Utils;
 using System.Collections.Concurrent;

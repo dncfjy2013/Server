@@ -1,4 +1,5 @@
-﻿using Server.Common.Extensions;
+﻿using Logger;
+using Server.Common.Extensions;
 using Server.Logger;
 using System.Threading.Channels;
 

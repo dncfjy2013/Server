@@ -1,4 +1,5 @@
-﻿using Protocol;
+﻿using Logger;
+using Protocol;
 using Server.Core.Config;
 using Server.Entity;
 using Server.Utils;

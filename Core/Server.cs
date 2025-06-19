@@ -2,6 +2,7 @@
 using Core.ProtocalService.HttpService;
 using Core.ProtocalService.TcpService;
 using Core.ProtocalService.UdpService;
+using Logger;
 using Server.Core.Certification;
 using Server.Core.Common;
 using Server.Core.Config;
