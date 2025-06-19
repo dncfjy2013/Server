@@ -1,5 +1,5 @@
 ﻿using Google.Protobuf;
-using Logger;
+using Server.Logger;
 using MySqlX.XDevAPI;
 using Protocol;
 using Server.Core;

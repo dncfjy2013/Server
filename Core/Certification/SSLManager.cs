@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 using System.Net.Security;
 using Server.Logger;
 using Server.Core.Common;
-using Logger;
 
 namespace Server.Core.Certification
 {
