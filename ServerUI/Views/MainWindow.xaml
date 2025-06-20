@@ -1,0 +1,137 @@
+﻿<Window x:Class="ServerUI.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:prism="http://prismlibrary.com/"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:ServerUI"
+        mc:Ignorable="d"
+        Title="服务器管理界面" Height="700" Width="1000"
+        prism:ViewModelLocator.AutoWireViewModel="True">
+    <Grid>
+        <!-- 侧边栏区域 -->
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="250" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="250" />
+        </Grid.ColumnDefinitions>
+
+        <!-- 左侧边栏 -->
+        <Border Grid.Column="0" Background="#f0f0f0" BorderBrush="LightGray" BorderThickness="0,0,1,0">
+            <!--<ContentControl prism:RegionManager.RegionName="LeftSidebarRegion" />-->
+        </Border>
+
+        <!-- 主内容区域 -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="120" />
+                <RowDefinition Height="120" />
+                <RowDefinition Height="120" />
+                <RowDefinition Height="120" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- 第一行：当前服务器信息 -->
+            <GroupBox Header="当前服务器信息" Grid.Row="0" Margin="10" BorderBrush="#cccccc">
+                <StackPanel Orientation="Horizontal" Margin="5">
+                    <Image Source="{Binding CurrentServer.Icon}" Width="64" Height="64" Margin="5" />
+                    <StackPanel>
+                        <TextBlock Text="{Binding CurrentServer.Name}" FontSize="16" FontWeight="Bold" />
+                        <TextBlock Text="{Binding CurrentServer.Status}" Foreground="{Binding CurrentServer.StatusColor}" />
+                        <TextBlock Text="{Binding CurrentServer.IPAddress}" />
+                        <TextBlock Text="{Binding CurrentServer.OperatingSystem}" />
+                        <TextBlock Text="{Binding CurrentServer.UpTime}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="10,0,0,0">
+                        <Button Content="刷新" Command="{Binding RefreshCurrentServerCommand}" Width="80" Margin="5" />
+                        <Button Content="详细信息" Command="{Binding ShowCurrentServerDetailsCommand}" Width="80" Margin="5" />
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
+
+            <!-- 第二行：代理服务器信息 -->
+            <GroupBox Header="代理服务器" Grid.Row="1" Margin="10" BorderBrush="#cccccc">
+                <StackPanel Orientation="Horizontal" Margin="5">
+                    <Image Source="{Binding ProxyServer.Icon}" Width="64" Height="64" Margin="5" />
+                    <StackPanel>
+                        <TextBlock Text="{Binding ProxyServer.Name}" FontSize="14" FontWeight="Bold" />
+                        <TextBlock Text="{Binding ProxyServer.Status}" Foreground="{Binding ProxyServer.StatusColor}" />
+                        <TextBlock Text="{Binding ProxyServer.IPAddress}" />
+                        <TextBlock Text="{Binding ProxyServer.Version}" />
+                        <TextBlock Text="{Binding ProxyServer.TrafficInfo}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="10,0,0,0">
+                        <Button Content="启动" Command="{Binding StartProxyServerCommand}" Width="80" Margin="5" />
+                        <Button Content="停止" Command="{Binding StopProxyServerCommand}" Width="80" Margin="5" />
+                        <Button Content="配置" Command="{Binding ConfigureProxyServerCommand}" Width="80" Margin="5" />
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
+
+            <!-- 第三行：服务器信息 -->
+            <GroupBox Header="服务器" Grid.Row="2" Margin="10" BorderBrush="#cccccc">
+                <StackPanel Orientation="Horizontal" Margin="5">
+                    <Image Source="{Binding Server.Icon}" Width="64" Height="64" Margin="5" />
+                    <StackPanel>
+                        <TextBlock Text="{Binding Server.Name}" FontSize="14" FontWeight="Bold" />
+                        <TextBlock Text="{Binding Server.Status}" Foreground="{Binding Server.StatusColor}" />
+                        <TextBlock Text="{Binding Server.IPAddress}" />
+                        <TextBlock Text="{Binding Server.Version}" />
+                        <TextBlock Text="{Binding Server.LoadInfo}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="10,0,0,0">
+                        <Button Content="启动" Command="{Binding StartServerCommand}" Width="80" Margin="5" />
+                        <Button Content="停止" Command="{Binding StopServerCommand}" Width="80" Margin="5" />
+                        <Button Content="重启" Command="{Binding RestartServerCommand}" Width="80" Margin="5" />
+                        <Button Content="配置" Command="{Binding ConfigureServerCommand}" Width="80" Margin="5" />
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
+
+            <!-- 第四行：数据库信息 -->
+            <GroupBox Header="数据库" Grid.Row="3" Margin="10" BorderBrush="#cccccc">
+                <StackPanel Orientation="Horizontal" Margin="5">
+                    <Image Source="{Binding Database.Icon}" Width="64" Height="64" Margin="5" />
+                    <StackPanel>
+                        <TextBlock Text="{Binding Database.Name}" FontSize="14" FontWeight="Bold" />
+                        <TextBlock Text="{Binding Database.Status}" Foreground="{Binding Database.StatusColor}" />
+                        <TextBlock Text="{Binding Database.ConnectionString}" />
+                        <TextBlock Text="{Binding Database.Version}" />
+                        <TextBlock Text="{Binding Database.SizeInfo}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="10,0,0,0">
+                        <Button Content="连接" Command="{Binding ConnectDatabaseCommand}" Width="80" Margin="5" />
+                        <Button Content="备份" Command="{Binding BackupDatabaseCommand}" Width="80" Margin="5" />
+                        <Button Content="还原" Command="{Binding RestoreDatabaseCommand}" Width="80" Margin="5" />
+                        <Button Content="管理" Command="{Binding ManageDatabaseCommand}" Width="80" Margin="5" />
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
+
+            <!-- 第五行：应用层信息 -->
+            <GroupBox Header="应用层" Grid.Row="4" Margin="10" BorderBrush="#cccccc">
+                <StackPanel Orientation="Horizontal" Margin="5">
+                    <Image Source="{Binding ApplicationLayer.Icon}" Width="64" Height="64" Margin="5" />
+                    <StackPanel>
+                        <TextBlock Text="{Binding ApplicationLayer.Name}" FontSize="14" FontWeight="Bold" />
+                        <TextBlock Text="{Binding ApplicationLayer.Status}" Foreground="{Binding ApplicationLayer.StatusColor}" />
+                        <TextBlock Text="{Binding ApplicationLayer.Version}" />
+                        <TextBlock Text="{Binding ApplicationLayer.RequestsPerSecond}" />
+                        <TextBlock Text="{Binding ApplicationLayer.MemoryUsage}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="10,0,0,0">
+                        <Button Content="启动" Command="{Binding StartApplicationCommand}" Width="80" Margin="5" />
+                        <Button Content="停止" Command="{Binding StopApplicationCommand}" Width="80" Margin="5" />
+                        <Button Content="重启" Command="{Binding RestartApplicationCommand}" Width="80" Margin="5" />
+                        <Button Content="监控" Command="{Binding MonitorApplicationCommand}" Width="80" Margin="5" />
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
+        </Grid>
+
+        <!-- 右侧边栏 -->
+        <Border Grid.Column="2" Background="#f0f0f0" BorderBrush="LightGray" BorderThickness="1,0,0,0">
+            <!--<ContentControl prism:RegionManager.RegionName="RightSidebarRegion" />-->
+        </Border>
+    </Grid>
+</Window>    

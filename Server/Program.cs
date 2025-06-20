@@ -29,7 +29,7 @@ Console.WriteLine($"磁盘类型: {hardwareInfo.DiskType}");
 //Console.WriteLine($"磁盘类型: {diskType.GetHardwareInfo()?.FullName ?? diskType.ToString()}");
 //Console.WriteLine(diskType.GetFullDescription());
 
-Server.Core.ServerInstance server = new Server.Core.ServerInstance(1111, 2222, 3333, "http://localhost:9999/", SSLManager.LoadOrCreateCertificate());
+Server.Core.ServerInstance server = new Server.Core.ServerInstance(1111, 2222, 3333, new List<string>() { "http://localhost:9999/" }, SSLManager.LoadOrCreateCertificate());
 server.Start(false);
 
 Console.WriteLine("press enter to stop the server...");

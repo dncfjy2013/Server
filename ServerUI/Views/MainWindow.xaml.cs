@@ -12,7 +12,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 
-namespace ServerUI
+namespace ServerUI.Views
 {
     /// <summary>
     /// Interaction logic for MainWindow.xaml
@@ -22,7 +22,7 @@ namespace ServerUI
         public MainWindow()
         {
             InitializeComponent();
-            Main();
+            //Main();
         }
 
         static async Task Main()
@@ -48,6 +48,12 @@ namespace ServerUI
             }
 
             Console.WriteLine("按任意键退出...");
+            foreach (var plugin in loadedPlugins)
+            {
+                Console.WriteLine($"执行插件: {plugin.Name} ({plugin.Id})");
+                var result = await pluginManager.UnloadPluginAsync(plugin.Id);
+                Console.WriteLine($"插件返回: {result}");
+            }
             Console.ReadKey();
         }
 
