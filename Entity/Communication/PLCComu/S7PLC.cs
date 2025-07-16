@@ -4,7 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
-namespace Entity.Common
+namespace Entity.Communication.PLCComu
 {
     // PLC通讯异常类，用于封装通讯过程中的异常
     public class PLCCommunicationException : Exception
@@ -286,8 +286,8 @@ namespace Entity.Common
 
             // Start Address (3 bytes)
             buffer[pos++] = 0x00;  // Address High Byte
-            buffer[pos++] = (byte)((startAddress >> 16) & 0xFF);  // Address Middle Byte
-            buffer[pos++] = (byte)((startAddress >> 8) & 0xFF);  // Address Low Byte 1
+            buffer[pos++] = (byte)(startAddress >> 16 & 0xFF);  // Address Middle Byte
+            buffer[pos++] = (byte)(startAddress >> 8 & 0xFF);  // Address Low Byte 1
             buffer[pos++] = (byte)(startAddress & 0xFF);  // Address Low Byte 2
 
             // Number of items
@@ -356,8 +356,8 @@ namespace Entity.Common
 
             // Start Address (3 bytes)
             buffer[pos++] = 0x00;  // Address High Byte
-            buffer[pos++] = (byte)((startAddress >> 16) & 0xFF);  // Address Middle Byte
-            buffer[pos++] = (byte)((startAddress >> 8) & 0xFF);  // Address Low Byte 1
+            buffer[pos++] = (byte)(startAddress >> 16 & 0xFF);  // Address Middle Byte
+            buffer[pos++] = (byte)(startAddress >> 8 & 0xFF);  // Address Low Byte 1
             buffer[pos++] = (byte)(startAddress & 0xFF);  // Address Low Byte 2
 
             // Number of items
@@ -429,7 +429,7 @@ namespace Entity.Common
             if (bytesRead < 4)
                 throw new PLCCommunicationException("接收响应超时或不完整");
 
-            int messageLength = (header[2] << 8) | header[3];
+            int messageLength = header[2] << 8 | header[3];
             byte[] response = new byte[messageLength + 2];
 
             Array.Copy(header, 0, response, 0, 4);
@@ -478,7 +478,7 @@ namespace Entity.Common
                     throw new PLCCommunicationException($"读取失败，错误码: 0x{response[returnCodePos]:X2}");
 
                 // 提取数据
-                int dataLength = (response[returnCodePos + 2] << 8) | response[returnCodePos + 3];
+                int dataLength = response[returnCodePos + 2] << 8 | response[returnCodePos + 3];
                 byte[] data = new byte[dataLength];
 
                 Array.Copy(response, returnCodePos + 4, data, 0, dataLength);
@@ -550,7 +550,7 @@ namespace Entity.Common
             if (bitIndex < 0 || bitIndex > 7)
                 throw new ArgumentOutOfRangeException(nameof(bitIndex));
 
-            return (data[byteIndex] & (1 << bitIndex)) != 0;
+            return (data[byteIndex] & 1 << bitIndex) != 0;
         }
 
         // 从字节数组中读取字节值
@@ -568,7 +568,7 @@ namespace Entity.Common
             if (index < 0 || index + 1 >= data.Length)
                 throw new ArgumentOutOfRangeException(nameof(index));
 
-            return (short)((data[index + 1] << 8) | data[index]);
+            return (short)(data[index + 1] << 8 | data[index]);
         }
 
         // 从字节数组中读取无符号短整型值(2字节，低字节在前)
@@ -577,7 +577,7 @@ namespace Entity.Common
             if (index < 0 || index + 1 >= data.Length)
                 throw new ArgumentOutOfRangeException(nameof(index));
 
-            return (ushort)((data[index + 1] << 8) | data[index]);
+            return (ushort)(data[index + 1] << 8 | data[index]);
         }
 
         // 从字节数组中读取整型值(4字节，低字节在前)
@@ -586,7 +586,7 @@ namespace Entity.Common
             if (index < 0 || index + 3 >= data.Length)
                 throw new ArgumentOutOfRangeException(nameof(index));
 
-            return (data[index + 3] << 24) | (data[index + 2] << 16) | (data[index + 1] << 8) | data[index];
+            return data[index + 3] << 24 | data[index + 2] << 16 | data[index + 1] << 8 | data[index];
         }
 
         // 从字节数组中读取无符号整型值(4字节，低字节在前)
@@ -595,7 +595,7 @@ namespace Entity.Common
             if (index < 0 || index + 3 >= data.Length)
                 throw new ArgumentOutOfRangeException(nameof(index));
 
-            return (uint)((data[index + 3] << 24) | (data[index + 2] << 16) | (data[index + 1] << 8) | data[index]);
+            return (uint)(data[index + 3] << 24 | data[index + 2] << 16 | data[index + 1] << 8 | data[index]);
         }
 
         // 从字节数组中读取浮点数(4字节，低字节在前)
@@ -604,7 +604,7 @@ namespace Entity.Common
             if (index < 0 || index + 3 >= data.Length)
                 throw new ArgumentOutOfRangeException(nameof(index));
 
-            int intValue = (data[index + 3] << 24) | (data[index + 2] << 16) | (data[index + 1] << 8) | data[index];
+            int intValue = data[index + 3] << 24 | data[index + 2] << 16 | data[index + 1] << 8 | data[index];
             return BitConverter.ToSingle(BitConverter.GetBytes(intValue), 0);
         }
 
@@ -642,13 +642,13 @@ namespace Entity.Common
         // 将短整型值转换为字节数组(2字节，低字节在前)
         public static byte[] ToByteArray(this short value)
         {
-            return new byte[] { (byte)(value & 0xFF), (byte)((value >> 8) & 0xFF) };
+            return new byte[] { (byte)(value & 0xFF), (byte)(value >> 8 & 0xFF) };
         }
 
         // 将无符号短整型值转换为字节数组(2字节，低字节在前)
         public static byte[] ToByteArray(this ushort value)
         {
-            return new byte[] { (byte)(value & 0xFF), (byte)((value >> 8) & 0xFF) };
+            return new byte[] { (byte)(value & 0xFF), (byte)(value >> 8 & 0xFF) };
         }
 
         // 将整型值转换为字节数组(4字节，低字节在前)
@@ -656,9 +656,9 @@ namespace Entity.Common
         {
             return new byte[] {
                 (byte)(value & 0xFF),
-                (byte)((value >> 8) & 0xFF),
-                (byte)((value >> 16) & 0xFF),
-                (byte)((value >> 24) & 0xFF)
+                (byte)(value >> 8 & 0xFF),
+                (byte)(value >> 16 & 0xFF),
+                (byte)(value >> 24 & 0xFF)
             };
         }
 
@@ -667,9 +667,9 @@ namespace Entity.Common
         {
             return new byte[] {
                 (byte)(value & 0xFF),
-                (byte)((value >> 8) & 0xFF),
-                (byte)((value >> 16) & 0xFF),
-                (byte)((value >> 24) & 0xFF)
+                (byte)(value >> 8 & 0xFF),
+                (byte)(value >> 16 & 0xFF),
+                (byte)(value >> 24 & 0xFF)
             };
         }
 
@@ -700,7 +700,7 @@ namespace Entity.Common
         }
     }
 
-    class Program
+    class S7PLCTest
     {
         static void Main(string[] args)
         {
