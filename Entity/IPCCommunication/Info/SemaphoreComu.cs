@@ -97,7 +97,7 @@ namespace Entity.IPCCommunication.Info
 
                     // 4. 从共享内存读取数据
                     SharedData data = new SharedData();
-                    accessor.Read(0, ref data); // 直接读取结构体
+                    accessor.Read(0, out data); // 直接读取结构体
                     Console.WriteLine($"读取到数据：");
                     Console.WriteLine($"ID: {data.Id}");
                     Console.WriteLine($"消息: {data.Message}");
