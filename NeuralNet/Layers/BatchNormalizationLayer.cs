@@ -1,7 +1,9 @@
+using NeuralNet.Common;
 using NeuralNetworkLibrary.Core;
 using NeuralNetworkLibrary.Optimizers;
 using System;
 using System.Numerics;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 
 namespace NeuralNetworkLibrary.Layers
@@ -342,5 +344,118 @@ namespace NeuralNetworkLibrary.Layers
         {
 
         }
+
+        /// <summary>
+        /// 序列化批归一化层参数
+        /// </summary>
+        public override JsonArray GetParameters()
+        {
+            JsonArray parameters = new JsonArray();
+
+            // 1. 层基本信息
+            JsonObject layerInfo = new JsonObject
+            {
+                ["type"] = "BatchNormalizationLayer",
+                ["name"] = Name,
+                ["momentum"] = _momentum,
+                ["channels"] = _channels
+            };
+            parameters.Add(layerInfo);
+
+            // 2. 可训练参数（gamma和beta）
+            JsonObject trainableParams = new JsonObject
+            {
+                ["gamma"] = JsonArrayHelper.FromFloatArray(_gamma.Data),
+                ["beta"] = JsonArrayHelper.FromFloatArray(_beta.Data)
+            };
+            parameters.Add(trainableParams);
+
+            // 3. 移动统计量（推理时使用）
+            JsonObject movingStats = new JsonObject
+            {
+                ["movingMean"] = JsonArrayHelper.FromFloatArray(_movingMean.Data),
+                ["movingVar"] = JsonArrayHelper.FromFloatArray(_movingVar.Data)
+            };
+            parameters.Add(movingStats);
+
+            return parameters;
+        }
+
+        /// <summary>
+        /// 反序列化批归一化层参数
+        /// </summary>
+        public override bool LoadParameters(JsonArray param)
+        {
+            try
+            {
+                // 验证参数结构完整性
+                if (param.Count != 3)
+                    return false;
+
+                // 1. 验证层信息
+                JsonObject layerInfo = param[0] as JsonObject;
+                if (layerInfo == null ||
+                    layerInfo["type"]?.ToString() != "BatchNormalizationLayer" ||
+                    layerInfo["name"]?.ToString() != Name)
+                    return false;
+
+                int savedChannels = layerInfo["channels"]?.GetValue<int>() ?? -1;
+                if (savedChannels != _channels)
+                    return false; // 通道数不匹配
+
+                // 2. 加载可训练参数（gamma和beta）
+                JsonObject trainableParams = param[1] as JsonObject;
+                if (trainableParams == null)
+                    return false;
+
+                float[] gammaData = JsonArrayHelper.ToFloatArray(trainableParams["gamma"] as JsonArray);
+                float[] betaData = JsonArrayHelper.ToFloatArray(trainableParams["beta"] as JsonArray);
+
+                if (gammaData == null || betaData == null ||
+                    gammaData.Length != _channels || betaData.Length != _channels)
+                    return false;
+
+                _gamma.CopyFrom(gammaData);
+                _beta.CopyFrom(betaData);
+
+                // 3. 加载移动统计量
+                JsonObject movingStats = param[2] as JsonObject;
+                if (movingStats == null)
+                    return false;
+
+                float[] movingMeanData = JsonArrayHelper.ToFloatArray(movingStats["movingMean"] as JsonArray);
+                float[] movingVarData = JsonArrayHelper.ToFloatArray(movingStats["movingVar"] as JsonArray);
+
+                if (movingMeanData == null || movingVarData == null ||
+                    movingMeanData.Length != _channels || movingVarData.Length != _channels)
+                    return false;
+
+                _movingMean.CopyFrom(movingMeanData);
+                _movingVar.CopyFrom(movingVarData);
+
+                return true;
+            }
+            catch
+            {
+                return false; // 任何解析错误都返回失败
+            }
+        }
     }
+
+    //[
+    //  {
+    //    "type": "BatchNormalizationLayer",
+    //    "name": "BN",
+    //    "momentum": 0.9,
+    //    "channels": 64
+    //  },
+    //  {
+    //    "gamma": [1.0, 1.0, ..., 1.0],  // 长度为channels的数组
+    //    "beta": [0.0, 0.0, ..., 0.0]     // 长度为channels的数组
+    //  },
+    //  {
+    //    "movingMean": [0.12, 0.34, ..., 0.56],  // 长度为channels的数组
+    //    "movingVar": [0.89, 0.76, ..., 0.45]     // 长度为channels的数组
+    //  }
+    //]
 }

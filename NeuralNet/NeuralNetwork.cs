@@ -5,6 +5,7 @@ using NeuralNetworkLibrary.Optimizers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Nodes;
 
 namespace NeuralNetworkLibrary
 {
@@ -117,6 +118,7 @@ namespace NeuralNetworkLibrary
             return loss;
         }
 
+        private JsonArray _bestParameters;  // 用于缓存最佳参数
         /// <summary>
         /// 训练网络
         /// </summary>
@@ -129,7 +131,9 @@ namespace NeuralNetworkLibrary
                 throw new InvalidOperationException("Network has no layers. Add layers before training.");
                 
             int numBatches = (int)Math.Ceiling((double)inputs.Count / batchSize);
-            
+
+            float _accuracyBase = 0.0f; // 用于记录每个epoch的精度基准
+
             for (int epoch = 0; epoch < epochs; epoch++)
             {
                 float totalLoss = 0;
@@ -178,8 +182,14 @@ namespace NeuralNetworkLibrary
                 float epochLoss = totalLoss / numBatches;
                 float epochAccuracy = (float)totalCorrect / totalSamples * 100;
 
-                Console.WriteLine($"{DateTime.Now} Epoch {epoch + 1}/{epochs} 完成. 平均损失: {epochLoss:F6}" +
-                    $" 平均精度: {epochAccuracy:F2}%");
+                if(epochAccuracy > _accuracyBase)
+                {
+                    _accuracyBase = epochAccuracy; // 更新精度基准
+                    _bestParameters = new JsonArray(Layers.Select(layer => layer.GetParameters()).ToArray());
+                }
+                
+                Console.WriteLine($"{DateTime.Now} Epoch {epoch + 1}/{epochs} 平均损失: {epochLoss:F6} 当前精度: {epochAccuracy:F2}%  基准精度: {_accuracyBase:F2}%");
+                
             }
         }
 
@@ -188,6 +198,20 @@ namespace NeuralNetworkLibrary
         /// </summary>
         public ITensor Predict(ITensor input)
         {
+            if (_bestParameters == null)
+            {
+                throw new InvalidOperationException("请先训练模型以获取最佳参数");
+            }
+
+            // 加载最佳参数到各层
+            for (int i = 0; i < Layers.Count; i++)
+            {
+                if (!Layers[i].LoadParameters(_bestParameters[i] as JsonArray))
+                {
+                    throw new InvalidOperationException($"加载第{i}层参数失败");
+                }
+            }
+
             return Forward(input, isTraining: false);
         }
 

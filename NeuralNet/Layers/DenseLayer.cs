@@ -1,8 +1,10 @@
+using NeuralNet.Common;
 using NeuralNetworkLibrary.Core;
 using NeuralNetworkLibrary.Optimizers;
 using System;
 using System.Collections.Concurrent;
 using System.Numerics;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 
 namespace NeuralNetworkLibrary.Layers
@@ -19,6 +21,8 @@ namespace NeuralNetworkLibrary.Layers
         private int _inputSize;    // 输入特征数量
         private readonly int _simdLength;  // SIMD向量长度（如AVX2为8，AVX-512为16）
 
+        private Tensor _weightGradients;
+        private Tensor _biasGradients;
         public override bool HasParameters => true;
 
         public DenseLayer(int units, string name = "Dense") : base(name)
@@ -252,7 +256,97 @@ namespace NeuralNetworkLibrary.Layers
             return sum;
         }
 
-        private Tensor _weightGradients;
-        private Tensor _biasGradients;
+        /// <summary>
+        /// 序列化全连接层参数
+        /// </summary>
+        public override JsonArray GetParameters()
+        {
+            JsonArray parameters = new JsonArray();
+
+            // 1. 层配置信息（超参数）
+            JsonObject layerConfig = new JsonObject
+            {
+                ["type"] = "DenseLayer",
+                ["name"] = Name,
+                ["units"] = _units,
+                ["inputSize"] = _inputSize,
+                ["weightShape"] = new JsonArray(_units, _inputSize),
+                ["biasShape"] = new JsonArray(_units)
+            };
+            parameters.Add(layerConfig);
+
+            // 2. 权重参数（[units, inputSize]）
+            parameters.Add(JsonArrayHelper.FromFloatArray(_weights.Data));
+
+            // 3. 偏置参数（[units]）
+            parameters.Add(JsonArrayHelper.FromFloatArray(_biases.Data));
+
+            return parameters;
+        }
+
+        /// <summary>
+        /// 反序列化全连接层参数
+        /// </summary>
+        public override bool LoadParameters(JsonArray param)
+        {
+            try
+            {
+                // 验证参数结构完整性
+                if (param.Count != 3)
+                    return false;
+
+                // 1. 验证层配置信息
+                JsonObject layerConfig = param[0] as JsonObject;
+                if (layerConfig == null ||
+                    layerConfig["type"]?.ToString() != "DenseLayer" ||
+                    layerConfig["name"]?.ToString() != Name)
+                    return false;
+
+                // 验证关键超参数是否匹配
+                int savedUnits = layerConfig["units"]?.GetValue<int>() ?? -1;
+                int savedInputSize = layerConfig["inputSize"]?.GetValue<int>() ?? -1;
+                if (savedUnits != _units || savedInputSize != _inputSize)
+                    return false;
+
+                // 2. 加载权重参数
+                JsonArray weightArray = param[1] as JsonArray;
+                float[] weightData = JsonArrayHelper.ToFloatArray(weightArray);
+
+                int expectedWeightSize = _units * _inputSize;
+                if (weightData == null || weightData.Length != expectedWeightSize)
+                    return false;
+
+                _weights.CopyFrom(weightData);
+
+                // 3. 加载偏置参数
+                JsonArray biasArray = param[2] as JsonArray;
+                float[] biasData = JsonArrayHelper.ToFloatArray(biasArray);
+
+                if (biasData == null || biasData.Length != _units)
+                    return false;
+
+                _biases.CopyFrom(biasData);
+
+                return true;
+            }
+            catch
+            {
+                return false; // 任何解析错误都返回失败
+            }
+        }
     }
+
+//[
+//{
+//    "type": "DenseLayer",
+//    "name": "Dense",
+//    "units": 128,
+//    "inputSize": 784,
+//    "weightShape": [128, 784],
+//    "biasShape": [128]
+//},
+//  [0.12, 0.34, ..., 0.56],  // 权重参数数组（长度为units×inputSize）
+//  [0.01, 0.02, ..., 0.128]  // 偏置参数数组（长度为units）
+//]
+
 }

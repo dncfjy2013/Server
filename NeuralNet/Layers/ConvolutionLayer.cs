@@ -1,7 +1,9 @@
+using NeuralNet.Common;
 using NeuralNetworkLibrary.Core;
 using NeuralNetworkLibrary.Optimizers;
 using System;
 using System.Numerics;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 
 namespace NeuralNetworkLibrary.Layers
@@ -342,5 +344,108 @@ namespace NeuralNetworkLibrary.Layers
             optimizer.UpdateParameter(_kernels, kernelGradients);
             optimizer.UpdateParameter(_biases, biasGradients);
         }
+
+        /// <summary>
+        /// 序列化卷积层参数
+        /// </summary>
+        public override JsonArray GetParameters()
+        {
+            JsonArray parameters = new JsonArray();
+
+            // 1. 层配置信息（超参数）
+            JsonObject layerConfig = new JsonObject
+            {
+                ["type"] = "ConvolutionLayer",
+                ["name"] = Name,
+                ["kernelSize"] = _kernelSize,
+                ["filters"] = _filters,
+                ["stride"] = _stride,
+                ["padding"] = _padding,
+                ["inputChannels"] = InputShape[0],
+                ["kernelShape"] = new JsonArray(_filters, InputShape[0], _kernelSize, _kernelSize)
+            };
+            parameters.Add(layerConfig);
+
+            // 2. 卷积核参数
+            parameters.Add(JsonArrayHelper.FromFloatArray(_kernels.Data));
+
+            // 3. 偏置参数
+            parameters.Add(JsonArrayHelper.FromFloatArray(_biases.Data));
+
+            return parameters;
+        }
+
+        /// <summary>
+        /// 反序列化卷积层参数
+        /// </summary>
+        public override bool LoadParameters(JsonArray param)
+        {
+            try
+            {
+                // 验证参数结构完整性
+                if (param.Count != 3)
+                    return false;
+
+                // 1. 验证层配置信息
+                JsonObject layerConfig = param[0] as JsonObject;
+                if (layerConfig == null ||
+                    layerConfig["type"]?.ToString() != "ConvolutionLayer" ||
+                    layerConfig["name"]?.ToString() != Name)
+                    return false;
+
+                // 验证关键超参数是否匹配
+                if (layerConfig["kernelSize"]?.GetValue<int>() != _kernelSize ||
+                    layerConfig["filters"]?.GetValue<int>() != _filters ||
+                    layerConfig["stride"]?.GetValue<int>() != _stride ||
+                    layerConfig["padding"]?.GetValue<int>() != _padding)
+                    return false;
+
+                // 验证输入通道数是否匹配
+                int savedInputChannels = layerConfig["inputChannels"]?.GetValue<int>() ?? -1;
+                if (savedInputChannels != InputShape[0])
+                    return false;
+
+                // 2. 加载卷积核参数
+                JsonArray kernelArray = param[1] as JsonArray;
+                float[] kernelData = JsonArrayHelper.ToFloatArray(kernelArray);
+
+                int expectedKernelSize = _filters * InputShape[0] * _kernelSize * _kernelSize;
+                if (kernelData == null || kernelData.Length != expectedKernelSize)
+                    return false;
+
+                _kernels.CopyFrom(kernelData);
+
+                // 3. 加载偏置参数
+                JsonArray biasArray = param[2] as JsonArray;
+                float[] biasData = JsonArrayHelper.ToFloatArray(biasArray);
+
+                if (biasData == null || biasData.Length != _filters)
+                    return false;
+
+                _biases.CopyFrom(biasData);
+
+                return true;
+            }
+            catch
+            {
+                return false; // 任何解析错误都返回失败
+            }
+        }
     }
+
+//[
+//{
+//    "type": "ConvolutionLayer",
+//    "name": "Conv",
+//    "kernelSize": 3,
+//    "filters": 64,
+//    "stride": 1,
+//    "padding": 1,
+//    "inputChannels": 3,
+//    "kernelShape": [64, 3, 3, 3]
+//},
+//  [0.12, 0.34, ..., 0.56],  // 卷积核参数数组（长度为filters×inputChannels×kernelSize×kernelSize）
+//  [0.01, 0.02, ..., 0.064]  // 偏置参数数组（长度为filters）
+//]
+
 }

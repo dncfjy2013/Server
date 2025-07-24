@@ -1,6 +1,7 @@
 using NeuralNetworkLibrary.Core;
 using NeuralNetworkLibrary.Optimizers;
 using System;
+using System.Text.Json.Nodes;
 
 namespace NeuralNetworkLibrary.Layers
 {
@@ -191,6 +192,44 @@ namespace NeuralNetworkLibrary.Layers
         public override void UpdateParameters(IOptimizer optimizer)
         {
 
+        }
+
+        /// <summary>
+        /// 序列化Dropout层配置信息（无训练参数）
+        /// </summary>
+        public override JsonArray GetParameters()
+        {
+            JsonArray parameters = new JsonArray();
+
+            parameters.Add("DropoutLayer");
+            parameters.Add(Name);
+            parameters.Add(_dropoutRate.ToString());
+
+            // 2. 明确标记无参数（保持与其他层结构一致）
+            parameters.Add(null);
+
+            return parameters;
+        }
+
+        /// <summary>
+        /// 反序列化Dropout层配置信息
+        /// </summary>
+        public override bool LoadParameters(JsonArray param)
+        {
+            try
+            {            
+                // 激活层没有参数需要加载，仅验证结构是否匹配
+                if (param.Count != 4)
+                    return false;
+
+                // 验证层类型和名称是否匹配
+                return param[0]?.ToString() == "DropoutLayer" &&
+                       param[1]?.ToString() == Name && param[2]?.ToString() == _dropoutRate.ToString();
+            }
+            catch
+            {
+                return false; // 任何解析错误都返回失败
+            }
         }
     }
 }

@@ -2,6 +2,7 @@ using NeuralNetworkLibrary.Activations;
 using NeuralNetworkLibrary.Core;
 using NeuralNetworkLibrary.Optimizers;
 using System;
+using System.Text.Json.Nodes;
 
 namespace NeuralNetworkLibrary.Layers
 {
@@ -57,6 +58,34 @@ namespace NeuralNetworkLibrary.Layers
         public override void UpdateParameters(IOptimizer optimizer)
         {
 
+        }
+
+        public override bool LoadParameters(JsonArray param)
+        {
+            try
+            {
+                // 激活层没有参数需要加载，仅验证结构是否匹配
+                if (param.Count != 3)
+                    return false;
+
+                // 验证层类型和名称是否匹配
+                return param[0]?.ToString() == "ActivationLayer" &&
+                       param[1]?.ToString() == Name;
+            }
+            catch { return false; }
+        }
+
+        public override JsonArray GetParameters()
+        {
+            JsonArray parameters = new JsonArray();
+            // 第1项：层类别
+            parameters.Add("ActivationLayer");
+            // 第2项：层名称
+            parameters.Add(Name);
+            // 第3项：参数（激活层无参数，设为null）
+            parameters.Add(null);
+
+            return parameters;
         }
     }
 }
