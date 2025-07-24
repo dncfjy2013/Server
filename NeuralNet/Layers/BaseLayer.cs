@@ -1,5 +1,6 @@
 using NeuralNetworkLibrary.Core;
 using NeuralNetworkLibrary.Optimizers;
+using System.Text.Json.Nodes;
 
 namespace NeuralNetworkLibrary.Layers
 {
@@ -22,6 +23,17 @@ namespace NeuralNetworkLibrary.Layers
         public abstract void SetInputShape(TensorShape inputShape);
         public abstract ITensor Forward(ITensor input, bool isTraining = true);
         public abstract ITensor Backward(ITensor gradient, float learningRate);
-        public abstract void UpdateParameters(IOptimizer optimizer);
+        public void UpdateParameters(IOptimizer optimizer)
+        {
+
+        }
+        public bool LoadParameters(JsonArray param)
+        {
+            return false;
+        }
+        public bool GetParameters(JsonArray param)
+        {
+            return false;
+        }
     }
 }

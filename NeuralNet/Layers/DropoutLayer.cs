@@ -187,10 +187,5 @@ namespace NeuralNetworkLibrary.Layers
 
             return inputGradient;
         }
-
-        public override void UpdateParameters(IOptimizer optimizer)
-        {
-            // Dropout层没有可学习的参数，所以不需要更新
-        }
     }
 }

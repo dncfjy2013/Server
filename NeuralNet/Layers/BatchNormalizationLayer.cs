@@ -329,15 +329,6 @@ namespace NeuralNetworkLibrary.Layers
             return inputGradient;
         }
 
-        /// <summary>
-        /// 空实现：参数更新已在Backward方法中完成
-        /// </summary>
-        public override void UpdateParameters(IOptimizer optimizer)
-        {
-            // 有意留空：批归一化层的参数更新在Backward中直接完成
-            // 无需通过优化器进行额外更新，保持接口一致性即可
-        }
-
         // 辅助函数：累加SIMD向量的所有元素
         private float SumVector(Vector<float> vector)
         {

@@ -1,5 +1,6 @@
 using NeuralNetworkLibrary.Core;
 using NeuralNetworkLibrary.Optimizers;
+using System.Text.Json.Nodes;
 
 namespace NeuralNetworkLibrary.Layers
 {
@@ -19,5 +20,8 @@ namespace NeuralNetworkLibrary.Layers
         ITensor Backward(ITensor gradient, float learningRate);
 
         void UpdateParameters(IOptimizer optimizer);
+
+        bool LoadParameters(JsonArray param);
+        bool GetParameters(JsonArray param);
     }
 }
