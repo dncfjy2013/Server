@@ -337,7 +337,7 @@ namespace NeuralNetworkLibrary.Layers
             }
         }
 
-        public new void UpdateParameters(IOptimizer optimizer)
+        public override void UpdateParameters(IOptimizer optimizer)
         {
             optimizer.UpdateParameter(_kernels, kernelGradients);
             optimizer.UpdateParameter(_biases, biasGradients);

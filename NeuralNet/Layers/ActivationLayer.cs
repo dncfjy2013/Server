@@ -53,5 +53,10 @@ namespace NeuralNetworkLibrary.Layers
             
             return inputGradient;
         }
+
+        public override void UpdateParameters(IOptimizer optimizer)
+        {
+
+        }
     }
 }

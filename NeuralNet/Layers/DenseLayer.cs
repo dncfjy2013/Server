@@ -162,7 +162,7 @@ namespace NeuralNetworkLibrary.Layers
             return inputGradient;
         }
 
-        public new void UpdateParameters(IOptimizer optimizer)
+        public override void UpdateParameters(IOptimizer optimizer)
         {
             optimizer.UpdateParameter(_weights, _weightGradients);
             optimizer.UpdateParameter(_biases, _biasGradients);

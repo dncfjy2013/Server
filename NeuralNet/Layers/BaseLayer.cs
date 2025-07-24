@@ -23,10 +23,7 @@ namespace NeuralNetworkLibrary.Layers
         public abstract void SetInputShape(TensorShape inputShape);
         public abstract ITensor Forward(ITensor input, bool isTraining = true);
         public abstract ITensor Backward(ITensor gradient, float learningRate);
-        public void UpdateParameters(IOptimizer optimizer)
-        {
-
-        }
+        public abstract void UpdateParameters(IOptimizer optimizer);
         public bool LoadParameters(JsonArray param)
         {
             return false;

@@ -337,5 +337,10 @@ namespace NeuralNetworkLibrary.Layers
                 sum += vector[i];
             return sum;
         }
+
+        public override void UpdateParameters(IOptimizer optimizer)
+        {
+
+        }
     }
 }
