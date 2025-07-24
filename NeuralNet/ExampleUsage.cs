@@ -85,10 +85,10 @@ namespace NeuralNetworkExample
             }
             
             // 训练网络
-            Console.WriteLine("开始训练...");
+            Console.WriteLine($"{DateTime.Now} 开始训练...");
             network.Train(inputs, targets, epochs: 10, batchSize: 16);
             
-            Console.WriteLine("训练完成!");
+            Console.WriteLine($"{DateTime.Now} 训练完成!");
             
             // 测试网络推理
             Console.WriteLine("测试网络推理...");

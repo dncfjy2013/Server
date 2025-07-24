@@ -133,7 +133,9 @@ namespace NeuralNetworkLibrary
             for (int epoch = 0; epoch < epochs; epoch++)
             {
                 float totalLoss = 0;
-                
+                int totalCorrect = 0;
+                int totalSamples = 0;
+
                 // 打乱数据顺序
                 var shuffledIndices = Enumerable.Range(0, inputs.Count).OrderBy(x => _random.Next()).ToList();
                 
@@ -142,7 +144,9 @@ namespace NeuralNetworkLibrary
                     // 获取当前批次的索引
                     var batchIndices = shuffledIndices.Skip(b * batchSize).Take(batchSize).ToList();
                     float batchLoss = 0;
-                    
+                    int batchCorrect = 0;
+                    int batchSamples = batchIndices.Count;
+
                     // 处理批次中的每个样本
                     foreach (int i in batchIndices)
                     {
@@ -151,18 +155,31 @@ namespace NeuralNetworkLibrary
                         
                         // 反向传播并更新参数
                         batchLoss += Backward(predicted, targets[i]);
+
+                        // 计算当前样本是否预测正确
+                        if (IsPredictionCorrect(predicted, targets[i]))
+                        {
+                            batchCorrect++;
+                            totalCorrect++;
+                        }
+                        totalSamples++;
                     }
                     
                     // 计算批次平均损失
                     batchLoss /= batchIndices.Count;
                     totalLoss += batchLoss;
-                    
-                    Console.WriteLine($"Epoch {epoch + 1}/{epochs}, Batch {b + 1}/{numBatches}, Loss: {batchLoss:F6}");
+                    float batchAccuracy = (float)batchCorrect / batchSamples * 100;
+
+                    Console.WriteLine($"{DateTime.Now} Epoch {epoch + 1}/{epochs}, Batch {b + 1}/{numBatches}, Loss: {batchLoss:F6}" +
+                        $", Accuracy: {batchAccuracy:F2}%");
                 }
                 
                 // 计算 epoch 平均损失
                 float epochLoss = totalLoss / numBatches;
-                Console.WriteLine($"Epoch {epoch + 1}/{epochs} 完成. 平均损失: {epochLoss:F6}");
+                float epochAccuracy = (float)totalCorrect / totalSamples * 100;
+
+                Console.WriteLine($"{DateTime.Now} Epoch {epoch + 1}/{epochs} 完成. 平均损失: {epochLoss:F6}" +
+                    $" 平均精度: {epochAccuracy:F2}%");
             }
         }
 
@@ -173,5 +190,44 @@ namespace NeuralNetworkLibrary
         {
             return Forward(input, isTraining: false);
         }
+
+        /// <summary>
+        /// 判断预测结果是否正确
+        /// 适用于分类问题，通过比较最大值索引判断
+        /// </summary>
+        private bool IsPredictionCorrect(ITensor predicted, ITensor target)
+        {
+            // 对于分类问题，假设预测和目标都是one-hot编码或概率分布
+            // 找到预测值中概率最高的索引
+            int predictedClass = GetMaxValueIndex(predicted);
+
+            // 找到目标值中标签位置（通常是1的位置）
+            int targetClass = GetMaxValueIndex(target);
+
+            return predictedClass == targetClass;
+        }
+
+        /// <summary>
+        /// 获取张量中最大值的索引
+        /// </summary>
+        private int GetMaxValueIndex(ITensor tensor)
+        {
+            float maxValue = float.MinValue;
+            int maxIndex = 0;
+
+            // 假设是1D张量（分类输出）
+            for (int i = 0; i < tensor.Shape[0]; i++)
+            {
+                float value = tensor[i];
+                if (value > maxValue)
+                {
+                    maxValue = value;
+                    maxIndex = i;
+                }
+            }
+
+            return maxIndex;
+        }
+
     }
 }
