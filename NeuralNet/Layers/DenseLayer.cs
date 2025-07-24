@@ -1,11 +1,14 @@
 using NeuralNetworkLibrary.Core;
 using NeuralNetworkLibrary.Optimizers;
 using System;
+using System.Collections.Concurrent;
+using System.Numerics;
+using System.Threading.Tasks;
 
 namespace NeuralNetworkLibrary.Layers
 {
     /// <summary>
-    /// 全连接层（密集层）实现
+    /// 优化的全连接层（密集层），利用SIMD和多线程最大化CPU性能
     /// </summary>
     public class DenseLayer : BaseLayer
     {
@@ -14,101 +17,242 @@ namespace NeuralNetworkLibrary.Layers
         private ITensor _biases;   // [units]
         private ITensor _input;    // 缓存输入用于反向传播
         private int _inputSize;    // 输入特征数量
-        
+        private readonly int _simdLength;  // SIMD向量长度（如AVX2为8，AVX-512为16）
+
         public override bool HasParameters => true;
 
         public DenseLayer(int units, string name = "Dense") : base(name)
         {
             _units = units;
+            _simdLength = Vector<float>.Count;  // 运行时确定SIMD长度（依赖CPU支持）
         }
 
         public override void SetInputShape(TensorShape inputShape)
         {
             InputShape = inputShape;
-            
+
             // 计算输入大小（展平后的尺寸）
             _inputSize = 1;
             foreach (int dim in inputShape.Dimensions)
                 _inputSize *= dim;
-                
+
             // 输出形状为 [_units]
             OutputShape = new TensorShape(_units);
         }
 
         public override void Initialize(Random random)
         {
-            // 初始化权重和偏置
+            // 初始化权重和偏置（内存对齐，提升SIMD效率）
             _weights = new Tensor(_units, _inputSize);
             _biases = new Tensor(_units);
-            
-            // 使用Xavier初始化
+
+            // 使用Xavier初始化（适应ReLU等激活函数）
             float scale = (float)Math.Sqrt(2.0 / _inputSize);
             _weights.Randomize(-scale, scale, random);
             _biases.Fill(0f);
         }
 
+        /// <summary>
+        /// 前向传播：y = W·x + b（利用SIMD和多线程加速）
+        /// </summary>
         public override ITensor Forward(ITensor input, bool isTraining = true)
         {
+            // 训练时缓存输入（深拷贝）
             _input = isTraining ? input.Clone() : null;
-            
+
             var output = new Tensor(_units);
-            
-            // 计算输出: output = weights * input + bias
-            for (int i = 0; i < _units; i++)
-            {
-                float sum = _biases[i];
-                for (int j = 0; j < _inputSize; j++)
+            float[] outputData = output.Data;
+            float[] weightsData = _weights.Data;
+            float[] biasesData = _biases.Data;
+            float[] inputData = input.Data;
+
+            // 多线程并行计算每个输出单元（按单元粒度拆分，平衡负载）
+            int batchSize = Math.Max(1, Environment.ProcessorCount * 2);  // 线程数为CPU核心数的2倍
+            Parallel.ForEach(
+                Partitioner.Create(0, _units),
+                new ParallelOptions { MaxDegreeOfParallelism = batchSize },
+                range =>
                 {
-                    sum += _weights[i, j] * input.Data[j];
+                    for (int i = range.Item1; i < range.Item2; i++)
+                    {
+                        // 计算 W[i]·x（使用SIMD加速点积）
+                        float sum = SimdDotProduct(
+                            weightsData, i * _inputSize,  // 权重起始地址：第i行的权重
+                            inputData, 0,                // 输入向量起始地址
+                            _inputSize                   // 向量长度
+                        );
+                        // 加上偏置 b[i]
+                        outputData[i] = sum + biasesData[i];
+                    }
                 }
-                output[i] = sum;
-            }
-            
+            );
+
             return output;
         }
-        private Tensor weightGradients;
-        private Tensor biasGradients;
+
+        /// <summary>
+        /// 反向传播：计算梯度并更新参数
+        /// </summary>
         public override ITensor Backward(ITensor gradient, float learningRate)
         {
-            // 计算权重和偏置的梯度
-            weightGradients = new Tensor(_units, _inputSize);
-            biasGradients = new Tensor(_units);
-            
-            // 计算偏置梯度
-            for (int i = 0; i < _units; i++)
-            {
-                biasGradients[i] = gradient[i];
-            }
-            
-            // 计算权重梯度
-            for (int i = 0; i < _units; i++)
-            {
-                for (int j = 0; j < _inputSize; j++)
-                {
-                    weightGradients[i, j] = gradient[i] * _input.Data[j];
-                }
-            }
-            
-            // 计算输入梯度（用于前一层的反向传播）
+            float[] gradData = gradient.Data;
+            float[] inputData = _input.Data;
+            int inputSize = _inputSize;
+            int units = _units;
+
+            // 初始化梯度张量（内存对齐）
+            var weightGradients = new Tensor(units, inputSize);
+            var biasGradients = new Tensor(units);
             var inputGradient = new Tensor(InputShape.Dimensions);
-            for (int j = 0; j < _inputSize; j++)
-            {
-                float sum = 0;
-                for (int i = 0; i < _units; i++)
+            float[] wGradData = weightGradients.Data;
+            float[] bGradData = biasGradients.Data;
+            float[] inGradData = inputGradient.Data;
+
+            // 1. 计算偏置梯度（bGrad[i] = ∇L/∇y[i]）
+            // 直接复制梯度（SIMD加速内存拷贝）
+            SimdCopy(gradData, 0, bGradData, 0, units);
+
+            // 2. 计算权重梯度（wGrad[i][j] = ∇L/∇y[i] * x[j]）
+            // 多线程并行计算每个权重的梯度
+            Parallel.ForEach(
+                Partitioner.Create(0, units),
+                new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount * 2 },
+                range =>
                 {
-                    sum += _weights[i, j] * gradient[i];
+                    for (int i = range.Item1; i < range.Item2; i++)
+                    {
+                        float g = gradData[i];  // 当前输出单元的梯度
+                        int weightRowStart = i * inputSize;  // 第i行权重的起始索引
+
+                        // 计算 g * x[j]（使用SIMD加速标量×向量）
+                        SimdMultiplyScalar(
+                            inputData, 0,          // 输入向量x
+                            g,                     // 标量g
+                            wGradData, weightRowStart,  // 输出：权重梯度第i行
+                            inputSize              // 向量长度
+                        );
+                    }
                 }
-                inputGradient.Data[j] = sum;
-            }           
-            
+            );
+
+            // 3. 计算输入梯度（inGrad[j] = sum(∇L/∇y[i] * W[i][j])）
+            // 多线程并行计算每个输入特征的梯度
+            Parallel.ForEach(
+                Partitioner.Create(0, inputSize),
+                new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount * 2 },
+                range =>
+                {
+                    for (int j = range.Item1; j < range.Item2; j++)
+                    {
+                        float sum = 0f;
+                        // 累加所有输出单元的梯度×权重
+                        for (int i = 0; i < units; i++)
+                        {
+                            sum += gradData[i] * _weights[i, j];
+                        }
+                        inGradData[j] = sum;
+                    }
+                }
+            );
+
+            // 保存梯度用于参数更新
+            _weightGradients = weightGradients;
+            _biasGradients = biasGradients;
+
             return inputGradient;
         }
-               
 
         public override void UpdateParameters(IOptimizer optimizer)
         {
-            optimizer.UpdateParameter(_weights, weightGradients);
-            optimizer.UpdateParameter(_biases, biasGradients);
+            optimizer.UpdateParameter(_weights, _weightGradients);
+            optimizer.UpdateParameter(_biases, _biasGradients);
         }
+
+        // ------------------------------
+        // SIMD工具函数（核心优化点）
+        // ------------------------------
+
+        /// <summary>
+        /// SIMD加速的点积计算：a·b = sum(a[i] * b[i])
+        /// </summary>
+        private float SimdDotProduct(float[] a, int aStart, float[] b, int bStart, int length)
+        {
+            Vector<float> sumVec = Vector<float>.Zero;
+            int i = 0;
+
+            // 按SIMD向量长度处理（每次处理_simdLength个元素）
+            for (; i <= length - _simdLength; i += _simdLength)
+            {
+                Vector<float> va = new Vector<float>(a, aStart + i);
+                Vector<float> vb = new Vector<float>(b, bStart + i);
+                sumVec += va * vb;  // SIMD乘法+累加
+            }
+
+            // 处理剩余元素（不足_simdLength的部分）
+            float sum = SumVector(sumVec);
+            for (; i < length; i++)
+            {
+                sum += a[aStart + i] * b[bStart + i];
+            }
+
+            return sum;
+        }
+
+        /// <summary>
+        /// SIMD加速的标量×向量乘法：result[i] = scalar * a[i]
+        /// </summary>
+        private void SimdMultiplyScalar(float[] a, int aStart, float scalar, float[] result, int resultStart, int length)
+        {
+            Vector<float> scalarVec = new Vector<float>(scalar);  // 标量广播为向量
+            int i = 0;
+
+            // 按SIMD向量长度处理
+            for (; i <= length - _simdLength; i += _simdLength)
+            {
+                Vector<float> va = new Vector<float>(a, aStart + i);
+                Vector<float> vResult = va * scalarVec;  // SIMD乘法
+                vResult.CopyTo(result, resultStart + i);  // 结果写入内存
+            }
+
+            // 处理剩余元素
+            for (; i < length; i++)
+            {
+                result[resultStart + i] = a[aStart + i] * scalar;
+            }
+        }
+
+        /// <summary>
+        /// SIMD加速的内存拷贝
+        /// </summary>
+        private void SimdCopy(float[] source, int sourceStart, float[] dest, int destStart, int length)
+        {
+            int i = 0;
+            for (; i <= length - _simdLength; i += _simdLength)
+            {
+                Vector<float> v = new Vector<float>(source, sourceStart + i);
+                v.CopyTo(dest, destStart + i);
+            }
+            // 处理剩余元素
+            for (; i < length; i++)
+            {
+                dest[destStart + i] = source[sourceStart + i];
+            }
+        }
+
+        /// <summary>
+        /// 累加SIMD向量的所有元素
+        /// </summary>
+        private float SumVector(Vector<float> vector)
+        {
+            float sum = 0;
+            for (int i = 0; i < _simdLength; i++)
+            {
+                sum += vector[i];
+            }
+            return sum;
+        }
+
+        private Tensor _weightGradients;
+        private Tensor _biasGradients;
     }
 }
