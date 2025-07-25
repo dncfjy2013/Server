@@ -1,3 +1,5 @@
+using NeuralNetworkLibrary.Core;
+
 namespace NeuralNetworkLibrary.Activations
 {
     /// <summary>
@@ -12,19 +14,36 @@ namespace NeuralNetworkLibrary.Activations
             _alpha = alpha;
         }
 
-        public float Activate(float x)
+        public ITensor Activate(ITensor input)
         {
-            return x > 0 ? x : _alpha * x;
+            ITensor tensor = input.Clone();
+            // Leaky ReLU公式: f(tensor) = tensor if tensor > 0 else alpha * tensor
+            for (int i=0; i < tensor.Size; i++)
+            {
+                tensor.Data[i] = tensor.Data[i] > 0 ? tensor.Data[i] : _alpha * tensor.Data[i];
+            }
+            return tensor;
         }
 
-        public float Derivative(float x)
+        public ITensor Derivative(ITensor input)
         {
-            return x > 0 ? 1 : _alpha;
+            ITensor tensor = input.Clone();
+            // Leaky ReLU导数: 1 if tensor > 0 else alpha
+            for (int i = 0; i < tensor.Size; i++)
+            {
+                tensor.Data[i] = tensor.Data[i] > 0 ? 1 : _alpha;
+            }
+            return tensor;
         }
 
-        public float DerivativeFromOutput(float output)
+        public ITensor DerivativeFromOutput(ITensor input)
         {
-            return output > 0 ? 1 : _alpha;
+            ITensor tensor = input.Clone();
+            for (int i = 0; i < tensor.Size; i++)
+            {
+                tensor.Data[i] = tensor.Data[i] > 0 ? 1 : _alpha;
+            }
+            return tensor;
         }
     }
 }

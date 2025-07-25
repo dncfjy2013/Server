@@ -1,3 +1,5 @@
+using NeuralNetworkLibrary.Core;
+
 namespace NeuralNetworkLibrary.Activations
 {
     /// <summary>
@@ -5,20 +7,37 @@ namespace NeuralNetworkLibrary.Activations
     /// </summary>
     public class ReLUActivation : IActivation
     {
-        public float Activate(float x)
+        public ITensor Activate(ITensor input)
         {
-            return x > 0 ? x : 0;
+            ITensor tensor = input.Clone();
+            // ReLU函数公式: f(tensor) = max(0, tensor)
+            for (int i = 0; i < tensor.Size; i++)
+            {
+                tensor.Data[i] = tensor.Data[i] > 0 ? tensor.Data[i] : 0;
+            }
+            return tensor;
         }
 
-        public float Derivative(float x)
+        public ITensor Derivative(ITensor input)
         {
-            return x > 0 ? 1 : 0;
+            ITensor tensor = input.Clone();
+            // ReLU导数公式: f'(tensor) = 1 if tensor > 0 else 0
+            for (int i = 0; i < tensor.Size; i++)
+            {
+                tensor.Data[i] = tensor.Data[i] > 0 ? 1 : 0;
+            }
+            return tensor;
         }
 
-        public float DerivativeFromOutput(float output)
+        public ITensor DerivativeFromOutput(ITensor input)
         {
-            // 对于ReLU，输出与输入的导数关系相同
-            return output > 0 ? 1 : 0;
+            ITensor tensor = input.Clone();
+            // ReLU导数公式: f'(tensor) = 1 if tensor > 0 else 0
+            for (int i = 0; i < tensor.Size; i++)
+            {
+                tensor.Data[i] = tensor.Data[i] > 0 ? 1 : 0;
+            }
+            return tensor;
         }
     }
 }

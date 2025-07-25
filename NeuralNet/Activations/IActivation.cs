@@ -1,3 +1,5 @@
+using NeuralNetworkLibrary.Core;
+
 namespace NeuralNetworkLibrary.Activations
 {
     /// <summary>
@@ -5,8 +7,8 @@ namespace NeuralNetworkLibrary.Activations
     /// </summary>
     public interface IActivation
     {
-        float Activate(float x);
-        float Derivative(float x);
-        float DerivativeFromOutput(float output);
+        ITensor Activate(ITensor x);
+        ITensor Derivative(ITensor x);
+        ITensor DerivativeFromOutput(ITensor output);
     }
 }
