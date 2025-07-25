@@ -247,5 +247,17 @@ namespace NeuralNetworkLibrary.Core
         /// </summary>
         void AddSIMD(ITensor other);
         #endregion
+
+        #region 自定义操作
+        /// <summary>
+        /// 对每个元素应用自定义操作（新增方法）
+        /// </summary>
+        void Apply(Func<float, float> operation);
+
+        /// <summary>
+        /// 对每个元素应用自定义操作并返回新张量（新增方法）
+        /// </summary>
+        ITensor ApplyAndClone(Func<float, float> operation);
+        #endregion
     }
 }

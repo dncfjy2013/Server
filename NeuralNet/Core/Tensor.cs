@@ -895,5 +895,45 @@ namespace NeuralNetworkLibrary.Core
                 Data[i] *= other.Data[i];
         }
         #endregion
+
+        /// <summary>
+        /// 实现元素级自定义操作（利用SIMD加速）
+        /// </summary>
+        public void Apply(Func<float, float> operation)
+        {
+            int vectorLength = Vector<float>.Count;
+            int vectorCount = Size / vectorLength;
+            int remaining = Size % vectorLength;
+
+            // 对支持SIMD的部分批量处理
+            for (int i = 0; i < vectorCount; i++)
+            {
+                int index = i * vectorLength;
+                // 读取向量
+                Vector<float> v = new Vector<float>(Data, index);
+                // 对每个元素应用操作（通过Span实现高效处理）
+                Span<float> span = new Span<float>(Data, index, vectorLength);
+                for (int j = 0; j < vectorLength; j++)
+                {
+                    span[j] = operation(span[j]);
+                }
+            }
+
+            // 处理剩余元素
+            for (int i = vectorCount * vectorLength; i < Size; i++)
+            {
+                Data[i] = operation(Data[i]);
+            }
+        }
+
+        /// <summary>
+        /// 克隆张量并对元素应用自定义操作
+        /// </summary>
+        public ITensor ApplyAndClone(Func<float, float> operation)
+        {
+            ITensor clone = Clone();
+            clone.Apply(operation);
+            return clone;
+        }
     }
 }
