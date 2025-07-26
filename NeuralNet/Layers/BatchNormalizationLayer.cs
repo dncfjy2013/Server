@@ -31,6 +31,7 @@ namespace NeuralNetworkLibrary.Layers
         private ITensor _mean;       // 批次均值 [channels]
         private ITensor _var;        // 批次方差 [channels]
 
+        public override string LayerType => "BatchNormalizationLayer";
         public override bool HasParameters => true;
 
         public BatchNormalizationLayer(float momentum = 0.9f, string name = "BN") : base(name)
@@ -439,6 +440,11 @@ namespace NeuralNetworkLibrary.Layers
             {
                 return false; // 任何解析错误都返回失败
             }
+        }
+
+        public override void ResetParameters(Random random)
+        {
+            Initialize(random);
         }
     }
 

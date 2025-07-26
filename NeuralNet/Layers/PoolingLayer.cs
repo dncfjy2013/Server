@@ -20,7 +20,7 @@ namespace NeuralNetworkLibrary.Layers
         private int _stride;
         private PoolingType _poolingType;
         private int[,,,] _maxIndices; // 用于最大池化的反向传播 [channels, outputH, outputW, 2] 存储最大值的坐标
-        
+        public override string LayerType => "PoolingLayer";
         public PoolingLayer(int poolSize, int stride = -1, PoolingType poolingType = PoolingType.Max, string name = "Pool") 
             : base(name)
         {
@@ -252,6 +252,11 @@ namespace NeuralNetworkLibrary.Layers
             {
                 return false;
             }
+        }
+
+        public override void ResetParameters(Random random)
+        {
+            Initialize(random);
         }
     }
 }

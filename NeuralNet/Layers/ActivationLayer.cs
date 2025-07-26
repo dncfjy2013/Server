@@ -14,7 +14,7 @@ namespace NeuralNetworkLibrary.Layers
         private IActivation _activation;
         private ITensor _input; // 缓存输入用于反向传播
         private ITensor _output;
-
+        public override string LayerType => "ActivationLayer";
         public ActivationLayer(IActivation activation, string name = "Activation") : base(name)
         {
             _activation = activation;
@@ -24,11 +24,6 @@ namespace NeuralNetworkLibrary.Layers
         {
             InputShape = inputShape;
             OutputShape = inputShape.Clone(); // 激活函数不改变形状
-        }
-
-        public override void Initialize(Random random)
-        {
-            // 激活层没有参数需要初始化
         }
 
         public override ITensor Forward(ITensor input, bool isTraining = true)
@@ -83,6 +78,14 @@ namespace NeuralNetworkLibrary.Layers
             parameters.Add(null);
 
             return parameters;
+        }
+        public override void Initialize(Random random)
+        {
+            // 激活层没有参数需要初始化
+        }
+        public override void ResetParameters(Random random)
+        {
+
         }
     }
 }

@@ -1,6 +1,7 @@
 using NeuralNetworkLibrary.Core;
 using NeuralNetworkLibrary.Optimizers;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace NeuralNetworkLibrary.Layers
 {
@@ -12,28 +13,24 @@ namespace NeuralNetworkLibrary.Layers
         public string Name { get; }
         public TensorShape InputShape { get; protected set; }
         public TensorShape OutputShape { get; protected set; }
+        public double ForwardTimeMs { get; protected set; }
+        public double BackwardTimeMs { get; protected set; }
         public virtual bool HasParameters => false;
+        public virtual string LayerType => null;
 
-        public string LayerType => throw new NotImplementedException();
+        public float Version => 1.0f;
 
-        public int Version => throw new NotImplementedException();
+        public IDictionary<string, string> Metadata => new Dictionary<string, string>() 
+        {
+            { "Author", "NeuralNetworkLibrary" },
+            { "Description", "Base layer for neural networks" },
+            { "Version", Version.ToString() }
+        };
 
-        public IDictionary<string, string> Metadata => throw new NotImplementedException();
-
-        public string Device => throw new NotImplementedException();
-
-        public bool IsTraining => throw new NotImplementedException();
+        public string Device { get; protected set; } = "cpu";
 
         public PrecisionMode Precision { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
         public QuantizationMode Quantization { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
-
-        public IReadOnlyList<ILayer> NextLayers => throw new NotImplementedException();
-
-        public IReadOnlyList<ILayer> PreviousLayers => throw new NotImplementedException();
-
-        public double ForwardTimeMs => throw new NotImplementedException();
-
-        public double BackwardTimeMs => throw new NotImplementedException();
 
         protected BaseLayer(string name)
         {
@@ -47,15 +44,24 @@ namespace NeuralNetworkLibrary.Layers
         public abstract void UpdateParameters(IOptimizer optimizer);
         public abstract bool LoadParameters(JsonArray param);
         public abstract JsonArray GetParameters();
-
-        public void SetTraining(bool isTraining)
-        {
-            throw new NotImplementedException();
-        }
+        public abstract void ResetParameters(Random random);
 
         public void MoveToDevice(string device)
         {
-            throw new NotImplementedException();
+            if (string.IsNullOrEmpty(device))
+            {
+                Device = "cpu";
+                return;
+            }
+
+            // 1. 去除所有空格（包括空格、制表符等空白字符）
+            string trimmed = Regex.Replace(device, @"\s+", "");
+
+            // 2. 转换为小写
+            string normalizedDevice = trimmed.ToLowerInvariant();
+
+            // 3. 赋值给设备属性
+            Device = normalizedDevice;
         }
 
         public void SetPrecision(PrecisionMode mode)
@@ -63,92 +69,7 @@ namespace NeuralNetworkLibrary.Layers
             throw new NotImplementedException();
         }
 
-        public IReadOnlyList<string> GetParameterNames()
-        {
-            throw new NotImplementedException();
-        }
-
-        public ITensor GetParameter(string name)
-        {
-            throw new NotImplementedException();
-        }
-
         public void ApplyConstraints()
-        {
-            throw new NotImplementedException();
-        }
-
-        public void ResetParameters(Random random)
-        {
-            throw new NotImplementedException();
-        }
-
-        public IReadOnlyDictionary<string, ITensor> GetStates()
-        {
-            throw new NotImplementedException();
-        }
-
-        public void SetStates(IDictionary<string, ITensor> states)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void ResetStates()
-        {
-            throw new NotImplementedException();
-        }
-
-        public JsonNode SaveConfiguration()
-        {
-            throw new NotImplementedException();
-        }
-
-        public bool LoadConfiguration(JsonNode config)
-        {
-            throw new NotImplementedException();
-        }
-
-        public byte[] ExportParameters(SerializationFormat format = SerializationFormat.Binary)
-        {
-            throw new NotImplementedException();
-        }
-
-        public bool ImportParameters(byte[] data, SerializationFormat format = SerializationFormat.Binary)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void OptimizeForInference()
-        {
-            throw new NotImplementedException();
-        }
-
-        public GraphNode GetGraphNode()
-        {
-            throw new NotImplementedException();
-        }
-
-        public IDictionary<string, ITensor> GetDebugIntermediates()
-        {
-            throw new NotImplementedException();
-        }
-
-        public ITensor ComputeInputGradient(ITensor input, int outputIndex = -1)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void AddNextLayer(ILayer layer)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void RemoveNextLayer(ILayer layer)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void ResetPerformanceStats()
         {
             throw new NotImplementedException();
         }

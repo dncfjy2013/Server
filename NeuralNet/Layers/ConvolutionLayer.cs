@@ -30,6 +30,7 @@ namespace NeuralNetworkLibrary.Layers
         private int _vectorizedKernelSize;
 
         public override bool HasParameters => true;
+        public override string LayerType => "ConvolutionLayer";
 
         public ConvolutionLayer(int kernelSize, int filters, int stride = 1, int padding = 1, string name = "Conv")
             : base(name)
@@ -430,6 +431,11 @@ namespace NeuralNetworkLibrary.Layers
             {
                 return false; // 任何解析错误都返回失败
             }
+        }
+
+        public override void ResetParameters(Random random)
+        {
+            Initialize(random);
         }
     }
 

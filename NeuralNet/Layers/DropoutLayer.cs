@@ -14,6 +14,7 @@ namespace NeuralNetworkLibrary.Layers
         private bool[,] _mask; // 存储dropout掩码，适用于2D输入（批次×特征 或 通道×特征）
         private Random _random;
         private int[] _inputDimensions; // 存储输入维度信息，用于处理不同形状的输入
+        public override string LayerType => "DropoutLayer";
 
         public DropoutLayer(float dropoutRate = 0.5f, string name = "Dropout") : base(name)
         {
@@ -230,6 +231,11 @@ namespace NeuralNetworkLibrary.Layers
             {
                 return false; // 任何解析错误都返回失败
             }
+        }
+
+        public override void ResetParameters(Random random)
+        {
+            Initialize(random);
         }
     }
 }

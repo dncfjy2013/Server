@@ -24,6 +24,7 @@ namespace NeuralNetworkLibrary.Layers
         private Tensor _weightGradients;
         private Tensor _biasGradients;
         public override bool HasParameters => true;
+        public override string LayerType => "DenseLayer";
 
         public DenseLayer(int units, string name = "Dense") : base(name)
         {
@@ -333,6 +334,11 @@ namespace NeuralNetworkLibrary.Layers
             {
                 return false; // 任何解析错误都返回失败
             }
+        }
+
+        public override void ResetParameters(Random random)
+        {
+            Initialize(random);
         }
     }
 

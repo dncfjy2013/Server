@@ -11,6 +11,7 @@ namespace NeuralNetworkLibrary.Layers
     public class FlattenLayer : BaseLayer
     {
         public FlattenLayer(string name = "Flatten") : base(name) { }
+        public override string LayerType => "FlattenLayer";
 
         public override void SetInputShape(TensorShape inputShape)
         {
@@ -105,6 +106,11 @@ namespace NeuralNetworkLibrary.Layers
             {
                 return false;
             }
+        }
+
+        public override void ResetParameters(Random random)
+        {
+            Initialize(random);
         }
     }
 }
