@@ -11,7 +11,7 @@ namespace Entity.Geometry.Tests
         private const double NoiseLevel = 0.1; // 噪声水平
         private const double OutlierRate = 0.3; // 离群点比例（提高以确保测试通过）
 
-        public static void Main()
+        public static void TestMain()
         {
             var tester = new CoordinateRotationCalculatorTester();
             tester.RunAllTests();

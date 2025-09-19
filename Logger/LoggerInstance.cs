@@ -44,7 +44,8 @@ namespace Server.Logger
         private bool _isDisposed;                                        // 资源释放状态标志
         private volatile bool _isAsyncWrite;                             // 异步写入标志，使用volatile确保多线程可见性
         #endregion
-
+        public int GetLogChannelCount() => _logChannel.Reader.Count;
+        public LoggerConfig GetLoggerConfig() => _config;
         #region 文件写入相关成员
         private FileStream _fileStream;                                  // 用于写入日志的文件流
         private readonly byte[] _writeBuffer;                            // 写入缓冲区

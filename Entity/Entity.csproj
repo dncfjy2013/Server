@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="IPCCommunication\介绍" />
+    <None Remove="IPCCommunication\介绍.md" />
   </ItemGroup>
 
   <ItemGroup>

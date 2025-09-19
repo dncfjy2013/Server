@@ -9,6 +9,7 @@ using System.Net.Sockets;
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
+using Server.Logger;
 
 namespace Server.Proxy.Core
 {/// <summary>

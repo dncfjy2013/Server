@@ -1,11 +1,4 @@
-﻿using Entity.Communication.USBComu.Common.UsbCommunicationFramework;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Entity.Communication.USBComu.Common
+﻿namespace Entity.Communication.USBComu.Common
 {
     // USB错误事件参数
     public class UsbErrorEventArgs : EventArgs
