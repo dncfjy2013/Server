@@ -8,26 +8,7 @@ Console.WriteLine($"CPU: {hardwareInfo.CpuInfo}");
 Console.WriteLine($"核心数: {hardwareInfo.CpuCores}");
 Console.WriteLine($"内存: {hardwareInfo.TotalMemoryGb} GB");
 Console.WriteLine($"磁盘类型: {hardwareInfo.DiskType}");
-
-//// 获取并输出系统类型的详细信息
-//var systemType = SystemDetector.DetectSystemType();
-//Console.WriteLine($"系统类型: {systemType.GetHardwareInfo()?.FullName ?? systemType.ToString()}");
-//Console.WriteLine(systemType.GetFullDescription());
-
-//// 获取并输出硬件配置文件的详细信息
-//var hardwareProfile = SystemDetector.DetectHardwareProfile();
-//Console.WriteLine($"硬件配置: {hardwareProfile.GetHardwareInfo()?.FullName ?? hardwareProfile.ToString()}");
-//Console.WriteLine(hardwareProfile.GetFullDescription());
-
-//// 获取并输出网络带宽配置文件的详细信息
-//var networkProfile = SystemDetector.DetectNetworkBandwidthProfile();
-//Console.WriteLine($"网络带宽: {networkProfile.GetHardwareInfo()?.FullName ?? networkProfile.ToString()}");
-//Console.WriteLine(networkProfile.GetFullDescription());
-
-//// 获取并输出磁盘类型的详细信息
-//var diskType = SystemDetector.DetectDiskType();
-//Console.WriteLine($"磁盘类型: {diskType.GetHardwareInfo()?.FullName ?? diskType.ToString()}");
-//Console.WriteLine(diskType.GetFullDescription());
+Console.WriteLine($"系统类型: {hardwareInfo.System}");
 
 Server.Core.ServerInstance server = new Server.Core.ServerInstance(1111, 2222, 3333, new List<string>() { "http://localhost:9999/" }, SSLManager.LoadOrCreateCertificate());
 server.Start(false);

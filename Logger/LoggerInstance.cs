@@ -1,24 +1,11 @@
 ﻿using Microsoft.Win32.SafeHandles;
-using Server.Common.Extensions;
 using Server.Logger.Common;
-using System;
-using System.Buffers;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.IO;
-using System.Numerics;
 using System.Runtime.CompilerServices;
-using System.Runtime.ConstrainedExecution;
 using System.Runtime.InteropServices;
-using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
-using System.Security;
-using System.Security.AccessControl;
 using System.Text;
-using System.Threading;
 using System.Threading.Channels;
-using System.Threading.Tasks;
 
 namespace Server.Logger
 {

@@ -14,7 +14,7 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace Server.Core
 {
-    public partial class ServerInstance
+    public class ServerInstance
     {
         // 流量监控器实例，用于监控服务器与客户端之间的流量情况，在构造函数中初始化
         private readonly TrafficMonitor _trafficMonitor;
