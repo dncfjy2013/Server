@@ -9,12 +9,23 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="log4net.config" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="log4net.config">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
     <PackageReference Include="MSTest.TestFramework" Version="3.10.4" />
     <PackageReference Include="System.ComponentModel.Composition" Version="9.0.9" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\CoordinateSystem\CoordinateSystem.csproj" />
     <ProjectReference Include="..\Core\Core.csproj" />
     <ProjectReference Include="..\Logger\Logger.csproj" />
     <ProjectReference Include="..\Proxy\Proxy.csproj" />

@@ -37,7 +37,7 @@ public class LogAspect : OnMethodBoundaryAspect
             for (int i = 0; i < arguments.Length; i++)
             {
                 if (i > 0) sb.Append(", ");
-                sb.Append(arguments[i] ?? "null");
+                sb.Append(arguments[i]?.ToString() ?? "null");
             }
 
             sb.Append(")");
@@ -92,6 +92,14 @@ public class LogAspect : OnMethodBoundaryAspect
         if (!declaringType.IsClass)
             return true;
 
+        if (method.Name == nameof(ToString))
+        {
+            return true;
+        }
+        if (method.Name.StartsWith("get_") || method.Name.StartsWith("set_"))
+        {
+            return true;
+        }
         if (method.IsDefined(typeof(NoLogAttribute), true))
             return true;
 

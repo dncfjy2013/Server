@@ -157,6 +157,15 @@ namespace CoordinateSystem
         /// 求四元数的逆（用于反向旋转）
         /// </summary>
         public Quaternion Inverse() => new Quaternion(-X, -Y, -Z, W);
+
+        /// <summary>
+        /// ToString
+        /// </summary>
+        /// <returns></returns>
+        public override string ToString()
+        {
+            return $"Quaternion(X={X:F4}, Y={Y:F4}, Z={Z:F4}, W={W:F4})";
+        }
     }
 
     /// <summary>
@@ -256,6 +265,20 @@ namespace CoordinateSystem
             inv.M[3, 3] = 1.0;
 
             return inv;
+        }
+
+        /// <summary>
+        /// ToString
+        /// </summary>
+        /// <returns></returns>
+        public override string ToString()
+        {
+            return
+                $"Matrix4x4\n" +
+                $"[{M[0, 0]:F4}, {M[0, 1]:F4}, {M[0, 2]:F4}, {M[0, 3]:F4}]\n" +
+                $"[{M[1, 0]:F4}, {M[1, 1]:F4}, {M[1, 2]:F4}, {M[1, 3]:F4}]\n" +
+                $"[{M[2, 0]:F4}, {M[2, 1]:F4}, {M[2, 2]:F4}, {M[2, 3]:F4}]\n" +
+                $"[{M[3, 0]:F4}, {M[3, 1]:F4}, {M[3, 2]:F4}, {M[3, 3]:F4}]";
         }
     }
 

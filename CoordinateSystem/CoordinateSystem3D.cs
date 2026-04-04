@@ -137,5 +137,15 @@ namespace CoordinateSystem
 
             return p;
         }
+
+        public override string ToString()
+        {
+            return $"CoordinateSystem3D [{Type}] | " +
+                   $"Offset={Offset}, " +
+                   $"Compensation={OffsetCompensation}, " +
+                   $"Scale={Scale}, " +
+                   $"Unit={Unit}, " +
+                   $"Parent={(Parent != null ? Parent.Type.ToString() : "null")}";
+        }
     }
 }
