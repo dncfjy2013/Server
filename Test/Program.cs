@@ -1,21 +1,20 @@
-﻿//// See https://aka.ms/new-console-template for more information
-//using BenchmarkDotNet.Running;
-//using Test.TestDoc;
+﻿using CoordinateSystem;
+using log4net;
+using log4net.Config;
+using System;
+using Test;
 
-//Console.WriteLine("Hello, World!");
-
-//var summary = BenchmarkRunner.Run<LoggerBenchmark>();
-
-//// 可选：输出结果到文件
-//Console.WriteLine("基准测试已完成，结果已保存到文件。");
-
-
-using Common.VaribelAttribute;
-using Server.Test;
-
-await Proxytest.Proxy();
-
-while (true)
+public class Program
 {
+    private static readonly ILog _log = LogManager.GetLogger(typeof(Program));
 
+    public static void Main()
+    {
+
+        XmlConfigurator.Configure(new FileInfo("log4net.config"));
+        _log.Info("应用启动");
+
+        CoordinateFullTest.RunAllTests();
+
+    }
 }

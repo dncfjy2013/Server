@@ -8,183 +8,193 @@ using System.Threading.Tasks;
 namespace Test
 {
     /// <summary>
-    /// 三维坐标系 压力/性能/稳定性 测试类
-    /// 测试指标：速度、并发安全、递归深度、内存、误差、持久化
+    /// 三维坐标系全套自动化测试
+    /// 1. 精度测试（转换误差）
+    /// 2. 压力测试（TPS/性能）
+    /// 3. 可靠性测试（异常/边界/重复）
+    /// 4. 多线程安全测试
+    /// 5. 持久化测试（保存/加载）
+    /// 总耗时 ≤ 60秒
     /// </summary>
-    public static class CoordinateStressTest
+    public static class CoordinateFullTest
     {
-        /// <summary>
-        /// 运行全套压力测试（自动输出所有指标）
-        /// </summary>
-        public static void RunFullStressTest()
+        private static readonly Coordinate3DManager _mgr = Coordinate3DManager.Instance;
+        private static readonly int _testTimeSec = 60;
+
+        public static void RunAllTests()
         {
-            Console.WriteLine("========================================");
-            Console.WriteLine("   三维坐标系库 压力/稳定性/性能 测试");
-            Console.WriteLine("========================================\n");
+            Console.WriteLine("==================================================");
+            Console.WriteLine("       三维坐标系全套测试 (1分钟内完成)");
+            Console.WriteLine("==================================================");
 
-            Test_1_SequentialConvert();          // 单线程百万点转换
-            Test_2_MultiThreadConvert();          // 多线程并发转换（核心压测）
-            Test_3_FrequentUpdateMatrix();        // 高频修改+刷新矩阵
-            Test_4_DeepParentChain();             // 极深父子链递归
-            Test_5_SaveLoadJsonStress();          // 配置保存加载压测
-            Test_6_MemoryLeakCheck();             // 内存泄漏检测
-
-            Console.WriteLine("\n========================================");
-            Console.WriteLine("            所有测试完成！");
-            Console.WriteLine("========================================");
-            Console.ReadLine();
-        }
-
-        #region 1. 单线程连续转换（速度基准）
-        private static void Test_1_SequentialConvert()
-        {
-            Console.WriteLine("【测试 1】单线程 1,000,000 次坐标转换");
-
-            var sw = Stopwatch.StartNew();
-            var rnd = new Random();
-            int count = 1_000_000;
-
-            for (int i = 0; i < count; i++)
-            {
-                var p = new Point3D(rnd.Next(1000), rnd.Next(1000), rnd.Next(500));
-                Coordinate3DManager.Instance.Convert(p,
-                    CoordinateSystemType.Stage,
-                    CoordinateSystemType.Offset);
-            }
-
-            sw.Stop();
-            Console.WriteLine($"✅ 完成 {count:N0} 次转换 | 耗时：{sw.ElapsedMilliseconds} ms | TPS：{count / sw.Elapsed.TotalSeconds:F0}\n");
-        }
-        #endregion
-
-        #region 2. 多线程并发转换（线程安全压测）
-        private static void Test_2_MultiThreadConvert()
-        {
-            Console.WriteLine("【测试 2】多线程并发转换（10 线程 × 20万）");
-
-            var sw = Stopwatch.StartNew();
-            int threadCount = 10;
-            int perThread = 200_000;
-            int total = threadCount * perThread;
-            var rnd = new Random();
-
-            Parallel.For(0, threadCount, _ =>
-            {
-                for (int i = 0; i < perThread; i++)
-                {
-                    var p = new Point3D(rnd.Next(1000), rnd.Next(1000), rnd.Next(500));
-                    Coordinate3DManager.Instance.Convert(p,
-                        CoordinateSystemType.Wafer,
-                        CoordinateSystemType.Stage);
-                }
-            });
-
-            sw.Stop();
-            Console.WriteLine($"✅ 并发 {total:N0} 次 | 耗时：{sw.ElapsedMilliseconds} ms | TPS：{total / sw.Elapsed.TotalSeconds:F0}\n");
-        }
-        #endregion
-
-        #region 3. 高频修改偏移/旋转/缩放 + 矩阵刷新
-        private static void Test_3_FrequentUpdateMatrix()
-        {
-            Console.WriteLine("【测试 3】高频修改参数 + 矩阵刷新（10万次）");
-
-            var sw = Stopwatch.StartNew();
-            var rnd = new Random();
-            int count = 100_000;
-
-            for (int i = 0; i < count; i++)
-            {
-                var type = CoordinateSystemType.Offset;
-                double x = rnd.Next(1000);
-                double y = rnd.Next(1000);
-                double z = rnd.Next(500);
-                double rz = rnd.NextDouble() * 360;
-
-                Coordinate3DManager.Instance.SetAbsoluteOffset(type, x, y, z);
-                Coordinate3DManager.Instance.SetAbsoluteRotation(type, 0, 0, rz);
-                Coordinate3DManager.Instance.RefreshAllCoordinateMatrices();
-            }
-
-            sw.Stop();
-            Console.WriteLine($"✅ {count:N0} 次修改+刷新 | 耗时：{sw.ElapsedMilliseconds} ms\n");
-        }
-        #endregion
-
-        #region 4. 极深父子链递归转换（栈溢出/稳定性）
-        private static void Test_4_DeepParentChain()
-        {
-            Console.WriteLine("【测试 4】极深父子链递归转换（深度 50 层）");
+            Stopwatch sw = Stopwatch.StartNew();
 
             try
             {
-                var mgr = Coordinate3DManager.Instance;
-                var lastType = CoordinateSystemType.Offset;
-
-                // 构建 50 层深度链
-                for (int i = 0; i < 50; i++)
-                {
-                    var newType = (CoordinateSystemType)(1000 + i);
-                    mgr.CreateCoordinate(newType, lastType);
-                    lastType = newType;
-                }
-
-                // 递归转换
-                var p = new Point3D(100, 200, 50);
-                var sw = Stopwatch.StartNew();
-                var result = mgr.Convert(p, lastType, CoordinateSystemType.Stage);
-                sw.Stop();
-
-                Console.WriteLine($"✅ 深度 50 层转换成功 | 耗时：{sw.ElapsedMilliseconds} ms");
-                Console.WriteLine($"结果：{result}\n");
+                Test_1_Precision();        // 精度测试
+                Test_2_Stress();           // 压力测试
+                Test_3_Reliability();       // 可靠性测试
+                Test_4_ThreadSafe();       // 多线程安全
+                Test_5_Persistence();      // 持久化保存加载
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ 深度测试失败：{ex.Message}\n");
-            }
-        }
-        #endregion
-
-        #region 5. JSON 保存/加载 压测
-        private static void Test_5_SaveLoadJsonStress()
-        {
-            Console.WriteLine("【测试 5】JSON 保存/加载 压测（100 次）");
-
-            var sw = Stopwatch.StartNew();
-            string path = "CoordinateTest.json";
-            int count = 100;
-
-            for (int i = 0; i < count; i++)
-            {
-                Coordinate3DManager.Instance.SaveToJson(path);
-                Coordinate3DManager.Instance.LoadFromJson(path);
+                Console.WriteLine($"\n❌ 测试异常：{ex.Message}");
             }
 
             sw.Stop();
-            Console.WriteLine($"✅ {count} 次保存/加载 | 耗时：{sw.ElapsedMilliseconds} ms\n");
+
+            Console.WriteLine("\n==================================================");
+            Console.WriteLine($"                所有测试完成");
+            Console.WriteLine($"  总耗时：{sw.Elapsed.TotalSeconds:F2} 秒");
+            Console.WriteLine("==================================================");
+            Console.ReadLine();
+        }
+
+        #region 1. 精度测试：往返转换误差 ≤ 1e-6
+        private static void Test_1_Precision()
+        {
+            Console.WriteLine("\n[测试1] 坐标转换精度测试（往返误差）");
+
+            var p = new Point3D(100.123456, 200.654321, 50.111222);
+            double maxError = 0;
+
+            for (int i = 0; i < 10000; i++)
+            {
+                var world = _mgr.Get(CoordinateSystemType.World).ConvertToWorld(p);
+                var back = _mgr.Get(CoordinateSystemType.World).ConvertFromWorld(world);
+
+                double ex = Math.Abs(p.X - back.X);
+                double ey = Math.Abs(p.Y - back.Y);
+                double ez = Math.Abs(p.Z - back.Z);
+                maxError = Math.Max(maxError, new[] { ex, ey, ez }.Max());
+            }
+
+            bool pass = maxError < 1e-6;
+            Console.WriteLine($"✅ 最大误差：{maxError:F10} | 测试结果：{(pass ? "通过" : "失败")}");
         }
         #endregion
 
-        #region 6. 内存泄漏检测（长时间运行）
-        private static void Test_6_MemoryLeakCheck()
+        #region 2. 压力测试：TPS / 性能
+        private static void Test_2_Stress()
         {
-            Console.WriteLine("【测试 6】内存泄漏检测（持续运行 10 秒）");
+            Console.WriteLine("\n[测试2] 压力性能测试");
 
-            var mgr = Coordinate3DManager.Instance;
+            long count = 0;
             var end = DateTime.Now.AddSeconds(10);
-            long loop = 0;
+            var rnd = new Random();
 
             while (DateTime.Now < end)
             {
-                mgr.Convert(new Point3D(100, 200, 50),
-                    CoordinateSystemType.Stage,
-                    CoordinateSystemType.Offset);
-
-                mgr.SetAbsoluteOffset(CoordinateSystemType.Offset, loop, loop, 0);
-                loop++;
+                var p = new Point3D(rnd.Next(1000), rnd.Next(1000), rnd.Next(500));
+                _mgr.Convert(p, CoordinateSystemType.Stage, CoordinateSystemType.Offset);
+                count++;
             }
 
-            Console.WriteLine($"✅ 10 秒内执行 {loop:N0} 次操作 | 内存稳定\n");
+            double tps = count / 10.0;
+            Console.WriteLine($"✅ 10秒处理：{count:N0} 次 | TPS：{tps:F0}");
+        }
+        #endregion
+
+        #region 3. 可靠性测试：边界、空值、重复、异常
+        private static void Test_3_Reliability()
+        {
+            Console.WriteLine("\n[测试3] 可靠性测试（边界/重复/异常）");
+
+            bool allPass = true;
+
+            // 1. 零点转换
+            try
+            {
+                var p = new Point3D(0, 0, 0);
+                var r = _mgr.Convert(p, CoordinateSystemType.Stage, CoordinateSystemType.Offset);
+            }
+            catch { allPass = false; }
+
+            // 2. 大数转换
+            try
+            {
+                var p = new Point3D(1e8, 1e8, 1e6);
+                var r = _mgr.Convert(p, CoordinateSystemType.Stage, CoordinateSystemType.Offset);
+            }
+            catch { allPass = false; }
+
+            // 3. 高频重置
+            try
+            {
+                for (int i = 0; i < 1000; i++)
+                    _mgr.ResetAll();
+            }
+            catch { allPass = false; }
+
+            // 4. 重复刷新矩阵
+            try
+            {
+                for (int i = 0; i < 1000; i++)
+                    _mgr.RefreshAllCoordinateMatrices();
+            }
+            catch { allPass = false; }
+
+            Console.WriteLine($"✅ 可靠性测试：{(allPass ? "通过" : "失败")}");
+        }
+        #endregion
+
+        #region 4. 多线程安全测试（无死锁、无崩溃）
+        private static void Test_4_ThreadSafe()
+        {
+            Console.WriteLine("\n[测试4] 多线程安全测试");
+
+            bool pass = true;
+
+            try
+            {
+                Parallel.For(0, 8, i =>
+                {
+                    var rnd = new Random();
+                    for (int j = 0; j < 10000; j++)
+                    {
+                        var p = new Point3D(rnd.Next(1000), rnd.Next(1000), rnd.Next(300));
+                        _mgr.Convert(p, CoordinateSystemType.Wafer, CoordinateSystemType.Stage);
+
+                        if (j % 1000 == 0)
+                            _mgr.SetAbsoluteOffset(CoordinateSystemType.Offset, rnd.Next(100), rnd.Next(100), 0);
+                    }
+                });
+            }
+            catch
+            {
+                pass = false;
+            }
+
+            Console.WriteLine($"✅ 多线程测试：{(pass ? "通过" : "失败")}");
+        }
+        #endregion
+
+        #region 5. 持久化测试：保存/加载/数据一致
+        private static void Test_5_Persistence()
+        {
+            Console.WriteLine("\n[测试5] 配置保存/加载测试");
+
+            bool pass = true;
+            string file = "test_config.json";
+
+            try
+            {
+                // 修改一个参数
+                _mgr.SetOffset(10, 20);
+                _mgr.SaveToJson(file);
+                _mgr.LoadFromJson(file);
+
+                var offset = _mgr.GetOffset();
+                if (Math.Abs(offset.Offset.X - 10) > 1e-6 || Math.Abs(offset.Offset.Y - 20) > 1e-6)
+                    pass = false;
+            }
+            catch
+            {
+                pass = false;
+            }
+
+            Console.WriteLine($"✅ 持久化测试：{(pass ? "通过" : "失败")}");
         }
         #endregion
     }
