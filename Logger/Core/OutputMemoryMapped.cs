@@ -17,8 +17,8 @@ namespace Logger.Core
         private readonly int _processId;
 
         // 内存映射核心对象
-        private MemoryMappedFile _mmf;
-        private MemoryMappedViewAccessor _accessor;
+        private MemoryMappedFile? _mmf = null;
+        private MemoryMappedViewAccessor? _accessor = null;
         private int _position;
 
         // 日志文件管理
@@ -253,15 +253,15 @@ namespace Logger.Core
             catch { }
         }
 
-        private void OnProcessExit(object sender, EventArgs e) => SafeFlushAndCache();
-        private void OnCancelKeyPress(object sender, ConsoleCancelEventArgs e)
+        private void OnProcessExit(object? sender, EventArgs? e) => SafeFlushAndCache();
+        private void OnCancelKeyPress(object? sender, ConsoleCancelEventArgs? e)
         {
             e.Cancel = true;
             SafeFlushAndCache();
             Environment.Exit(0);
         }
 
-        private void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
+        private void OnUnhandledException(object? sender, UnhandledExceptionEventArgs? e)
         {
             SafeFlushAndCache();
         }

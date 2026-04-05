@@ -18,7 +18,12 @@ namespace Logger
         public static LoggerInstance GetInstance(string name, LoggerConfig config = null)
         {
             name = string.IsNullOrEmpty(name) ? Default : name;
-            return _instances.GetOrAdd(name, k => new Lazy<LoggerInstance>(() => new LoggerInstance(config ?? new LoggerConfig { LogName = k }))).Value;
+
+            return _instances.GetOrAdd(name, k =>
+                new Lazy<LoggerInstance>(() =>
+                    new LoggerInstance(config ?? LoggerConfig.LoadFromFile())
+                )
+            ).Value;
         }
         #endregion
 
@@ -27,45 +32,49 @@ namespace Logger
         private readonly Channel<LogMessage> _channel;
         private readonly List<ILogOutput> _outputs = new();
         private readonly CancellationTokenSource _cts = new();
-        private readonly Task[] _workers;
+        private readonly Task[] _workers = Array.Empty<Task>();
         private bool _disposed;
 
         public LoggerInstance(LoggerConfig config)
         {
-            _config = config ?? throw new ArgumentNullException(nameof(config));
-            _channel = Channel.CreateBounded<LogMessage>(new BoundedChannelOptions(config.MaxQueueSize) { FullMode = BoundedChannelFullMode.DropOldest });
+            _config = config;
 
-            switch (config.UseMemoryMappedType)
+            _channel = Channel.CreateBounded<LogMessage>(new BoundedChannelOptions(_config.MaxQueueSize) { FullMode = BoundedChannelFullMode.DropOldest });
+
+            switch (_config.UseMemoryMappedType)
             {
                 case LogOutputType.Console:
-                    _outputs.Add(new OutputConsole(config));
+                    _outputs.Add(new OutputConsole(_config));
                     break;
                 case LogOutputType.File:
-                    _outputs.Add(new OutputFileStream(config));
+                    _outputs.Add(new OutputFileStream(_config));
                     break;
                 case LogOutputType.MMF:
-                    _outputs.Add(new OutputMemoryMapped(config));
+                    _outputs.Add(new OutputMemoryMapped(_config));
                     break;
                 case LogOutputType.FileAndConsole:
-                    _outputs.Add(new OutputConsole(config));
-                    _outputs.Add(new OutputFileStream(config));
+                    _outputs.Add(new OutputConsole(_config));
+                    _outputs.Add(new OutputFileStream(_config));
                     break;
                 case LogOutputType.MMFAndConsole:
-                    _outputs.Add(new OutputConsole(config));
-                    _outputs.Add(new OutputMemoryMapped(config));
+                    _outputs.Add(new OutputConsole(_config));
+                    _outputs.Add(new OutputMemoryMapped(_config));
+                    break;
+                default:
+                    _outputs.Add(new OutputConsole(_config));
                     break;
             }
 
             AddTemplate(new LogTemplate { Name = "Default", Level = LogLevel.Information, IncludeException = true });
 
-            if (config.EnableAsyncWriting)
+            if (_config.EnableAsyncWriting)
             {
-                _workers = Enumerable.Range(0, config.MaxDegreeOfParallelism).Select(_ => Task.Factory.StartNew(ConsumeAsync, TaskCreationOptions.LongRunning)).ToArray();
+                _workers = Enumerable.Range(0, _config.MaxDegreeOfParallelism).Select(_ => Task.Factory.StartNew(ConsumeAsync, TaskCreationOptions.LongRunning)).ToArray();
             }
         }
 
         #region 日志核心
-        public void Log<T>(LogLevel level, T state, Func<T, Exception, string> formatter = null, Exception ex = null, string template = null)
+        public void Log<T>(LogLevel level, T state, Func<T, Exception, string>? formatter = null, Exception? ex = null, string? template = null)
         {
             if (_disposed) return;
             var tpl = GetTemplate(template);
@@ -94,7 +103,7 @@ namespace Logger
                 level,
                 msgText,
                 Environment.CurrentManagedThreadId,
-                Thread.CurrentThread.Name,
+                Thread.CurrentThread.Name?? string.Empty,
                 ex
             );
 
@@ -119,16 +128,16 @@ namespace Logger
         #region 模板
         public void AddTemplate(LogTemplate t) => _templates[t.Name] = t;
         public void RemoveTemplate(string n) => _templates.TryRemove(n, out _);
-        public LogTemplate GetTemplate(string n) => _templates.TryGetValue(n ?? "Default", out var t) ? t : _templates["Default"];
+        public LogTemplate GetTemplate(string? n) => _templates.TryGetValue(n ?? "Default", out var t) ? t : _templates["Default"];
         #endregion
 
         #region ILogger
-        public void LogTrace<T>(T s, Func<T, Exception, string> f = null, string t = null) => Log(LogLevel.Trace, s, f, null, t);
-        public void LogDebug<T>(T s, Func<T, Exception, string> f = null, string t = null) => Log(LogLevel.Debug, s, f, null, t);
-        public void LogInformation<T>(T s, Func<T, Exception, string> f = null, string t = null) => Log(LogLevel.Information, s, f, null, t);
-        public void LogWarning<T>(T s, Exception e = null, Func<T, Exception, string> f = null, string t = null) => Log(LogLevel.Warning, s, f, e, t);
-        public void LogError<T>(T s, Exception e = null, Func<T, Exception, string> f = null, string t = null) => Log(LogLevel.Error, s, f, e, t);
-        public void LogCritical<T>(T s, Exception e = null, Func<T, Exception, string> f = null, string t = null) => Log(LogLevel.Critical, s, f, e, t);
+        public void LogTrace<T>(T s, Func<T, Exception, string>? f = null, string? t = null) => Log(LogLevel.Trace, s, f, null, t);
+        public void LogDebug<T>(T s, Func<T, Exception, string>? f = null, string? t = null) => Log(LogLevel.Debug, s, f, null, t);
+        public void LogInformation<T>(T s, Func<T, Exception, string>? f = null, string? t = null) => Log(LogLevel.Information, s, f, null, t);
+        public void LogWarning<T>(T s, Exception? e = null, Func<T, Exception, string>? f = null, string? t = null) => Log(LogLevel.Warning, s, f, e, t);
+        public void LogError<T>(T s, Exception? e = null, Func<T, Exception, string>? f = null, string? t = null) => Log(LogLevel.Error, s, f, e, t);
+        public void LogCritical<T>(T s, Exception? e = null, Func<T, Exception, string>? f = null, string? t = null) => Log(LogLevel.Critical, s, f, e, t);
         #endregion
 
         #region 释放

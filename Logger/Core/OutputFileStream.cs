@@ -10,12 +10,12 @@ namespace Logger.Core
     public class OutputFileStream : ILogOutput, IDisposable
     {
         private readonly LoggerConfig _config;
-        private FileStream _fileStream;
+        private FileStream? _fileStream = null;
         private readonly byte[] _buffer;
         private int _bufferOffset;
         private readonly object _lock = new object();
         private readonly Encoding _encoding = Encoding.UTF8;
-        private string _finalPath;
+        private string? _finalPath;
         private long _currentFileLength;
         private int _currentFileIndex;
         private string _currentDate;
@@ -48,7 +48,7 @@ namespace Logger.Core
                 Directory.CreateDirectory(_config.LogDirectory);
                 var files = Directory.GetFiles(_config.LogDirectory, $"Log_{_currentDate}_*.dat");
                 int maxIndex = -1;
-                string lastFile = null;
+                string lastFile = string.Empty;
 
                 foreach (var f in files)
                 {
