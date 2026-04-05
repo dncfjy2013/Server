@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
-using Server.Logger;
+using Logger;
+using Logger;
 
 /// <summary>
 /// 日志组件性能测试（FileStream VS MemoryMapped）
@@ -39,7 +40,7 @@ public class LoggerPerformanceTest
         var config = new LoggerConfig
         {
             LogDirectory = TestLogDir,
-            UseMemoryMappedFile = false,       // 关闭MMF，使用文件流
+            UseMemoryMappedType = LogOutputType.File,       // 关闭MMF，使用文件流
             EnableAsyncWriting = true,         // 开启异步写入
             MaxDegreeOfParallelism = 8,
             File_Buffer_Size = 65536,
@@ -57,7 +58,7 @@ public class LoggerPerformanceTest
         var config = new LoggerConfig
         {
             LogDirectory = TestLogDir,
-            UseMemoryMappedFile = true,        // 开启MMF
+            UseMemoryMappedType = LogOutputType.MMF,        // 开启MMF
             EnableAsyncWriting = true,
             MaxDegreeOfParallelism = 8,
             MMF_BUFFER_SIZE = 5 * 1024 * 1024,

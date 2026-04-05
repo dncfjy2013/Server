@@ -1,5 +1,5 @@
 ﻿using Proxy.Common;
-using Server.Logger;
+using Logger;
 using Server.Proxy.Common;
 using Server.Proxy.Config;
 using Server.Proxy.LoadBalance;

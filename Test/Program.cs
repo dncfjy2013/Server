@@ -14,7 +14,9 @@ public class Program
         XmlConfigurator.Configure(new FileInfo("log4net.config"));
         _log.Info("应用启动");
 
-        CoordinateFullTest.RunAllTests();
+        LoggerPerformanceTest.Performance();
+
+        //CoordinateFullTest.RunAllTests();
 
     }
 }

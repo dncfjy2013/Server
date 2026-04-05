@@ -2,7 +2,7 @@
 using Server.Core;
 using Server.Core.Common;
 using Server.Core.Config;
-using Server.Logger;
+using Logger;
 using System.Threading.Channels;
 
 namespace Core.Message

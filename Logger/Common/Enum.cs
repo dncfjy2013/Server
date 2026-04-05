@@ -1,6 +1,6 @@
-﻿namespace Server.Logger
+﻿namespace Logger
 {
-    #region Level
+
     public enum LogLevel : byte
     {
         Trace = 0,
@@ -11,5 +11,13 @@
         Critical = 5,
         None = 6
     }
-    #endregion
+
+    public enum LogOutputType : byte
+    {
+        Console = 0,
+        File = 1,
+        MMF = 2,
+        FileAndConsole = 3,
+        MMFAndConsole = 4,
+    }
 }

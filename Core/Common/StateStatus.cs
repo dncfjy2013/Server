@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Server.Common;
-using Server.Logger;
+using Logger;
 
 namespace Server.Core.Common
 {

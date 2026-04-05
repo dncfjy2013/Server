@@ -1,7 +1,7 @@
 ﻿using Google.Protobuf;
 using Protocol;
 using Server.Core.Config;
-using Server.Logger;
+using Logger;
 using Server.Utils;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;

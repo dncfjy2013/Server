@@ -163,5 +163,10 @@ namespace NeuralNet
             _shortcut?.GetParameters()
         };
         }
+
+        public override void ResetParameters(Random random)
+        {
+
+        }
     }
 }

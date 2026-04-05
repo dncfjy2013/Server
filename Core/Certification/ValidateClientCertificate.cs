@@ -1,5 +1,5 @@
 ﻿using Server.Core.Common;
-using Server.Logger;
+using Logger;
 using System;
 using System.Collections.Generic;
 using System.Linq;

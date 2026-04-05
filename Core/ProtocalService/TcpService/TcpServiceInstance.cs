@@ -1,5 +1,5 @@
 ﻿using Core.Message;
-using Server.Logger;
+using Logger;
 using MySqlX.XDevAPI;
 using Protocol;
 using Server.Core.Certification;

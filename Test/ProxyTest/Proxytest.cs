@@ -1,5 +1,5 @@
 ﻿using Server.DataBase.Core.RelateSQL;
-using Server.Logger;
+using Logger;
 using Server.Proxy.Common;
 using Server.Proxy.Core;
 using System;

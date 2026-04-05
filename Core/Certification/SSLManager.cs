@@ -6,7 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using System.Net.Security;
-using Server.Logger;
+using Logger;
 using Server.Core.Common;
 
 namespace Server.Core.Certification

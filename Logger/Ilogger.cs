@@ -1,6 +1,4 @@
-﻿// 日志接口
-
-namespace Server.Logger
+﻿namespace Logger
 {
     public interface ILogger : IDisposable
     {
@@ -15,5 +13,12 @@ namespace Server.Logger
         void LogWarning<T>(T state, Exception exception = null, Func<T, Exception, string> formatter = null, string templateName = null);
         void LogError<T>(T state, Exception exception = null, Func<T, Exception, string> formatter = null, string templateName = null);
         void LogCritical<T>(T state, Exception exception = null, Func<T, Exception, string> formatter = null, string templateName = null);
+    }
+
+    public interface ILogOutput
+    {
+        void Write(LogMessage message);
+        void Flush();
+        void Close();
     }
 }
