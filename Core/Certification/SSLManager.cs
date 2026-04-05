@@ -103,30 +103,30 @@ namespace Server.Core.Certification
             // 基础验证：证书不能为空
             if (certificate == null)
             {
-                _logger.LogCritical("Client certificate is null - Authentication failed");
+                _logger.Critical("Client certificate is null - Authentication failed");
                 return false;
             }
 
-            _logger.LogInformation($"Client certificate received: {certificate.Subject}");
-            _logger.LogDebug($"Certificate details: Issuer={certificate.Issuer}, Serial={certificate.GetSerialNumberString()}");
+            _logger.Info($"Client certificate received: {certificate.Subject}");
+            _logger.Debug($"Certificate details: Issuer={certificate.Issuer}, Serial={certificate.GetSerialNumberString()}");
 
             // 开发环境配置：宽松验证
             bool isDevelopment = IsDevelopmentEnvironment();
-            _logger.LogTrace($"Environment mode: {(isDevelopment ? "Development" : "Production")}");
+            _logger.Trace($"Environment mode: {(isDevelopment ? "Development" : "Production")}");
 
             // 证书指纹验证
             bool thumbprintValid = ValidateCertificateThumbprint(certificate);
-            _logger.LogDebug($"Certificate thumbprint validation: {(thumbprintValid ? "Passed" : "Failed")}");
+            _logger.Debug($"Certificate thumbprint validation: {(thumbprintValid ? "Passed" : "Failed")}");
 
             if (!thumbprintValid)
             {
-                _logger.LogWarning($"Certificate thumbprint mismatch: {certificate.GetCertHashString()}");
+                _logger.Warn($"Certificate thumbprint mismatch: {certificate.GetCertHashString()}");
                 if (!isDevelopment)
                 {
-                    _logger.LogError("Rejected in non-development environment due to thumbprint mismatch");
+                    _logger.Error("Rejected in non-development environment due to thumbprint mismatch");
                     return false;
                 }
-                _logger.LogWarning("Allowing certificate with invalid thumbprint in development environment");
+                _logger.Warn("Allowing certificate with invalid thumbprint in development environment");
             }
 
             // 处理证书链错误
@@ -134,7 +134,7 @@ namespace Server.Core.Certification
             {
                 if (isDevelopment)
                 {
-                    _logger.LogWarning("Accepting untrusted certificate chain in development environment");
+                    _logger.Warn("Accepting untrusted certificate chain in development environment");
                     return true; // 开发环境直接通过
                 }
 
@@ -143,17 +143,17 @@ namespace Server.Core.Certification
 
                 if (!customChainValid)
                 {
-                    _logger.LogCritical("Certificate chain validation failed with both custom and system roots - Authentication failed");
+                    _logger.Critical("Certificate chain validation failed with both custom and system roots - Authentication failed");
                     return false;
                 }
 
-                _logger.LogInformation("Certificate chain validation passed using custom and system roots");
+                _logger.Info("Certificate chain validation passed using custom and system roots");
             }
 
             // 处理其他证书错误
             if ((sslPolicyErrors & ~SslPolicyErrors.RemoteCertificateChainErrors) != 0)
             {
-                _logger.LogError($"Certificate validation errors: {sslPolicyErrors & ~SslPolicyErrors.RemoteCertificateChainErrors}");
+                _logger.Error($"Certificate validation errors: {sslPolicyErrors & ~SslPolicyErrors.RemoteCertificateChainErrors}");
                 return false;
             }
 
@@ -161,14 +161,14 @@ namespace Server.Core.Certification
             string[] allowedSubjects = { "CN=trusted-client", "CN=api-client" };
             bool subjectAllowed = allowedSubjects.Contains(certificate.Subject);
 
-            _logger.LogDebug($"Certificate subject validation: {(subjectAllowed ? "Allowed" : "Rejected")} - {certificate.Subject}");
+            _logger.Debug($"Certificate subject validation: {(subjectAllowed ? "Allowed" : "Rejected")} - {certificate.Subject}");
             if (!subjectAllowed)
             {
-                _logger.LogWarning($"Certificate subject not in allowed list: {certificate.Subject}");
+                _logger.Warn($"Certificate subject not in allowed list: {certificate.Subject}");
 
                 if (isDevelopment)
                 {
-                    _logger.LogWarning("Allowing certificate with unrecognized subject in development environment");
+                    _logger.Warn("Allowing certificate with unrecognized subject in development environment");
                     return true; // 开发环境直接通过
                 }
 
@@ -185,15 +185,15 @@ namespace Server.Core.Certification
 
                 if (isDevelopment && expiredBy.TotalDays <= 1)
                 {
-                    _logger.LogWarning($"Certificate expired {expiredBy:g} ago, but allowing in development environment");
+                    _logger.Warn($"Certificate expired {expiredBy:g} ago, but allowing in development environment");
                     return true; // 开发环境允许1天内过期
                 }
 
-                _logger.LogError($"Certificate has expired: {expiryDate:u} (Current: {now:u})");
+                _logger.Error($"Certificate has expired: {expiryDate:u} (Current: {now:u})");
                 return false;
             }
 
-            _logger.LogInformation("Client certificate validation passed successfully");
+            _logger.Info("Client certificate validation passed successfully");
             return true;
         }
 
@@ -224,10 +224,10 @@ namespace Server.Core.Certification
             // 记录证书链状态
             if (!isValid)
             {
-                _logger.LogWarning("Certificate chain validation failed with custom roots");
+                _logger.Warn("Certificate chain validation failed with custom roots");
                 foreach (var status in customChain.ChainStatus)
                 {
-                    _logger.LogDebug($"Custom chain status: {status.Status} - {status.StatusInformation}");
+                    _logger.Debug($"Custom chain status: {status.Status} - {status.StatusInformation}");
                 }
 
                 // 尝试仅使用系统默认根证书验证
@@ -241,15 +241,15 @@ namespace Server.Core.Certification
 
                 if (!systemValid)
                 {
-                    _logger.LogWarning("Certificate chain validation failed with system roots");
+                    _logger.Warn("Certificate chain validation failed with system roots");
                     foreach (var status in systemChain.ChainStatus)
                     {
-                        _logger.LogDebug($"System chain status: {status.Status} - {status.StatusInformation}");
+                        _logger.Debug($"System chain status: {status.Status} - {status.StatusInformation}");
                     }
                     return false;
                 }
 
-                _logger.LogInformation("Certificate chain validation passed using system roots only");
+                _logger.Info("Certificate chain validation passed using system roots only");
             }
 
             return true;
@@ -272,13 +272,13 @@ namespace Server.Core.Certification
                     {
                         var cert = new X509Certificate2(certFile);
                         customRoots.Add(cert);
-                        _logger.LogDebug($"Loaded custom root certificate: {cert.Subject}");
+                        _logger.Debug($"Loaded custom root certificate: {cert.Subject}");
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error loading custom root certificates: {ex.Message}");
+                _logger.Error($"Error loading custom root certificates: {ex.Message}");
             }
 
             return customRoots;
@@ -304,12 +304,12 @@ namespace Server.Core.Certification
             // 从配置加载允许的指纹列表
             var allowedThumbprints = LoadAllowedThumbprints();
 
-            _logger.LogDebug($"Verifying certificate thumbprint: {certificateHash}");
+            _logger.Debug($"Verifying certificate thumbprint: {certificateHash}");
 
             bool isValid = allowedThumbprints.Contains(certificateHash);
             if (!isValid)
             {
-                _logger.LogDebug($"Thumbprint not in allowed list. Allowed: {string.Join(", ", allowedThumbprints)}");
+                _logger.Debug($"Thumbprint not in allowed list. Allowed: {string.Join(", ", allowedThumbprints)}");
             }
 
             return isValid;

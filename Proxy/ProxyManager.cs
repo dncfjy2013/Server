@@ -46,7 +46,7 @@ namespace Server.Proxy.Common
                 MaxConnections = maxConnections
             });
 
-            _logger.LogInformation($"添加TCP转发配置: {listenIp}:{listenPort} → {string.Join(", ", targetServers)}");
+            _logger.Info($"添加TCP转发配置: {listenIp}:{listenPort} → {string.Join(", ", targetServers)}");
             return this;
         }
         #endregion
@@ -74,7 +74,7 @@ namespace Server.Proxy.Common
                 MaxConnections = maxConnections
             });
 
-            _logger.LogInformation($"添加SSL/TCP多目标转发: {listenIp}:{listenPort} → {string.Join(", ", targetServers)}");
+            _logger.Info($"添加SSL/TCP多目标转发: {listenIp}:{listenPort} → {string.Join(", ", targetServers)}");
             return this;
         }
         #endregion
@@ -96,7 +96,7 @@ namespace Server.Proxy.Common
                 MaxConnections = maxConnections
             });
 
-            _logger.LogInformation($"添加UDP多目标转发: {listenIp}:{listenPort} → {string.Join(", ", targetServers)}");
+            _logger.Info($"添加UDP多目标转发: {listenIp}:{listenPort} → {string.Join(", ", targetServers)}");
             return this;
         }
         #endregion
@@ -118,7 +118,7 @@ namespace Server.Proxy.Common
                 MaxConnections = maxConnections
             });
 
-            _logger.LogInformation($"添加HTTP多目标转发: {listenIp}:{listenPort} → {string.Join(", ", targetServers)}");
+            _logger.Info($"添加HTTP多目标转发: {listenIp}:{listenPort} → {string.Join(", ", targetServers)}");
             return this;
         }
         #endregion
@@ -131,7 +131,7 @@ namespace Server.Proxy.Common
         {
             if (_isRunning)
             {
-                _logger.LogWarning("转发管理器已在运行中");
+                _logger.Warn("转发管理器已在运行中");
                 return;
             }
 
@@ -139,7 +139,7 @@ namespace Server.Proxy.Common
 
             _forwarder.Init(_endpointConfigs);
 
-            _logger.LogInformation($"启动端口转发管理器，配置数: {_endpointConfigs.Count}");
+            _logger.Info($"启动端口转发管理器，配置数: {_endpointConfigs.Count}");
             await _forwarder.StartAsync();
             _isRunning = true;
         }
@@ -151,11 +151,11 @@ namespace Server.Proxy.Common
         {
             if (!_isRunning)
             {
-                _logger.LogWarning("转发管理器未在运行中");
+                _logger.Warn("转发管理器未在运行中");
                 return;
             }
 
-            _logger.LogInformation("停止端口转发管理器");
+            _logger.Info("停止端口转发管理器");
             await _forwarder.StopAsync(timeout);
             _isRunning = false;
         }

@@ -88,7 +88,7 @@ public class LoggerPerformanceTest
             sw.Restart();
             for (int i = 0; i < TEST_LOG_COUNT; i++)
             {
-                logger.LogInformation($"性能测试日志 - 普通日志内容 - 序号：{i} - 这是一条标准长度的日志消息");
+                logger.Info($"性能测试日志 - 普通日志内容 - 序号：{i} - 这是一条标准长度的日志消息");
             }
             logger.Dispose(); // 强制刷盘
             cpuWatch.Stop();
@@ -117,7 +117,7 @@ public class LoggerPerformanceTest
                 {
                     for (int i = 0; i < MULTI_TEST_LOG_COUNT; i++)
                     {
-                        logger.LogInformation($"多线程性能测试 - 线程{Thread.CurrentThread.ManagedThreadId} - 序号：{i}");
+                        logger.Info($"多线程性能测试 - 线程{Thread.CurrentThread.ManagedThreadId} - 序号：{i}");
                     }
                 });
                 threads.Add(thread);

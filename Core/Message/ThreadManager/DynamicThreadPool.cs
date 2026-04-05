@@ -73,7 +73,7 @@ namespace Core.Message
             _name = name.Center(9, " ");
             _dataPriority = priority.Center(6, " ");
             // 启动监控线程
-            _logger.LogInformation($"[{_name}] [{_dataPriority}] DynamicThreadManagerBase initialized. MinThreads={minThreads}, MaxThreads={maxThreads}");
+            _logger.Info($"[{_name}] [{_dataPriority}] DynamicThreadManagerBase initialized. MinThreads={minThreads}, MaxThreads={maxThreads}");
             StartMonitoring();
         }
 
@@ -86,7 +86,7 @@ namespace Core.Message
             {
                 try
                 {
-                    _logger.LogDebug($"[{_name}] [{_dataPriority}] Monitoring loop started.");
+                    _logger.Debug($"[{_name}] [{_dataPriority}] Monitoring loop started.");
                     while (!_cts.IsCancellationRequested)
                     {
                         // 等待监控间隔
@@ -94,7 +94,7 @@ namespace Core.Message
 
                         // 获取当前队列长度
                         int queueLength = _channel.Reader.Count;
-                        _logger.LogTrace($"[{_name}] [{_dataPriority}] Queue length checked: {queueLength}");
+                        _logger.Trace($"[{_name}] [{_dataPriority}] Queue length checked: {queueLength}");
 
                         // 调整线程数
                         AdjustThreadCount(queueLength);
@@ -102,11 +102,11 @@ namespace Core.Message
                 }
                 catch (OperationCanceledException)
                 {
-                    _logger.LogDebug($"[{_name}] [{_dataPriority}] Monitoring loop cancelled.");
+                    _logger.Debug($"[{_name}] [{_dataPriority}] Monitoring loop cancelled.");
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogCritical($"[{_name}] [{_dataPriority}] Monitoring loop failed with exception: {ex.Message}");
+                    _logger.Critical($"[{_name}] [{_dataPriority}] Monitoring loop failed with exception: {ex.Message}");
                     throw;
                 }
             });
@@ -140,7 +140,7 @@ namespace Core.Message
                         _currentThreadCount++;
 
                         // 日志：记录扩容操作
-                        _logger.LogInformation(
+                        _logger.Info(
                             $"[{_name}] [{_dataPriority}] Thread added. Current: {_currentThreadCount}, Queue: {queueLength}, Priority: {typeof(T).Name}");
                     }
                 }
@@ -158,7 +158,7 @@ namespace Core.Message
                         _currentThreadCount--;
 
                         // 日志：记录缩容操作
-                        _logger.LogWarning(
+                        _logger.Warn(
                             $"[{_name}] [{_dataPriority}] Thread removed. Current: {_currentThreadCount}, Queue: {queueLength}, Priority: {typeof(T).Name}");
                     }
                 }
@@ -174,7 +174,7 @@ namespace Core.Message
         {
             try
             {
-                _logger.LogDebug($"[{_name}] [{_dataPriority}] Worker thread started. Thread ID: {Environment.CurrentManagedThreadId}");
+                _logger.Debug($"[{_name}] [{_dataPriority}] Worker thread started. Thread ID: {Environment.CurrentManagedThreadId}");
 
                 // 持续读取消息直到通道关闭或取消
                 await foreach (var msg in _channel.Reader.ReadAllAsync(ct))
@@ -188,18 +188,18 @@ namespace Core.Message
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(
+                        _logger.Error(
                             $"[{_name}] [{_dataPriority}] Message processing failed. Thread ID: {Environment.CurrentManagedThreadId}, Error: {ex.Message}");
                     }
                 }
             }
             catch (OperationCanceledException)
             {
-                _logger.LogDebug($"[{_name}] [{_dataPriority}] Worker thread cancelled. Thread ID: {Environment.CurrentManagedThreadId}");
+                _logger.Debug($"[{_name}] [{_dataPriority}] Worker thread cancelled. Thread ID: {Environment.CurrentManagedThreadId}");
             }
             catch (Exception ex)
             {
-                _logger.LogCritical(
+                _logger.Critical(
                     $"[{_name}] [{_dataPriority}] Worker thread terminated unexpectedly. Thread ID: {Environment.CurrentManagedThreadId}, Error: {ex.Message}");
             }
         }
@@ -219,11 +219,11 @@ namespace Core.Message
                     Task.WaitAll(_activeTasks.ToArray());
                     _activeTasks.Clear();
                     _currentThreadCount = 0;
-                    _logger.LogInformation($"[{_name}] [{_dataPriority}] All worker threads shutdown gracefully.");
+                    _logger.Info($"[{_name}] [{_dataPriority}] All worker threads shutdown gracefully.");
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogCritical($"[{_name}] [{_dataPriority}] Shutdown failed with exception: {ex.Message}");
+                    _logger.Critical($"[{_name}] [{_dataPriority}] Shutdown failed with exception: {ex.Message}");
                 }
             }
         }

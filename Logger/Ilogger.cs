@@ -7,12 +7,12 @@
         LogTemplate GetTemplate(string templateName);
 
         // 泛型快捷方法
-        void LogTrace<T>(T state, Func<T, Exception, string>? formatter = null, string? templateName = null);
-        void LogDebug<T>(T state, Func<T, Exception, string>? formatter = null, string? templateName = null);
-        void LogInformation<T>(T state, Func<T, Exception, string>? formatter = null, string? templateName = null);
-        void LogWarning<T>(T state, Exception? exception = null, Func<T, Exception, string>? formatter = null, string? templateName = null);
-        void LogError<T>(T state, Exception? exception = null, Func<T, Exception, string>? formatter = null, string? templateName = null);
-        void LogCritical<T>(T state, Exception? exception = null, Func<T, Exception, string>? formatter = null, string? templateName = null);
+        void Trace<T>(T state, Func<T, Exception, string>? formatter = null, string? templateName = null);
+        void Debug<T>(T state, Func<T, Exception, string>? formatter = null, string? templateName = null);
+        void Info<T>(T state, Func<T, Exception, string>? formatter = null, string? templateName = null);
+        void Warn<T>(T state, Exception? exception = null, Func<T, Exception, string>? formatter = null, string? templateName = null);
+        void Error<T>(T state, Exception? exception = null, Func<T, Exception, string>? formatter = null, string? templateName = null);
+        void Critical<T>(T state, Exception? exception = null, Func<T, Exception, string>? formatter = null, string? templateName = null);
     }
 
     public interface ILogOutput

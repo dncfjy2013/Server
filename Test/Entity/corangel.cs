@@ -161,9 +161,7 @@ namespace Entity.Geometry.Tests
             Console.WriteLine("测试5: RANSAC离群点移除功能...");
             var originalPoints = GenerateSquarePoints(10);
             // 增加点集数量到10个，提高离群点检测成功率
-            originalPoints.AddRange(new List<Vector2> {
-        new Vector2(2, 2), new Vector2(8, 2), new Vector2(8, 8), new Vector2(2, 8)
-    });
+            originalPoints.AddRange(new List<Vector2> {new Vector2(2, 2), new Vector2(8, 2), new Vector2(8, 8), new Vector2(2, 8)});
 
             double expectedAngle = 45;
             var rotatedPoints = RotatePoints(originalPoints, expectedAngle);

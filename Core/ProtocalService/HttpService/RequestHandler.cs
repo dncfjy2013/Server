@@ -1,8 +1,6 @@
 ﻿using Logger;
 using Server.Core.Common;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -10,7 +8,6 @@ using System.Threading.Tasks;
 
 namespace Core.ProtocalService.HttpService
 {
-    // 请求处理器 - 修改HandleHttpsRequest方法签名
     public class RequestHandler
     {
         private readonly ILogger _logger;
@@ -26,82 +23,65 @@ namespace Core.ProtocalService.HttpService
         {
             try
             {
-                _logger.LogDebug($"Handling HTTP request: {context.Request.Url}");
-
                 using var response = context.Response;
                 var responseContent = ProcessHttpRequest(context.Request);
-
                 await WriteResponse(response, responseContent);
 
                 _connectionManager.TryGetClientById(clientId)?.ConnectCompleteAsync();
-                _logger.LogInformation($"HTTP request handled successfully");
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error handling HTTP request: {ex.Message}");
+                _logger.Error($"Error handling HTTP request: {ex.Message}");
                 SendErrorResponse(context.Response, 500);
             }
         }
 
-        // 修改方法签名，添加clientCert参数
         public async Task HandleHttpsRequest(HttpListenerContext context, uint clientId, X509Certificate2 clientCert)
         {
             try
             {
-                _logger.LogDebug($"Handling HTTPS request: {context.Request.Url}");
-
-                // 客户端证书已在HttpsService中验证过
-                if (clientCert != null)
-                {
-                    _logger.LogDebug($"Client certificate: {clientCert.Subject}");
-                }
-
                 using var response = context.Response;
                 var responseContent = ProcessHttpsRequest(context.Request, clientCert);
-
                 await WriteResponse(response, responseContent);
 
                 _connectionManager.TryGetClientById(clientId)?.ConnectCompleteAsync();
-                _logger.LogInformation($"HTTPS request handled successfully");
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error handling HTTPS request: {ex.Message}");
+                _logger.Error($"Error handling HTTPS request: {ex.Message}");
                 SendErrorResponse(context.Response, 500);
             }
         }
 
         private string ProcessHttpRequest(HttpListenerRequest request)
         {
-            switch (request.HttpMethod)
+            return request.HttpMethod switch
             {
-                case "GET": return HandleHttpGet(request);
-                case "POST": return HandleHttpPost(request);
-                case "PUT": return HandleHttpPut(request);
-                case "DELETE": return HandleHttpDelete(request);
-                default: return "Method not supported";
-            }
+                "GET" => HandleHttpGet(request),
+                "POST" => HandleHttpPost(request),
+                "PUT" => HandleHttpPut(request),
+                "DELETE" => HandleHttpDelete(request),
+                _ => "Method not supported"
+            };
         }
 
         private string ProcessHttpsRequest(HttpListenerRequest request, X509Certificate2 clientCert)
         {
-            switch (request.HttpMethod)
+            return request.HttpMethod switch
             {
-                case "GET": return HandleHttpsGet(request, clientCert);
-                case "POST": return HandleHttpsPost(request);
-                case "PUT": return HandleHttpsPut(request);
-                case "DELETE": return HandleHttpsDelete(request);
-                default: return "Method not supported";
-            }
+                "GET" => HandleHttpsGet(request, clientCert),
+                "POST" => HandleHttpsPost(request),
+                "PUT" => HandleHttpsPut(request),
+                "DELETE" => HandleHttpsDelete(request),
+                _ => "Method not supported"
+            };
         }
 
-        // HTTP方法处理实现
         private string HandleHttpGet(HttpListenerRequest request) => "HTTP GET response";
         private string HandleHttpPost(HttpListenerRequest request) => "HTTP POST response";
         private string HandleHttpPut(HttpListenerRequest request) => "HTTP PUT response";
         private string HandleHttpDelete(HttpListenerRequest request) => "HTTP DELETE response";
 
-        // HTTPS方法处理实现
         private string HandleHttpsGet(HttpListenerRequest request, X509Certificate2 clientCert)
         {
             var certInfo = clientCert != null ? $"Client cert: {clientCert.Subject}" : "No client certificate";

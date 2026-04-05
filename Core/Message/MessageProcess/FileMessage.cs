@@ -46,16 +46,16 @@ namespace Core.Message
         public async Task HandleFileTransfer(ClientConfig client, CommunicationData data)
         {
             // 记录文件传输处理开始（细粒度调试）
-            _logger.LogTrace($"Client {client.Id} handling file transfer: FileId={data.FileId}, ChunkIndex={data.ChunkIndex}");
+            _logger.Trace($"Client {client.Id} handling file transfer: FileId={data.FileId}, ChunkIndex={data.ChunkIndex}");
 
             // 统计接收数据量（内存占用计算）
             long receivedSize = MemoryCalculator.CalculateObjectSize(data);
             client.AddFileReceivedBytes(receivedSize);
-            _logger.LogDebug($"Client {client.Id} received {receivedSize} bytes for file {data.FileId}");
+            _logger.Debug($"Client {client.Id} received {receivedSize} bytes for file {data.FileId}");
 
             // 申请文件操作锁（保证文件写入线程安全）
             await _fileLock.WaitAsync();
-            _logger.LogTrace($"Client {client.Id} acquired file lock for FileId={data.FileId}");
+            _logger.Trace($"Client {client.Id} acquired file lock for FileId={data.FileId}");
 
             try
             {
@@ -64,14 +64,14 @@ namespace Core.Message
                 // 处理文件传输完成事件
                 if (data.Message == "FILE_COMPLETE")
                 {
-                    _logger.LogInformation($"Client {client.Id} received file complete notification for FileId={data.FileId}");
+                    _logger.Info($"Client {client.Id} received file complete notification for FileId={data.FileId}");
 
                     if (_activeTransfers.TryRemove(data.FileId, out transferInfo))
                     {
                         // 1. 校验文件完整性（MD5哈希比对）
-                        _logger.LogDebug($"Client {client.Id} verifying file {transferInfo.FileName} integrity");
+                        _logger.Debug($"Client {client.Id} verifying file {transferInfo.FileName} integrity");
                         await VerifyFileIntegrity(transferInfo, data.Md5Hash);
-                        _logger.LogInformation($"Client {client.Id} file integrity verification passed for {transferInfo.FileName}");
+                        _logger.Info($"Client {client.Id} file integrity verification passed for {transferInfo.FileName}");
 
                         // 2. 发送完成确认（高优先级ACK）
                         var completionAck = new CommunicationData
@@ -82,24 +82,24 @@ namespace Core.Message
                             FileId = data.FileId
                         };
 
-                        _logger.LogDebug($"Sending file complete ACK for FileId={data.FileId}");
+                        _logger.Debug($"Sending file complete ACK for FileId={data.FileId}");
                         await _outMessage.SendInfoDate(client, completionAck);
-                        _logger.LogInformation($"Client {client.Id} sent file complete ACK for {transferInfo.FileName}");
+                        _logger.Info($"Client {client.Id} sent file complete ACK for {transferInfo.FileName}");
 
                         // 3. 统计发送数据量
                         long ackSize = MemoryCalculator.CalculateObjectSize(completionAck);
                         client.AddFileSentBytes(ackSize);
-                        _logger.LogDebug($"Sent {ackSize} bytes for file complete ACK");
+                        _logger.Debug($"Sent {ackSize} bytes for file complete ACK");
 
                         // 4. 记录完成日志并触发事件
-                        _logger.LogInformation($"Client {client.Id} file transfer completed: {transferInfo.FilePath}");
-                        _logger.LogTrace($"Invoking OnFileTransferCompleted event for {transferInfo.FilePath}");
+                        _logger.Info($"Client {client.Id} file transfer completed: {transferInfo.FilePath}");
+                        _logger.Trace($"Invoking OnFileTransferCompleted event for {transferInfo.FilePath}");
                         OnFileTransferCompleted?.Invoke(transferInfo.FilePath);
                     }
                     else
                     {
                         // 警告：未知文件ID的完成通知（可能是重复请求或攻击）
-                        _logger.LogWarning($"Client {client.Id} invalid file complete request: unknown FileId={data.FileId}");
+                        _logger.Warn($"Client {client.Id} invalid file complete request: unknown FileId={data.FileId}");
                     }
                     return;
                 }
@@ -109,7 +109,7 @@ namespace Core.Message
                 if (data.FileSize < 0)
                 {
                     // 错误：非法文件大小（防御性校验）
-                    _logger.LogError($"Client {client.Id} invalid file size: {data.FileSize} (must be >= 0)");
+                    _logger.Error($"Client {client.Id} invalid file size: {data.FileSize} (must be >= 0)");
                     return;
                 }
 
@@ -127,17 +127,17 @@ namespace Core.Message
                         FilePath = GetUniqueFilePath(Path.Combine(client.FilePath, data.FileName))
                     };
 
-                    _logger.LogInformation($"Client {client.Id} new file transfer started: {transferInfo.FileName} (Size={data.FileSize} bytes)");
-                    _logger.LogDebug($"Creating directory for file: {Path.GetDirectoryName(transferInfo.FilePath)}");
+                    _logger.Info($"Client {client.Id} new file transfer started: {transferInfo.FileName} (Size={data.FileSize} bytes)");
+                    _logger.Debug($"Creating directory for file: {Path.GetDirectoryName(transferInfo.FilePath)}");
                     Directory.CreateDirectory(Path.GetDirectoryName(transferInfo.FilePath));
 
-                    _logger.LogDebug($"Adding file transfer to active list: FileId={data.FileId}");
+                    _logger.Debug($"Adding file transfer to active list: FileId={data.FileId}");
                     _activeTransfers.TryAdd(data.FileId, transferInfo);
                 }
                 else
                 {
                     // 警告：重复初始化文件传输（可能是客户端重连）
-                    _logger.LogWarning($"Client {client.Id} file transfer already exists: FileId={data.FileId}");
+                    _logger.Warn($"Client {client.Id} file transfer already exists: FileId={data.FileId}");
                 }
                 #endregion
 
@@ -145,13 +145,13 @@ namespace Core.Message
                 // 快速MD5校验（提前过滤无效块）
                 if (CalculateChunkHash(data.ChunkData.ToByteArray()) != data.ChunkMd5)
                 {
-                    _logger.LogError($"Client {client.Id} chunk {data.ChunkIndex} MD5 mismatch (expected: {data.ChunkMd5}, actual: {CalculateChunkHash(data.ChunkData.ToByteArray())})");
+                    _logger.Error($"Client {client.Id} chunk {data.ChunkIndex} MD5 mismatch (expected: {data.ChunkMd5}, actual: {CalculateChunkHash(data.ChunkData.ToByteArray())})");
                     return; // 丢弃无效块
                 }
-                _logger.LogDebug($"Client {client.Id} chunk {data.ChunkIndex} MD5 verified successfully");
+                _logger.Debug($"Client {client.Id} chunk {data.ChunkIndex} MD5 verified successfully");
 
                 // 存储分块数据（支持重传覆盖）
-                _logger.LogTrace($"Storing chunk {data.ChunkIndex} for FileId={data.FileId}");
+                _logger.Trace($"Storing chunk {data.ChunkIndex} for FileId={data.FileId}");
                 transferInfo.ReceivedChunks.AddOrUpdate(
                     data.ChunkIndex,
                     data.ChunkData.ToByteArray(),
@@ -168,14 +168,14 @@ namespace Core.Message
                     Priority = DataPriority.High // ACK使用最高优先级，避免阻塞
                 };
 
-                _logger.LogInformation($"Client {client.Id} received chunk {data.ChunkIndex}/{transferInfo.TotalChunks} for {transferInfo.FileName}");
+                _logger.Info($"Client {client.Id} received chunk {data.ChunkIndex}/{transferInfo.TotalChunks} for {transferInfo.FileName}");
                 await _outMessage.SendInfoDate(client, ack);
-                _logger.LogDebug($"Sent chunk ACK for ChunkIndex={data.ChunkIndex}, FileId={data.FileId}");
+                _logger.Debug($"Sent chunk ACK for ChunkIndex={data.ChunkIndex}, FileId={data.FileId}");
 
                 // 检查是否所有块已接收
                 if (transferInfo.ReceivedChunks.Count == transferInfo.TotalChunks)
                 {
-                    _logger.LogInformation($"Client {client.Id} all chunks received for {transferInfo.FileName}, combining files...");
+                    _logger.Info($"Client {client.Id} all chunks received for {transferInfo.FileName}, combining files...");
                     await CombineFileChunks(transferInfo); // 合并分块文件
                 }
                 #endregion
@@ -183,19 +183,19 @@ namespace Core.Message
                 // 统计发送数据量
                 long ackDataSize = MemoryCalculator.CalculateObjectSize(ack);
                 client.AddFileSentBytes(ackDataSize);
-                _logger.LogDebug($"Client {client.Id} sent {ackDataSize} bytes for chunk ACK");
+                _logger.Debug($"Client {client.Id} sent {ackDataSize} bytes for chunk ACK");
             }
             catch (Exception ex)
             {
                 // 致命错误：文件传输处理失败（清理会话并记录完整堆栈）
-                _logger.LogCritical($"Client {client.Id} file transfer failed: {ex.Message}");
+                _logger.Critical($"Client {client.Id} file transfer failed: {ex.Message}");
                 _activeTransfers.TryRemove(data.FileId, out _); // 清理无效会话
                 throw;
             }
             finally
             {
                 _fileLock.Release();
-                _logger.LogTrace($"Client {client.Id} released file lock for FileId={data.FileId}");
+                _logger.Trace($"Client {client.Id} released file lock for FileId={data.FileId}");
             }
         }
         /// <summary>
@@ -204,7 +204,7 @@ namespace Core.Message
         /// <param name="transferInfo">文件传输信息对象（包含分块数据和文件元信息）</param>
         private async Task CombineFileChunks(FileTransferInfo transferInfo)
         {
-            _logger.LogTrace($"Initiating file chunk combination: {transferInfo.FileName} (Total chunks={transferInfo.TotalChunks})");
+            _logger.Trace($"Initiating file chunk combination: {transferInfo.FileName} (Total chunks={transferInfo.TotalChunks})");
 
             // 使用大缓冲区异步文件流（提升写入性能，减少I/O次数）
             using var fs = new FileStream(
@@ -215,41 +215,41 @@ namespace Core.Message
                 bufferSize: 16 * 1024 * 1024,  // 16MB缓冲区
                 useAsync: true
             );
-            _logger.LogDebug($"Created FileStream for {transferInfo.FileName} with 16MB buffer");
+            _logger.Debug($"Created FileStream for {transferInfo.FileName} with 16MB buffer");
 
             try
             {
                 // 按块索引顺序写入文件（确保分块按顺序组装）
                 for (int i = 0; i < transferInfo.TotalChunks; i++)
                 {
-                    _logger.LogTrace($"Processing chunk {i}/{transferInfo.TotalChunks} for {transferInfo.FileName}");
+                    _logger.Trace($"Processing chunk {i}/{transferInfo.TotalChunks} for {transferInfo.FileName}");
 
                     // 检查块是否存在（防御性校验，处理乱序或缺失块）
                     if (!transferInfo.ReceivedChunks.TryGetValue(i, out var chunkData))
                     {
                         var errorMsg = $"Chunk {i} missing for file {transferInfo.FileName}, cannot combine";
-                        _logger.LogError(errorMsg);
+                        _logger.Error(errorMsg);
                         throw new InvalidOperationException(errorMsg);
                     }
 
                     // 异步写入文件块（避免阻塞线程）
                     await fs.WriteAsync(chunkData, 0, chunkData.Length);
-                    _logger.LogDebug($"Wrote chunk {i} to {transferInfo.FileName} ({chunkData.Length} bytes)");
+                    _logger.Debug($"Wrote chunk {i} to {transferInfo.FileName} ({chunkData.Length} bytes)");
                 }
 
-                _logger.LogInformation($"File {transferInfo.FileName} combined successfully ({transferInfo.TotalChunks} chunks)");
-                _logger.LogTrace($"File path: {transferInfo.FilePath}");
+                _logger.Info($"File {transferInfo.FileName} combined successfully ({transferInfo.TotalChunks} chunks)");
+                _logger.Trace($"File path: {transferInfo.FilePath}");
             }
             catch (IOException ex)
             {
                 // 文件写入异常（磁盘故障、权限问题等）
-                _logger.LogCritical($"File write failed for {transferInfo.FileName}: {ex.Message}");
+                _logger.Critical($"File write failed for {transferInfo.FileName}: {ex.Message}");
                 throw;
             }
             catch (InvalidOperationException ex)
             {
                 // 块缺失异常（业务逻辑错误）
-                _logger.LogError($"File combination failed: {ex.Message}");
+                _logger.Error($"File combination failed: {ex.Message}");
                 throw;
             }
         }
@@ -261,7 +261,7 @@ namespace Core.Message
         /// <param name="expectedHash">预期的MD5哈希值</param>
         private async Task VerifyFileIntegrity(FileTransferInfo transferInfo, string expectedHash)
         {
-            _logger.LogTrace($"Verifying integrity for file: {transferInfo.FileName} (Expected hash: {expectedHash})");
+            _logger.Trace($"Verifying integrity for file: {transferInfo.FileName} (Expected hash: {expectedHash})");
 
             using (var md5 = MD5.Create())
             using (var stream = File.OpenRead(transferInfo.FilePath))
@@ -271,24 +271,24 @@ namespace Core.Message
                     // 计算文件实际哈希值
                     var actualHash = BitConverter.ToString(await md5.ComputeHashAsync(stream))
                         .Replace("-", "").ToLowerInvariant();
-                    _logger.LogDebug($"Calculated hash for {transferInfo.FileName}: {actualHash}");
+                    _logger.Debug($"Calculated hash for {transferInfo.FileName}: {actualHash}");
 
                     // 对比哈希值
                     if (actualHash != expectedHash)
                     {
                         // 哈希不匹配，删除文件并记录错误
                         File.Delete(transferInfo.FilePath);
-                        _logger.LogError($"File integrity failed for {transferInfo.FileName}: " +
+                        _logger.Error($"File integrity failed for {transferInfo.FileName}: " +
                                        $"Expected hash={expectedHash}, Actual hash={actualHash}");
                         throw new InvalidDataException("File hash mismatch");
                     }
 
-                    _logger.LogInformation($"File {transferInfo.FileName} integrity verified successfully");
+                    _logger.Info($"File {transferInfo.FileName} integrity verified successfully");
                 }
                 catch (IOException ex)
                 {
                     // 文件读取异常（如文件被占用、磁盘错误）
-                    _logger.LogCritical($"Failed to read file {transferInfo.FileName} for verification: {ex.Message}");
+                    _logger.Critical($"Failed to read file {transferInfo.FileName} for verification: {ex.Message}");
                     throw;
                 }
             }
@@ -301,11 +301,11 @@ namespace Core.Message
         /// <returns>唯一化后的文件路径</returns>
         private string GetUniqueFilePath(string originalPath)
         {
-            _logger.LogTrace($"Generating unique path for: {originalPath}");
+            _logger.Trace($"Generating unique path for: {originalPath}");
 
             if (!File.Exists(originalPath))
             {
-                _logger.LogDebug($"Original path does not exist: {originalPath}, using directly");
+                _logger.Debug($"Original path does not exist: {originalPath}, using directly");
                 return originalPath;
             }
 
@@ -318,11 +318,11 @@ namespace Core.Message
             do
             {
                 newPath = Path.Combine(directory, $"{fileNameWithoutExtension}_{counter}{extension}");
-                _logger.LogTrace($"Checking path availability: {newPath}");
+                _logger.Trace($"Checking path availability: {newPath}");
                 counter++;
             } while (File.Exists(newPath));
 
-            _logger.LogInformation($"Generated unique path: {newPath} (Original path conflicted)");
+            _logger.Info($"Generated unique path: {newPath} (Original path conflicted)");
             return newPath;
         }
         public async Task SendFileAsync(uint clientId, string filePath, DataPriority priority = DataPriority.High)
@@ -377,7 +377,7 @@ namespace Core.Message
         /// <returns>十六进制格式的MD5哈希字符串</returns>
         private string CalculateChunkHash(byte[] data)
         {
-            _logger.LogTrace($"Calculating chunk hash for data of size {data.Length} bytes");
+            _logger.Trace($"Calculating chunk hash for data of size {data.Length} bytes");
 
             using var md5 = MD5.Create();
             try
@@ -385,12 +385,12 @@ namespace Core.Message
                 var hash = md5.ComputeHash(data);
                 var hashString = BitConverter.ToString(hash)
                     .Replace("-", "").ToLowerInvariant();
-                _logger.LogDebug($"Chunk hash calculated: {hashString}");
+                _logger.Debug($"Chunk hash calculated: {hashString}");
                 return hashString;
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Failed to calculate chunk hash: {ex.Message}");
+                _logger.Error($"Failed to calculate chunk hash: {ex.Message}");
                 throw;
             }
         }

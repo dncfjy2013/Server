@@ -71,24 +71,24 @@ namespace Server.Core.Extend
             _logger = logger;
 
             // 记录 Trace 日志，表明开始执行构造函数
-            _logger.LogTrace("Starting the constructor of TrafficMonitor.");
+            _logger.Trace("Starting the constructor of TrafficMonitor.");
 
             try
             {
                 // 将传入的客户端配置字典赋值给类的私有字段
                 _clients = clients;
                 // 记录 Debug 日志，显示客户端配置字典已成功赋值
-                _logger.LogDebug("Clients configuration dictionary has been assigned.");
+                _logger.Debug("Clients configuration dictionary has been assigned.");
 
                 // 将传入的监控时间间隔赋值给类的私有字段
                 _monitorInterval = monitorInterval;
                 // 记录 Debug 日志，显示监控时间间隔已成功赋值
-                _logger.LogDebug($"Monitor interval has been set to {monitorInterval}.");
+                _logger.Debug($"Monitor interval has been set to {monitorInterval}.");
 
                 // 启动总流量统计的秒表
                 _totalTrafficWatch = new Timer(_ => Monitor(), null, Timeout.Infinite, Timeout.Infinite); ;
                 // 记录 Info 日志，表明总流量统计秒表已启动
-                _logger.LogDebug("Total traffic stopwatch has been started.");
+                _logger.Debug("Total traffic stopwatch has been started.");
 
                 // 遍历所有客户端配置
                 foreach (var client in _clients.Values)
@@ -96,20 +96,20 @@ namespace Server.Core.Extend
                     // 将客户端的初始流量统计信息存储到客户端实时流量统计字典中
                     _clientTrafficStats[client.Id] = (client.BytesReceived, client.BytesSent, client.FileBytesReceived, client.FileBytesSent, client.ReceiveCount, client.SendCount, client.ReceiveFileCount, client.SendFileCount, client.ConnectionWatch);
                     // 记录 Debug 日志，显示已为特定客户端初始化流量统计信息
-                    _logger.LogDebug($"Initialized traffic statistics for client with ID {client.Id}.");
+                    _logger.Debug($"Initialized traffic statistics for client with ID {client.Id}.");
                 }
 
                 // 记录 Info 日志，表明所有客户端的流量统计信息已初始化完成
-                _logger.LogInformation("Traffic statistics for all clients have been initialized.");
+                _logger.Info("Traffic statistics for all clients have been initialized.");
             }
             catch (Exception ex)
             {
                 // 若在构造函数执行过程中出现异常，记录 Error 日志，显示异常信息
-                _logger.LogError($"An error occurred during the initialization of TrafficMonitor: {ex.Message} {ex}");
+                _logger.Error($"An error occurred during the initialization of TrafficMonitor: {ex.Message} {ex}");
             }
 
             // 记录 Trace 日志，表明构造函数执行结束
-            _logger.LogTrace("Constructor of TrafficMonitor has been completed.");
+            _logger.Trace("Constructor of TrafficMonitor has been completed.");
         }
 
         /// <summary>
@@ -118,7 +118,7 @@ namespace Server.Core.Extend
         /// <param name="enable">一个布尔值，true 表示启用流量监控，false 表示禁用流量监控</param>
         public void ModifyEnable(bool enable)
         {
-            _logger.LogTrace($"Entering ModifyEnable method with enable value: {enable}");
+            _logger.Trace($"Entering ModifyEnable method with enable value: {enable}");
 
             try
             {
@@ -126,79 +126,79 @@ namespace Server.Core.Extend
 
                 if (_enableTrafficMonitoring)
                 {
-                    _logger.LogDebug($"Starting the traffic monitor timer with an immediate start and interval of {_monitorInterval} ms.");
+                    _logger.Debug($"Starting the traffic monitor timer with an immediate start and interval of {_monitorInterval} ms.");
                     if(!_totalTrafficWatch.Change(0, _monitorInterval))
                     {
-                        _logger.LogError($"Error Starting the traffic monitor timer with an immediate start and interval of {_monitorInterval} ms.");
+                        _logger.Error($"Error Starting the traffic monitor timer with an immediate start and interval of {_monitorInterval} ms.");
                     }
                     else
-                        _logger.LogDebug("Traffic monitor timer has been successfully started.");
+                        _logger.Debug("Traffic monitor timer has been successfully started.");
                 }
                 else
                 {
-                    _logger.LogDebug($"Sttoping the traffic monitor timer");
+                    _logger.Debug($"Sttoping the traffic monitor timer");
                     if (!_totalTrafficWatch.Change(Timeout.Infinite, Timeout.Infinite))
                     {
-                        _logger.LogError("Traffic monitor timer stoped error.");
+                        _logger.Error("Traffic monitor timer stoped error.");
                     }
                     else
-                        _logger.LogDebug("Traffic monitor timer has been successfully stoped.");
+                        _logger.Debug("Traffic monitor timer has been successfully stoped.");
                 }
 
-                _logger.LogInformation($"Traffic monitoring enable status has been modified to {(_enableTrafficMonitoring ? "enabled" : "disabled")}");
+                _logger.Info($"Traffic monitoring enable status has been modified to {(_enableTrafficMonitoring ? "enabled" : "disabled")}");
             }
             catch (Exception ex)
             {
-                _logger.LogError($"An error occurred while modifying the traffic monitoring enable status: {ex.Message} {ex}");
+                _logger.Error($"An error occurred while modifying the traffic monitoring enable status: {ex.Message} {ex}");
             }
 
-            _logger.LogTrace("Exiting ModifyEnable method");
+            _logger.Trace("Exiting ModifyEnable method");
         }
 
         public double GetMonitorInterval()
         {
-            _logger.LogTrace($"Return MonitorInterval with value: {_monitorInterval}ms");
+            _logger.Trace($"Return MonitorInterval with value: {_monitorInterval}ms");
             return _monitorInterval;
         }
 
         public bool SetMonitorInterval(int value)
         {
-            _logger.LogTrace($"Entering SetMonitorInterval with value: {value}ms");
+            _logger.Trace($"Entering SetMonitorInterval with value: {value}ms");
 
             try
             {
                 if (value <= 0)
                 {
-                    _logger.LogWarning($"Invalid monitor interval value: {value}ms. Must be greater than 0");
+                    _logger.Warn($"Invalid monitor interval value: {value}ms. Must be greater than 0");
                     return false;
                 }
 
-                _logger.LogDebug($"Attempting to set traffic monitor interval to {value}ms");
+                _logger.Debug($"Attempting to set traffic monitor interval to {value}ms");
                 _monitorInterval = value;
 
-                _logger.LogDebug($"Starting timer change operation with interval: {value}ms");
+                _logger.Debug($"Starting timer change operation with interval: {value}ms");
                 if (!_totalTrafficWatch.Change(0, value))
                 {
-                    _logger.LogError($"Failed to update traffic monitor interval to {value}ms. Timer state: {_disposed}");
+                    _logger.Error($"Failed to update traffic monitor interval to {value}ms. Timer state: {_disposed}");
                     return false;
                 }
 
-                _logger.LogInformation($"Traffic monitor interval successfully updated to {value}ms");
+                _logger.Info($"Traffic monitor interval successfully updated to {value}ms");
                 return true;
             }
             catch (ObjectDisposedException ex)
             {
-                _logger.LogError("Timer has already been disposed. Cannot modify interval");
+                _logger.Error("Timer has already been disposed. Cannot modify interval");
                 return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Unexpected error setting monitor interval: {ex.Message}");
+                _logger.Error($"Unexpected error setting monitor interval: {ex.Message}");
                 return false;
             }
             finally
             {
-                _logger.LogTrace($"Exiting SetMonitorInterval. Current interval: {_monitorInterval}ms");
+                _logger.Trace($"Exiting SetMonitorInterval. Current interval: {_monitorInterval}ms");
             }
         }
         /// <summary>
@@ -208,7 +208,7 @@ namespace Server.Core.Extend
         {
             if (!_enableTrafficMonitoring)
             {
-                _logger.LogTrace("Traffic monitoring is disabled, skipping monitor");
+                _logger.Trace("Traffic monitoring is disabled, skipping monitor");
                 return;
             }
 
@@ -217,11 +217,11 @@ namespace Server.Core.Extend
             // 采样机制：仅当计数器是采样率的整数倍时执行统计
             if (_sampleCounter % _samplingRate != 0)
             {
-                _logger.LogTrace($"Sampling counter {_sampleCounter} not reached threshold {_samplingRate}, skipping");
+                _logger.Trace($"Sampling counter {_sampleCounter} not reached threshold {_samplingRate}, skipping");
                 return;
             }
 
-            _logger.LogDebug($"Entering monitor with sample counter {_sampleCounter}");
+            _logger.Debug($"Entering monitor with sample counter {_sampleCounter}");
 
             // 加锁确保线程安全（操作共享的客户端统计数据）
             lock (_lock)
@@ -229,7 +229,7 @@ namespace Server.Core.Extend
                 try
                 {
                     #region 同步新增客户端流量统计
-                    _logger.LogTrace("Syncing new client entries");
+                    _logger.Trace("Syncing new client entries");
                     foreach (var client in _clients.Values)
                     {
                         if (!_clientTrafficStats.ContainsKey(client.Id))
@@ -246,13 +246,13 @@ namespace Server.Core.Extend
                                 client.SendFileCount,
                                 client.ConnectionWatch
                             );
-                            _logger.LogInformation($"New client {client.Id} traffic stats initialized");
+                            _logger.Info($"New client {client.Id} traffic stats initialized");
                         }
                     }
                     #endregion
 
                     #region 清理已断开客户端的过时数据
-                    _logger.LogTrace("Cleaning up stale client entries");
+                    _logger.Trace("Cleaning up stale client entries");
                     var activeClientIds = _clients.Keys;
                     var staleEntries = _clientTrafficStats.Keys.Where(k => !activeClientIds.Contains(k)).ToList();
 
@@ -262,13 +262,13 @@ namespace Server.Core.Extend
                         {
                             // 移动旧数据到历史统计
                             _clientHistoryTrafficStats.TryAdd(id, oldStats);
-                            _logger.LogWarning($"Client {id} disconnected, moved stats to history");
+                            _logger.Warn($"Client {id} disconnected, moved stats to history");
                         }
                     }
                     #endregion
 
                     #region 计算单个客户端流量差异
-                    _logger.LogTrace("Calculating per-client traffic deltas");
+                    _logger.Trace("Calculating per-client traffic deltas");
                     foreach (var client in _clients.Values)
                     {
                         if (_clientTrafficStats.TryGetValue(client.Id, out var stats))
@@ -301,7 +301,7 @@ namespace Server.Core.Extend
                                             History Total: Recv {Function.FormatBytes(client.BytesReceived)} | Sent {Function.FormatBytes(client.BytesSent + client.FileBytesSent)}";
 
                             // 记录 Debug 日志（详细流量数据）
-                            _logger.LogDebug(message);
+                            _logger.Debug(message);
 
                             // 更新为当前统计值（供下次计算差值）
                             _clientTrafficStats[client.Id] = (
@@ -320,7 +320,7 @@ namespace Server.Core.Extend
                     #endregion
 
                     #region 计算全局流量统计
-                    _logger.LogTrace("Calculating global traffic statistics");
+                    _logger.Trace("Calculating global traffic statistics");
                     var globalRecv = _clients.Values.Sum(c => c.BytesReceived);
                     var globalSent = _clients.Values.Sum(c => c.BytesSent);
                     var globalFileRecv = _clients.Values.Sum(c => c.FileBytesReceived);
@@ -339,24 +339,24 @@ namespace Server.Core.Extend
                                             Total: Recv {Function.FormatBytes(globalRecv + globalFileRecv)} | Sent {Function.FormatBytes(globalSent + globalFileSent)}";
 
                         // 记录 Info 日志（全局流量概览）
-                        _logger.LogInformation(totalMessage);
+                        _logger.Info(totalMessage);
                     }
                     #endregion
 
                     #region 每日历史数据清理
-                    _logger.LogTrace("Checking for daily history cleanup");
+                    _logger.Trace("Checking for daily history cleanup");
                     var currentTime = DateTime.Now;
                     if (currentTime.Date > DateTime.Today) // 跨天后执行清理
                     {
                         _clientHistoryTrafficStats.Clear();
-                        _logger.LogInformation("Daily traffic history cleared");
+                        _logger.Info("Daily traffic history cleared");
                     }
                     #endregion
                 }
                 catch (Exception ex)
                 {
                     // 记录致命错误（如锁竞争、数据解析异常）
-                    _logger.LogError($"Critical error in traffic monitor: {ex.Message} {ex}");
+                    _logger.Error($"Critical error in traffic monitor: {ex.Message} {ex}");
                 }
             }
         }
@@ -386,12 +386,12 @@ namespace Server.Core.Extend
                     _totalTrafficWatch.Change(Timeout.Infinite, Timeout.Infinite);
                     // 显式释放定时器资源
                     _totalTrafficWatch.Dispose();
-                    _logger.LogInformation("Traffic monitor timer has been disposed");
+                    _logger.Info("Traffic monitor timer has been disposed");
                 }
                 catch (ObjectDisposedException)
                 {
                     // 忽略已释放的异常
-                    _logger.LogTrace("Timer already disposed");
+                    _logger.Trace("Timer already disposed");
                 }
             }
 

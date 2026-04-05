@@ -48,7 +48,7 @@ namespace Server.Proxy.Core
 
             if (!healthyServers.Any())
             {
-                _logger.LogWarning("无健康服务器，尝试重新检查所有服务器状态");
+                _logger.Warn("无健康服务器，尝试重新检查所有服务器状态");
                 await CheckServerHealthAsync(config);
                 healthyServers = config.TargetServers.Where(s => s.IsHealthy).ToList();
 
@@ -83,12 +83,12 @@ namespace Server.Proxy.Core
                 catch (OperationCanceledException)
                 {
                     server.IsHealthy = false;
-                    _logger.LogWarning($"服务器 {server.Ip}:{server.TargetPort} 连接超时");
+                    _logger.Warn($"服务器 {server.Ip}:{server.TargetPort} 连接超时");
                 }
                 catch (Exception ex)
                 {
                     server.IsHealthy = false;
-                    _logger.LogWarning($"服务器 {server.Ip}:{server.TargetPort} 健康检查失败: {ex.Message}");
+                    _logger.Warn($"服务器 {server.Ip}:{server.TargetPort} 健康检查失败: {ex.Message}");
                 }
             }
         }

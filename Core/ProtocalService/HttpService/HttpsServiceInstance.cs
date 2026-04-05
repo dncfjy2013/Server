@@ -50,12 +50,12 @@ namespace Core.ProtocalService.HttpService
                 LoadCertificates();
                 _listener.Start();
                 _isRunning = true;
-                _logger.LogInformation($"HTTPS server started on {Host}");
+                _logger.Info($"HTTPS server started on {Host}");
                 Task.Run(() => AcceptClients());
             }
             catch (Exception ex)
             {
-                _logger.LogCritical($"Failed to start HTTPS server: {ex.Message}");
+                _logger.Critical($"Failed to start HTTPS server: {ex.Message}");
                 throw;
             }
         }
@@ -65,7 +65,7 @@ namespace Core.ProtocalService.HttpService
             _isRunning = false;
             _listener?.Stop();
             _listener?.Close();
-            _logger.LogInformation($"HTTPS server stopped");
+            _logger.Info($"HTTPS server stopped");
         }
 
         private void LoadCertificates()
@@ -73,17 +73,17 @@ namespace Core.ProtocalService.HttpService
             try
             {
                 _serverCertificate = new X509Certificate2(_certificatePath, _certificatePassword);
-                _logger.LogInformation($"HTTPS server certificate loaded: {_serverCertificate.Subject}");
+                _logger.Info($"HTTPS server certificate loaded: {_serverCertificate.Subject}");
 
                 if (!string.IsNullOrEmpty(_trustedCertPath))
                 {
                     _trustedCertificate = new X509Certificate2(_trustedCertPath);
-                    _logger.LogInformation($"HTTPS trusted certificate loaded: {_trustedCertificate.Subject}");
+                    _logger.Info($"HTTPS trusted certificate loaded: {_trustedCertificate.Subject}");
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogCritical($"Failed to load certificate: {ex.Message}");
+                _logger.Critical($"Failed to load certificate: {ex.Message}");
                 throw;
             }
         }
@@ -98,7 +98,7 @@ namespace Core.ProtocalService.HttpService
                     var clientId = Interlocked.Increment(ref _nextClientId);
 
                     _connectionManager.CreateClient(clientId).ConnectAsync();
-                    _logger.LogDebug($"HTTPS client connected: {context.Request.RemoteEndPoint}");
+                    _logger.Debug($"HTTPS client connected: {context.Request.RemoteEndPoint}");
 
                     // 验证客户端证书
                     var clientCert = GetClientCertificate(context);
@@ -110,18 +110,18 @@ namespace Core.ProtocalService.HttpService
                     }
                     else
                     {
-                        _logger.LogWarning("Client certificate validation failed");
+                        _logger.Warn("Client certificate validation failed");
                         SendErrorResponse(context.Response, 403);
                         _connectionManager.TryGetClientById(clientId)?.ConnectCompleteAsync();
                     }
                 }
                 catch (HttpListenerException ex) when (ex.ErrorCode == 995)
                 {
-                    _logger.LogTrace("HTTPS listener stopped gracefully");
+                    _logger.Trace("HTTPS listener stopped gracefully");
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError($"HTTPS accept error: {ex.Message}");
+                    _logger.Error($"HTTPS accept error: {ex.Message}");
                     await Task.Delay(100);
                 }
             }
@@ -141,14 +141,14 @@ namespace Core.ProtocalService.HttpService
 
                 bool isValid = chain.Build(clientCert);
 
-                _logger.LogDebug($"Client certificate validation result: {isValid}");
+                _logger.Debug($"Client certificate validation result: {isValid}");
 
                 // 额外验证证书链中是否有受信任的根证书
                 foreach (X509ChainElement element in chain.ChainElements)
                 {
                     if (element.Certificate.Thumbprint == _trustedCertificate.Thumbprint)
                     {
-                        _logger.LogDebug("Client certificate chain contains trusted certificate");
+                        _logger.Debug("Client certificate chain contains trusted certificate");
                         return true;
                     }
                 }
@@ -157,7 +157,7 @@ namespace Core.ProtocalService.HttpService
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Certificate validation error: {ex.Message}");
+                _logger.Error($"Certificate validation error: {ex.Message}");
                 return false;
             }
         }
@@ -180,7 +180,7 @@ namespace Core.ProtocalService.HttpService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning($"Failed to get client certificate: {ex.Message}");
+                _logger.Warn($"Failed to get client certificate: {ex.Message}");
                 return null;
             }
         }

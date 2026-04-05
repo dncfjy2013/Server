@@ -45,7 +45,7 @@ namespace Server.Core.Common
             // 全局事件监听
             _stateMachine.OnAfterTransition += (id, oldState, newState) =>
             {
-                _logger.LogInformation($"[Client {id}] State changed: {oldState} → {newState}");
+                _logger.Info($"[Client {id}] State changed: {oldState} → {newState}");
             };
         }
 
@@ -117,7 +117,7 @@ namespace Server.Core.Common
                 ConnectionState.Connecting,
                 transitionAction: async (id, _, _) =>
                 {
-                    _logger.LogTrace($"Connecting client {id}...");
+                    _logger.Trace($"Connecting client {id}...");
                 },
                 reason: "User initiated connection"
             );
@@ -130,7 +130,7 @@ namespace Server.Core.Common
                 ConnectionState.Connected,
                 transitionAction: async (id, _, _) =>
                 {
-                    _logger.LogTrace($"Finalizing connection for client {id}...");
+                    _logger.Trace($"Finalizing connection for client {id}...");
                 },
                 reason: "Connection established"
             );
@@ -145,7 +145,7 @@ namespace Server.Core.Common
                 ConnectionState.Disconnecting,
                 transitionAction: async (id, _, _) =>
                 {
-                    _logger.LogTrace($"Starting disconnection for client {id}...");
+                    _logger.Trace($"Starting disconnection for client {id}...");
                 },
                 reason: "Begin disconnecting"
             );
@@ -160,7 +160,7 @@ namespace Server.Core.Common
                 ConnectionState.Disconnected,
                 transitionAction: async (id, _, _) =>
                 {
-                    _logger.LogTrace($"Finalizing disconnection for client {id}...");
+                    _logger.Trace($"Finalizing disconnection for client {id}...");
                 },
                 reason: "Complete disconnection"
             );
@@ -175,7 +175,7 @@ namespace Server.Core.Common
                 ConnectionState.Error,
                 transitionAction: async (id, _, _) =>
                 {
-                    _logger.LogTrace($"Finalizing disconnection for client {id}...");
+                    _logger.Trace($"Finalizing disconnection for client {id}...");
                 },
                 reason: "Complete disconnection"
             );
@@ -190,10 +190,10 @@ namespace Server.Core.Common
 
         public void PrintHistory()
         {
-            _logger.LogInformation($"Connection history for client {_clientId}:");
+            _logger.Info($"Connection history for client {_clientId}:");
             foreach (var entry in _stateMachine.GetStateHistory(_clientId))
             {
-                _logger.LogInformation($"[{entry.Timestamp:HH:mm:ss.fff}] {entry.State} - {entry.Reason}");
+                _logger.Info($"[{entry.Timestamp:HH:mm:ss.fff}] {entry.State} - {entry.Reason}");
             }
         }
 

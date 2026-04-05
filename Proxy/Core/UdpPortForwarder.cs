@@ -61,7 +61,7 @@ namespace Server.Proxy.Core
                 throw new InvalidOperationException("UDP转发器已处于运行状态");
 
             _isRunning = true;
-            _logger.LogInformation("启动UDP端口转发器...");
+            _logger.Info("启动UDP端口转发器...");
 
             var tasks = new List<Task>();
             foreach (var ep in endpoints.Where(e => e.Protocol == ConnectType.Udp))
@@ -75,11 +75,11 @@ namespace Server.Proxy.Core
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInformation("UDP转发器已停止");
+                _logger.Info("UDP转发器已停止");
             }
             catch (Exception ex)
             {
-                _logger.LogCritical($"UDP转发器启动失败：{ex.Message}");
+                _logger.Critical($"UDP转发器启动失败：{ex.Message}");
             }
             finally
             {
@@ -89,7 +89,7 @@ namespace Server.Proxy.Core
 
         public async Task StopAsync(TimeSpan timeout)
         {
-            _logger.LogInformation("开始停止UDP转发器...");
+            _logger.Info("开始停止UDP转发器...");
             _cancellationTokenSource.Cancel();
 
             var tasks = new List<Task>();
@@ -103,7 +103,7 @@ namespace Server.Proxy.Core
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError($"停止UDP客户端失败：{ex.Message}");
+                        _logger.Error($"停止UDP客户端失败：{ex.Message}");
                     }
                 }));
             }
@@ -117,7 +117,7 @@ namespace Server.Proxy.Core
             }
             _portLimiters.Clear();
 
-            _logger.LogInformation("UDP转发器已完全停止");
+            _logger.Info("UDP转发器已完全停止");
         }
 
         public PortForwarderMetrics GetMetrics()
@@ -145,7 +145,7 @@ namespace Server.Proxy.Core
                 throw new InvalidOperationException($"UDP端口 {ep.ListenPort} 已被占用");
             }
 
-            _logger.LogInformation($"UDP监听器启动：端口 {ep.ListenPort}");
+            _logger.Info($"UDP监听器启动：端口 {ep.ListenPort}");
 
             try
             {
@@ -154,7 +154,7 @@ namespace Server.Proxy.Core
                     using var lease = await _portLimiters[ep.ListenPort].AcquireAsync(1, ct);
                     if (!lease.IsAcquired)
                     {
-                        _logger.LogWarning($"UDP端口 {ep.ListenPort} 处理队列已满，丢弃数据包");
+                        _logger.Warn($"UDP端口 {ep.ListenPort} 处理队列已满，丢弃数据包");
                         await Task.Delay(100, ct);
                         continue;
                     }
@@ -166,7 +166,7 @@ namespace Server.Proxy.Core
                     }
                     catch (SocketException ex)
                     {
-                        _logger.LogWarning($"UDP接收失败：{ex.SocketErrorCode} - {ex.Message}");
+                        _logger.Warn($"UDP接收失败：{ex.SocketErrorCode} - {ex.Message}");
                     }
                 }
             }
@@ -174,7 +174,7 @@ namespace Server.Proxy.Core
             {
                 _udpClients.TryRemove(ep.ListenPort, out _);
                 udpClient.Close();
-                _logger.LogInformation($"UDP监听器停止：端口 {ep.ListenPort}");
+                _logger.Info($"UDP监听器停止：端口 {ep.ListenPort}");
             }
         }
 
@@ -197,15 +197,15 @@ namespace Server.Proxy.Core
                 var targetEndpoint = new IPEndPoint(IPAddress.Parse(target.Ip), target.TargetPort);
                 await client.SendAsync(result.Buffer, result.Buffer.Length, targetEndpoint);
 
-                _logger.LogDebug($"UDP转发完成：{result.RemoteEndPoint} → {target.Ip}:{target.TargetPort}，字节数 {result.Buffer.Length}");
+                _logger.Debug($"UDP转发完成：{result.RemoteEndPoint} → {target.Ip}:{target.TargetPort}，字节数 {result.Buffer.Length}");
             }
             catch (OperationCanceledException)
             {
-                _logger.LogDebug("UDP转发被取消");
+                _logger.Debug("UDP转发被取消");
             }
             catch (Exception ex)
             {
-                _logger.LogError($"UDP转发失败：{ex.Message}");
+                _logger.Error($"UDP转发失败：{ex.Message}");
             }
         }
 

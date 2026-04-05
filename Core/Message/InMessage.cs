@@ -59,30 +59,30 @@ namespace Core.Message
         public void Stop()
         {
             // 取消消息处理取消令牌源，同样是关键操作步骤，使用Debug记录
-            _logger.LogDebug("Canceling the message - processing cancellation token source _cts.");
+            _logger.Debug("Canceling the message - processing cancellation token source _cts.");
             _cts.Cancel();
-            _logger.LogDebug("Successfully canceled the message - processing cancellation token source _cts.");
+            _logger.Debug("Successfully canceled the message - processing cancellation token source _cts.");
 
             _inComingLowManager.Shutdown();
-            _logger.LogDebug("All incoming low-priority message processing threads have been shut down.");
+            _logger.Debug("All incoming low-priority message processing threads have been shut down.");
 
             _inComingMediumManager.Shutdown();
-            _logger.LogDebug("All incoming medium-priority message processing threads have been shut down.");
+            _logger.Debug("All incoming medium-priority message processing threads have been shut down.");
 
             _inComingHighManager.Shutdown();
-            _logger.LogDebug("All incoming high-priority message processing threads have been shut down.");
+            _logger.Debug("All incoming high-priority message processing threads have been shut down.");
 
-            _logger.LogInformation("All incoming message processing threads have been shut down.");
+            _logger.Info("All incoming message processing threads have been shut down.");
         }
         public void Start()
         {
             try
             {
-                _logger.LogTrace("Entering StartProcessing method.");
-                _logger.LogDebug("Initiating the initialization of message thread managers for different priorities.");
+                _logger.Trace("Entering StartProcessing method.");
+                _logger.Debug("Initiating the initialization of message thread managers for different priorities.");
 
                 // 启动高优先级消息的处理任务
-                _logger.LogDebug("Starting the initialization of the high-priority message thread manager.");
+                _logger.Debug("Starting the initialization of the high-priority message thread manager.");
                 _inComingHighManager = new IncomingMessageThreadManager(
                     this,
                     _messageHighQueue,
@@ -90,10 +90,10 @@ namespace Core.Message
                     DataPriority.High,
                     minThreads: ConstantsConfig.In_High_MinThreadNum,
                     maxThreads: ConstantsConfig.In_High_MaxThreadNum);
-                _logger.LogDebug("High-priority message thread manager initialization completed.");
+                _logger.Debug("High-priority message thread manager initialization completed.");
 
                 // 启动中优先级消息的处理任务
-                _logger.LogDebug("Starting the initialization of the medium-priority message thread manager.");
+                _logger.Debug("Starting the initialization of the medium-priority message thread manager.");
                 _inComingMediumManager = new IncomingMessageThreadManager(
                     this,
                     _messageMediumQueue,
@@ -101,10 +101,10 @@ namespace Core.Message
                     DataPriority.Medium,
                     minThreads: ConstantsConfig.In_Medium_MinThreadNum,
                     maxThreads: ConstantsConfig.In_Medium_MaxThreadNum);
-                _logger.LogDebug("Medium-priority message thread manager initialization completed.");
+                _logger.Debug("Medium-priority message thread manager initialization completed.");
 
                 // 启动低优先级消息的处理任务
-                _logger.LogDebug("Starting the initialization of the low-priority message thread manager.");
+                _logger.Debug("Starting the initialization of the low-priority message thread manager.");
                 _inComingLowManager = new IncomingMessageThreadManager(
                     this,
                     _messagelowQueue,
@@ -112,15 +112,15 @@ namespace Core.Message
                     DataPriority.Low,
                     minThreads: ConstantsConfig.In_Low_MinThreadNum,
                     maxThreads: ConstantsConfig.In_Low_MaxThreadNum);
-                _logger.LogDebug("Low-priority message thread manager initialization completed.");
+                _logger.Debug("Low-priority message thread manager initialization completed.");
 
-                _logger.LogDebug("Initialization of all priority message thread managers completed.");
-                _logger.LogTrace("Exiting StartProcessing method.");
+                _logger.Debug("Initialization of all priority message thread managers completed.");
+                _logger.Trace("Exiting StartProcessing method.");
             }
             catch (Exception ex)
             {
-                _logger.LogError($"An error occurred while starting message processing consumers: {ex.Message}");
-                _logger.LogWarning("Due to the error, some or all message thread managers may not have been initialized successfully.");
+                _logger.Error($"An error occurred while starting message processing consumers: {ex.Message}");
+                _logger.Warn("Due to the error, some or all message thread managers may not have been initialized successfully.");
             }
         }
 
@@ -128,40 +128,40 @@ namespace Core.Message
         {
             // 获取对应优先级的信号量（控制并发处理数量）
             var semaphore = _prioritySemaphores[priority];
-            _logger.LogDebug($"Acquired semaphore for {priority} priority (CurrentCount={semaphore.CurrentCount})");
+            _logger.Debug($"Acquired semaphore for {priority} priority (CurrentCount={semaphore.CurrentCount})");
 
             try
             {
                 switch (priority)
                 {
                     case DataPriority.High:
-                        _logger.LogInformation($"High priority message processor started (ThreadId={Environment.CurrentManagedThreadId})");
+                        _logger.Info($"High priority message processor started (ThreadId={Environment.CurrentManagedThreadId})");
                         await ProcessPriorityMessages(priority, _messageHighQueue.Reader, semaphore);
                         break;
                     case DataPriority.Medium:
-                        _logger.LogInformation($"Medium priority message processor started (ThreadId={Environment.CurrentManagedThreadId})");
+                        _logger.Info($"Medium priority message processor started (ThreadId={Environment.CurrentManagedThreadId})");
                         await ProcessPriorityMessages(priority, _messageMediumQueue.Reader, semaphore);
                         break;
                     case DataPriority.Low:
-                        _logger.LogInformation($"Low priority message processor started (ThreadId={Environment.CurrentManagedThreadId})");
+                        _logger.Info($"Low priority message processor started (ThreadId={Environment.CurrentManagedThreadId})");
                         await ProcessPriorityMessages(priority, _messagelowQueue.Reader, semaphore);
                         break;
                     default:
-                        _logger.LogWarning($"Unknown priority {priority} received, skipping processor");
+                        _logger.Warn($"Unknown priority {priority} received, skipping processor");
                         return;
                 }
             }
             catch (OperationCanceledException)
             {
-                _logger.LogDebug($"{priority} priority processor was canceled");
+                _logger.Debug($"{priority} priority processor was canceled");
             }
             catch (Exception ex)
             {
-                _logger.LogCritical($"Unhandled exception in {priority} processor: {ex.Message}  ");
+                _logger.Critical($"Unhandled exception in {priority} processor: {ex.Message}  ");
             }
             finally
             {
-                _logger.LogInformation($"{priority} priority processor stopped");
+                _logger.Info($"{priority} priority processor stopped");
             }
         }
 
@@ -173,38 +173,38 @@ namespace Core.Message
                 // 验证消息优先级与处理器匹配（防御性编程）
                 if (message.Data.Priority != priority)
                 {
-                    _logger.LogTrace($"Dropping message with mismatched priority: expected {priority}, actual {message.Data.Priority}");
+                    _logger.Trace($"Dropping message with mismatched priority: expected {priority}, actual {message.Data.Priority}");
                     continue;
                 }
 
-                _logger.LogDebug($"Received {priority} priority message: Id={message.Client.Id}, Size={MemoryCalculator.CalculateObjectSize(message.Data)} bytes");
+                _logger.Debug($"Received {priority} priority message: Id={message.Client.Id}, Size={MemoryCalculator.CalculateObjectSize(message.Data)} bytes");
 
                 // 等待信号量（控制并发数）
                 await semaphore.WaitAsync(_cts.Token);
-                _logger.LogTrace($"{priority} semaphore acquired (current count={semaphore.CurrentCount})");
+                _logger.Trace($"{priority} semaphore acquired (current count={semaphore.CurrentCount})");
 
                 try
                 {
                     // 处理消息核心逻辑（假设包含业务处理和耗时操作）
                     await ProcessMessageWithPriority(message, priority);
-                    _logger.LogDebug($"{priority} message processed successfully: Id={message.Client.Id}");
+                    _logger.Debug($"{priority} message processed successfully: Id={message.Client.Id}");
                 }
                 catch (TimeoutException tex)
                 {
-                    _logger.LogError($"Timeout processing {priority} message {message.Client.Id}: {tex.Message}");
+                    _logger.Error($"Timeout processing {priority} message {message.Client.Id}: {tex.Message}");
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError($"Error processing {priority} message {message.Client.Id}: {ex.Message}  ");
+                    _logger.Error($"Error processing {priority} message {message.Client.Id}: {ex.Message}  ");
                     if (priority == DataPriority.High)
                     {
-                        _logger.LogWarning($"High-priority message failed: {message.Client.Id}, will retry later");
+                        _logger.Warn($"High-priority message failed: {message.Client.Id}, will retry later");
                     }
                 }
                 finally
                 {
                     semaphore.Release();
-                    _logger.LogTrace($"{priority} semaphore released (current count={semaphore.CurrentCount})");
+                    _logger.Trace($"{priority} semaphore released (current count={semaphore.CurrentCount})");
                 }
             }
         }
@@ -218,50 +218,50 @@ namespace Core.Message
                 DataPriority.Medium => TimeSpan.FromMilliseconds(500), // 中等优先级允许稍长处理时间
                 _ => TimeSpan.FromSeconds(1)                           // 低优先级默认1秒超时
             };
-            _logger.LogDebug($"Set {priority} priority message timeout to {timeout.TotalMilliseconds}ms");
+            _logger.Debug($"Set {priority} priority message timeout to {timeout.TotalMilliseconds}ms");
 
             // 使用CancellationTokenSource实现处理超时控制
             using var cts = new CancellationTokenSource(timeout);
 
             try
             {
-                _logger.LogTrace($"Start processing {priority} message (Id={message.Client.Id}, Type={message.Data.InfoType})");
+                _logger.Trace($"Start processing {priority} message (Id={message.Client.Id}, Type={message.Data.InfoType})");
 
                 // 根据消息类型分发不同的处理逻辑
                 switch (message.Data.InfoType)
                 {
                     case InfoType.HeartBeat:
-                        _logger.LogDebug($"Handling heartbeat from client {message.Client.Id}");
+                        _logger.Debug($"Handling heartbeat from client {message.Client.Id}");
                         await _heartbeatMessage.HandleHeartbeat(message.Client, message.Data);
-                        _logger.LogDebug($"Heartbeat handled successfully for client {message.Client.Id}");
+                        _logger.Debug($"Heartbeat handled successfully for client {message.Client.Id}");
                         break;
 
                     case InfoType.CtsFile:
-                        _logger.LogDebug($"Handling file transfer for client {message.Client.Id} (Size={MemoryCalculator.CalculateObjectSize(message.Data)} bytes)");
+                        _logger.Debug($"Handling file transfer for client {message.Client.Id} (Size={MemoryCalculator.CalculateObjectSize(message.Data)} bytes)");
                         await _fileMessage.HandleFileTransfer(message.Client, message.Data);
-                        _logger.LogDebug($"File transfer completed for client {message.Client.Id}");
+                        _logger.Debug($"File transfer completed for client {message.Client.Id}");
                         break;
 
                     case InfoType.CtsNormal:
-                        _logger.LogDebug($"Handling normal message for client {message.Client.Id} (Content={message.Data.Message})");
+                        _logger.Debug($"Handling normal message for client {message.Client.Id} (Content={message.Data.Message})");
                         await _normalMessage.HandleNormalMessage(message.Client, message.Data);
-                        _logger.LogDebug($"Normal message processed for client {message.Client.Id}");
+                        _logger.Debug($"Normal message processed for client {message.Client.Id}");
                         break;
                 }
             }
             catch (OperationCanceledException) when (cts.IsCancellationRequested)
             {
                 // 处理超时异常（优先级相关）
-                _logger.LogError($"{priority} priority message processing timed out (Id={message.Client.Id})");
-                _logger.LogWarning($"Client {message.Client.Id} may experience delay due to timeout");
+                _logger.Error($"{priority} priority message processing timed out (Id={message.Client.Id})");
+                _logger.Warn($"Client {message.Client.Id} may experience delay due to timeout");
             }
             catch (Exception ex)
             {
                 // 处理其他异常（非超时原因）
-                _logger.LogError($"Unhandled error processing {priority} message (Id={message.Client.Id}): {ex.Message}  ");
+                _logger.Error($"Unhandled error processing {priority} message (Id={message.Client.Id}): {ex.Message}  ");
                 if (priority == DataPriority.High)
                 {
-                    _logger.LogCritical($"High-priority message failure requires immediate attention: {message.Client.Id}");
+                    _logger.Critical($"High-priority message failure requires immediate attention: {message.Client.Id}");
                 }
             }
         }

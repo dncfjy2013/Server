@@ -48,7 +48,7 @@ namespace Server.Proxy.Core
 
         private void InitIpZone()
         {
-            _logger.LogInformation("初始化 IP 区域策略...");
+            _logger.Info("初始化 IP 区域策略...");
             AddCustomMappings(_ipGeoLocationService);
             LoadRulesFromFile(_ipGeoLocationService);
         }
@@ -84,11 +84,11 @@ namespace Server.Proxy.Core
             {
                 if (service.TryAddMapping(cidr, zone))
                 {
-                    _logger.LogDebug($"添加 IP 规则：{cidr} → {zone}");
+                    _logger.Debug($"添加 IP 规则：{cidr} → {zone}");
                 }
                 else
                 {
-                    _logger.LogWarning($"添加 IP 规则失败：{cidr}");
+                    _logger.Warn($"添加 IP 规则失败：{cidr}");
                 }
             }
         }
@@ -98,12 +98,12 @@ namespace Server.Proxy.Core
             string configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ip-rules.txt");
             if (File.Exists(configPath))
             {
-                _logger.LogInformation($"从文件加载 IP 规则：{configPath}");
+                _logger.Info($"从文件加载 IP 规则：{configPath}");
                 service.LoadFromConfig(configPath);
             }
             else
             {
-                _logger.LogWarning($"未找到 IP 规则文件：{configPath}");
+                _logger.Warn($"未找到 IP 规则文件：{configPath}");
             }
         }
 
@@ -117,7 +117,7 @@ namespace Server.Proxy.Core
         {
             if (_isRunning) throw new InvalidOperationException("转发器已运行");
             _isRunning = true;
-            _logger.LogInformation("启动高级端口转发器...");
+            _logger.Info("启动高级端口转发器...");
 
             var tasks = new List<Task>
             {
@@ -127,13 +127,13 @@ namespace Server.Proxy.Core
             };
 
             try { await Task.WhenAll(tasks); }
-            catch (OperationCanceledException) { _logger.LogInformation("转发器停止请求已接收"); }
+            catch (OperationCanceledException) { _logger.Info("转发器停止请求已接收"); }
             finally { _isRunning = false; }
         }
 
         public async Task StopAsync(TimeSpan timeout)
         {
-            _logger.LogInformation("开始优雅停止转发器...");
+            _logger.Info("开始优雅停止转发器...");
             _cancellationTokenSource.Cancel();
 
             await Task.WhenAll(
@@ -142,7 +142,7 @@ namespace Server.Proxy.Core
                 _httpForwarder.StopAsync(timeout)
             );
 
-            _logger.LogInformation("所有协议转发器已停止");
+            _logger.Info("所有协议转发器已停止");
         }
 
         public PortForwarderMetrics GetMetrics()

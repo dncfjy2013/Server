@@ -42,12 +42,12 @@ namespace Core.ProtocalService.HttpService
             {
                 _listener.Start();
                 _isRunning = true;
-                _logger.LogInformation($"HTTP server started on {Host}");
+                _logger.Info($"HTTP server started on {Host}");
                 Task.Run(() => AcceptClients());
             }
             catch (Exception ex)
             {
-                _logger.LogCritical($"Failed to start HTTP server: {ex.Message}");
+                _logger.Critical($"Failed to start HTTP server: {ex.Message}");
                 throw;
             }
         }
@@ -57,7 +57,7 @@ namespace Core.ProtocalService.HttpService
             _isRunning = false;
             _listener?.Stop();
             _listener?.Close();
-            _logger.LogInformation($"HTTP server stopped");
+            _logger.Info($"HTTP server stopped");
         }
 
         private async Task AcceptClients()
@@ -70,17 +70,17 @@ namespace Core.ProtocalService.HttpService
                     var clientId = Interlocked.Increment(ref _nextClientId);
 
                     _connectionManager.CreateClient(clientId).ConnectAsync();
-                    _logger.LogDebug($"HTTP client connected: {context.Request.RemoteEndPoint}");
+                    _logger.Debug($"HTTP client connected: {context.Request.RemoteEndPoint}");
 
                     _ = _requestHandler.HandleHttpRequest(context, clientId);
                 }
                 catch (HttpListenerException ex) when (ex.ErrorCode == 995)
                 {
-                    _logger.LogTrace("HTTP listener stopped gracefully");
+                    _logger.Trace("HTTP listener stopped gracefully");
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError($"HTTP accept error: {ex.Message}");
+                    _logger.Error($"HTTP accept error: {ex.Message}");
                     await Task.Delay(100);
                 }
             }

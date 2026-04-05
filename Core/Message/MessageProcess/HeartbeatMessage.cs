@@ -26,7 +26,7 @@ namespace Core.Message
             // 统计接收数据量
             long receivedSize = MemoryCalculator.CalculateObjectSize(data);
             client.AddReceivedBytes(receivedSize);
-            _logger.LogDebug($"Client {client.Id} received heartbeat (Size={receivedSize} bytes)");
+            _logger.Debug($"Client {client.Id} received heartbeat (Size={receivedSize} bytes)");
 
             // 构造心跳响应
             var ack = new CommunicationData
@@ -38,16 +38,16 @@ namespace Core.Message
             };
 
             // 记录正常心跳日志（Info级别）
-            _logger.LogInformation($"Client {client.Id} heartbeat {data.SeqNum} received, sending ACK");
+            _logger.Info($"Client {client.Id} heartbeat {data.SeqNum} received, sending ACK");
 
             // 统计发送数据量
             long sentSize = MemoryCalculator.CalculateObjectSize(ack);
             client.AddSentBytes(sentSize);
-            _logger.LogDebug($"Client {client.Id} sent heartbeat ACK (Size={sentSize} bytes)");
+            _logger.Debug($"Client {client.Id} sent heartbeat ACK (Size={sentSize} bytes)");
 
             // 发送心跳响应
             await _outMessage.SendInfoDate(client, ack);
-            _logger.LogTrace($"Client {client.Id} heartbeat ACK sent successfully");
+            _logger.Trace($"Client {client.Id} heartbeat ACK sent successfully");
         }
 
     }

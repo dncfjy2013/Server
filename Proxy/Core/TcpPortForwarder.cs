@@ -74,7 +74,7 @@ namespace Server.Proxy.Core
         {
             if (_isRunning) throw new InvalidOperationException("TCP转发器已运行");
             _isRunning = true;
-            _logger.LogInformation("启动高性能TCP端口转发器...");
+            _logger.Info("启动高性能TCP端口转发器...");
 
             var tasks = new List<Task>();
             foreach (var ep in endpoints.Where(e =>
@@ -90,11 +90,11 @@ namespace Server.Proxy.Core
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInformation("TCP转发器已停止");
+                _logger.Info("TCP转发器已停止");
             }
             catch (Exception ex)
             {
-                _logger.LogCritical($"TCP转发器启动失败：{ex.Message}", ex);
+                _logger.Critical($"TCP转发器启动失败：{ex.Message}", ex);
             }
             finally
             {
@@ -104,7 +104,7 @@ namespace Server.Proxy.Core
 
         public async Task StopAsync(TimeSpan timeout)
         {
-            _logger.LogInformation("开始停止TCP转发器...");
+            _logger.Info("开始停止TCP转发器...");
             _cancellationTokenSource.Cancel();
 
             using var timeoutCts = new CancellationTokenSource(timeout);
@@ -138,15 +138,15 @@ namespace Server.Proxy.Core
 
                 _certificateCache.Clear();
 
-                _logger.LogInformation("TCP转发器已完全停止");
+                _logger.Info("TCP转发器已完全停止");
             }
             catch (OperationCanceledException)
             {
-                _logger.LogWarning("停止操作超时，部分资源可能未完全释放");
+                _logger.Warn("停止操作超时，部分资源可能未完全释放");
             }
             catch (Exception ex)
             {
-                _logger.LogError($"停止过程中发生错误: {ex.Message}", ex);
+                _logger.Error($"停止过程中发生错误: {ex.Message}", ex);
             }
         }
 
@@ -176,7 +176,7 @@ namespace Server.Proxy.Core
             }
             catch (SocketException ex)
             {
-                _logger.LogCritical($"无法在端口 {ep.ListenPort} 启动TCP监听器: {ex.Message}", ex);
+                _logger.Critical($"无法在端口 {ep.ListenPort} 启动TCP监听器: {ex.Message}", ex);
                 throw;
             }
 
@@ -186,7 +186,7 @@ namespace Server.Proxy.Core
                 throw new InvalidOperationException($"端口 {ep.ListenPort} 已被占用");
             }
 
-            _logger.LogInformation($"TCP监听器启动：端口 {ep.ListenPort}，协议 {ep.Protocol}");
+            _logger.Info($"TCP监听器启动：端口 {ep.ListenPort}，协议 {ep.Protocol}");
 
             try
             {
@@ -200,7 +200,7 @@ namespace Server.Proxy.Core
                         // 关键修改点：检查限流器是否存在
                         if (!_portLimiters.TryGetValue(ep.ListenPort, out var limiter))
                         {
-                            _logger.LogError($"端口 {ep.ListenPort} 没有配置限流器，拒绝新连接");
+                            _logger.Error($"端口 {ep.ListenPort} 没有配置限流器，拒绝新连接");
                             // 等待一段时间避免CPU占用过高
                             await Task.Delay(100, ct);
                             continue;
@@ -209,7 +209,7 @@ namespace Server.Proxy.Core
                         using var lease = await limiter.AcquireAsync(1, linkedCts.Token);
                         if (!lease.IsAcquired)
                         {
-                            _logger.LogWarning($"端口 {ep.ListenPort} 连接数已满，拒绝新连接");
+                            _logger.Warn($"端口 {ep.ListenPort} 连接数已满，拒绝新连接");
                             continue;
                         }
 
@@ -221,11 +221,11 @@ namespace Server.Proxy.Core
                     }
                     catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
                     {
-                        _logger.LogDebug($"接受客户端连接超时");
+                        _logger.Debug($"接受客户端连接超时");
                     }
                     catch (Exception ex) when (!ct.IsCancellationRequested)
                     {
-                        _logger.LogError($"接受客户端连接时发生错误: {ex.Message}", ex);
+                        _logger.Error($"接受客户端连接时发生错误: {ex.Message}", ex);
                     }
                 }
             }
@@ -233,7 +233,7 @@ namespace Server.Proxy.Core
             {
                 _tcpListeners.TryRemove(ep.ListenPort, out _);
                 listener.Stop();
-                _logger.LogInformation($"TCP监听器停止：端口 {ep.ListenPort}");
+                _logger.Info($"TCP监听器停止：端口 {ep.ListenPort}");
             }
         }
 
@@ -250,7 +250,7 @@ namespace Server.Proxy.Core
             }
             catch (Exception ex)
             {
-                _logger.LogWarning($"配置TCP客户端选项失败: {ex.Message}");
+                _logger.Warn($"配置TCP客户端选项失败: {ex.Message}");
             }
         }
 
@@ -278,7 +278,7 @@ namespace Server.Proxy.Core
                 }
 
                 UpdateMetrics(target, 1);
-                _logger.LogDebug($"新连接 [{connectionId}]：{client.Client.RemoteEndPoint} → {target.Ip}:{target.TargetPort}");
+                _logger.Debug($"新连接 [{connectionId}]：{client.Client.RemoteEndPoint} → {target.Ip}:{target.TargetPort}");
 
                 // 处理客户端SSL
                 clientStream = await ProcessClientSslAsync(client, ep, ct);
@@ -295,11 +295,11 @@ namespace Server.Proxy.Core
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
-                _logger.LogDebug($"连接 [{connectionId}] 因取消请求而关闭");
+                _logger.Debug($"连接 [{connectionId}] 因取消请求而关闭");
             }
             catch (Exception ex)
             {
-                _logger.LogError($"连接 [{connectionId}] 处理失败：{ex.Message}", ex);
+                _logger.Error($"连接 [{connectionId}] 处理失败：{ex.Message}", ex);
             }
             finally
             {
@@ -337,7 +337,7 @@ namespace Server.Proxy.Core
             }
             catch (Exception ex)
             {
-                _logger.LogError($"建立客户端SSL连接失败: {ex.Message}", ex);
+                _logger.Error($"建立客户端SSL连接失败: {ex.Message}", ex);
                 throw;
             }
         }
@@ -359,7 +359,7 @@ namespace Server.Proxy.Core
                 // 尝试从池中获取连接
                 if (pool.TryGet(out targetClient))
                 {
-                    _logger.LogTrace($"从连接池获取连接：{poolKey}");
+                    _logger.Trace($"从连接池获取连接：{poolKey}");
 
                     // 验证连接是否仍然有效
                     if (!IsConnectionAlive(targetClient))
@@ -375,7 +375,7 @@ namespace Server.Proxy.Core
                     isNewConnection = true;
                     targetClient = new TcpClient();
                     await targetClient.ConnectAsync(target.Ip, target.TargetPort, linkedCts.Token);
-                    _logger.LogTrace($"创建新连接：{poolKey}");
+                    _logger.Trace($"创建新连接：{poolKey}");
                 }
 
                 return targetClient;
@@ -386,9 +386,9 @@ namespace Server.Proxy.Core
                 targetClient?.Dispose();
 
                 if (isNewConnection)
-                    _logger.LogError($"连接到目标服务器失败: {target.Ip}:{target.TargetPort}, 错误: {ex.Message}", ex);
+                    _logger.Error($"连接到目标服务器失败: {target.Ip}:{target.TargetPort}, 错误: {ex.Message}", ex);
                 else
-                    _logger.LogError($"从池获取的连接无效，创建新连接失败: {target.Ip}:{target.TargetPort}, 错误: {ex.Message}", ex);
+                    _logger.Error($"从池获取的连接无效，创建新连接失败: {target.Ip}:{target.TargetPort}, 错误: {ex.Message}", ex);
 
                 throw;
             }
@@ -431,7 +431,7 @@ namespace Server.Proxy.Core
             }
             catch (Exception ex)
             {
-                _logger.LogError($"建立目标服务器SSL连接失败: {target.Ip}:{target.TargetPort}, 错误: {ex.Message}", ex);
+                _logger.Error($"建立目标服务器SSL连接失败: {target.Ip}:{target.TargetPort}, 错误: {ex.Message}", ex);
                 throw;
             }
         }
@@ -441,7 +441,7 @@ namespace Server.Proxy.Core
             if (errors == SslPolicyErrors.None)
                 return true;
 
-            _logger.LogWarning($"目标服务器证书验证失败: {errors}");
+            _logger.Warn($"目标服务器证书验证失败: {errors}");
 
             // 在开发环境中允许无效证书
             return Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development";
@@ -462,11 +462,11 @@ namespace Server.Proxy.Core
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
-                _logger.LogDebug($"连接 [{connectionId}] 转发任务被取消");
+                _logger.Debug($"连接 [{connectionId}] 转发任务被取消");
             }
             catch (Exception ex)
             {
-                _logger.LogError($"连接 [{connectionId}] 转发失败: {ex.Message}", ex);
+                _logger.Error($"连接 [{connectionId}] 转发失败: {ex.Message}", ex);
                 throw;
             }
         }
@@ -483,13 +483,13 @@ namespace Server.Proxy.Core
                 if (clientStream != null)
                 {
                     try { await clientStream.DisposeAsync(); }
-                    catch (Exception ex) { _logger.LogWarning($"关闭客户端流失败: {ex.Message}"); }
+                    catch (Exception ex) { _logger.Warn($"关闭客户端流失败: {ex.Message}"); }
                 }
 
                 if (targetStream != null)
                 {
                     try { await targetStream.DisposeAsync(); }
-                    catch (Exception ex) { _logger.LogWarning($"关闭目标流失败: {ex.Message}"); }
+                    catch (Exception ex) { _logger.Warn($"关闭目标流失败: {ex.Message}"); }
                 }
 
                 // 处理目标连接池
@@ -502,29 +502,29 @@ namespace Server.Proxy.Core
                         pool.Count < MaxPooledConnections)
                     {
                         pool.Return(targetClient);
-                        _logger.LogTrace($"连接 [{connectionId}] 回收至连接池：{poolKey}");
+                        _logger.Trace($"连接 [{connectionId}] 回收至连接池：{poolKey}");
                     }
                     else
                     {
                         try { targetClient.Dispose(); }
-                        catch (Exception ex) { _logger.LogWarning($"释放目标客户端失败: {ex.Message}"); }
+                        catch (Exception ex) { _logger.Warn($"释放目标客户端失败: {ex.Message}"); }
                     }
                 }
 
                 // 关闭客户端连接
                 try { client?.Dispose(); }
-                catch (Exception ex) { _logger.LogWarning($"释放客户端失败: {ex.Message}"); }
+                catch (Exception ex) { _logger.Warn($"释放客户端失败: {ex.Message}"); }
 
                 // 更新指标
                 if (target != null)
                 {
                     UpdateMetrics(target, -1);
-                    _logger.LogInformation($"连接 [{connectionId}] 关闭：{duration.TotalMilliseconds}ms，目标：{target.Ip}:{target.TargetPort}");
+                    _logger.Info($"连接 [{connectionId}] 关闭：{duration.TotalMilliseconds}ms，目标：{target.Ip}:{target.TargetPort}");
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError($"释放连接资源失败: {ex.Message}", ex);
+                _logger.Error($"释放连接资源失败: {ex.Message}", ex);
             }
         }
 
@@ -533,7 +533,7 @@ namespace Server.Proxy.Core
             if (errors == SslPolicyErrors.None)
                 return true;
 
-            _logger.LogWarning($"客户端证书验证失败: {errors}");
+            _logger.Warn($"客户端证书验证失败: {errors}");
 
             // 在开发环境中允许无效证书
             return Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development";

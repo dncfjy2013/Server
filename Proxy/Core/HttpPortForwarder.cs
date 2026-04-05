@@ -60,7 +60,7 @@ namespace Server.Proxy.Core
         {
             if (_isRunning) throw new InvalidOperationException("HTTP转发器已运行");
             _isRunning = true;
-            _logger.LogInformation("启动HTTP端口转发器...");
+            _logger.Info("启动HTTP端口转发器...");
 
             var tasks = new List<Task>();
             foreach (var ep in endpoints.Where(e =>
@@ -71,14 +71,14 @@ namespace Server.Proxy.Core
             }
 
             try { await Task.WhenAll(tasks); }
-            catch (OperationCanceledException) { _logger.LogInformation("HTTP转发器已停止"); }
-            catch (Exception ex) { _logger.LogCritical($"HTTP转发器启动失败：{ex.Message}"); }
+            catch (OperationCanceledException) { _logger.Info("HTTP转发器已停止"); }
+            catch (Exception ex) { _logger.Critical($"HTTP转发器启动失败：{ex.Message}"); }
             finally { _isRunning = false; }
         }
 
         public async Task StopAsync(TimeSpan timeout)
         {
-            _logger.LogInformation("开始停止HTTP转发器...");
+            _logger.Info("开始停止HTTP转发器...");
             _cancellationTokenSource.Cancel();
 
             var stopTasks = new List<Task>();
@@ -92,7 +92,7 @@ namespace Server.Proxy.Core
             foreach (var limiter in _portLimiters.Values) limiter.Dispose();
             _portLimiters.Clear();
 
-            _logger.LogInformation("HTTP转发器已完全停止");
+            _logger.Info("HTTP转发器已完全停止");
         }
 
         public PortForwarderMetrics GetMetrics()
@@ -186,7 +186,7 @@ namespace Server.Proxy.Core
         {
             if (!HttpListener.IsSupported)
             {
-                _logger.LogError($"不支持的平台，无法启动HTTP监听：{ep.ListenPort}");
+                _logger.Error($"不支持的平台，无法启动HTTP监听：{ep.ListenPort}");
                 return;
             }
 
@@ -200,7 +200,7 @@ namespace Server.Proxy.Core
                 throw new InvalidOperationException($"端口被占用：{ep.ListenPort}");
             }
 
-            _logger.LogInformation($"HTTP监听启动：{ep.ListenIp}:{ep.ListenPort}");
+            _logger.Info($"HTTP监听启动：{ep.ListenIp}:{ep.ListenPort}");
 
             try
             {
@@ -209,7 +209,7 @@ namespace Server.Proxy.Core
                     using var lease = await _portLimiters[ep.ListenPort].AcquireAsync(1, ct);
                     if (!lease.IsAcquired)
                     {
-                        _logger.LogWarning($"请求限流：{ep.ListenPort}");
+                        _logger.Warn($"请求限流：{ep.ListenPort}");
                         continue;
                     }
 
@@ -220,7 +220,7 @@ namespace Server.Proxy.Core
                     }
                     catch (HttpListenerException ex)
                     {
-                        _logger.LogWarning($"HTTP上下文获取失败：{ex.ErrorCode}");
+                        _logger.Warn($"HTTP上下文获取失败：{ex.ErrorCode}");
                     }
                 }
             }
@@ -241,7 +241,7 @@ namespace Server.Proxy.Core
 
             try
             {
-                _logger.LogDebug($"HTTP请求 [{requestId}]：{request.HttpMethod} {request.Url}");
+                _logger.Debug($"HTTP请求 [{requestId}]：{request.HttpMethod} {request.Url}");
 
                 target = ProxyConstant._isUseHttpMap
                     ? _httpServerMap.GetOrAdd(request.RemoteEndPoint.ToString(),
@@ -267,12 +267,12 @@ namespace Server.Proxy.Core
             }
             catch (OperationCanceledException)
             {
-                _logger.LogWarning($"请求取消 [{requestId}]");
+                _logger.Warn($"请求取消 [{requestId}]");
                 response.StatusCode = 503;
             }
             catch (Exception ex)
             {
-                _logger.LogError($"请求处理失败 [{requestId}]：{ex.Message}");
+                _logger.Error($"请求处理失败 [{requestId}]：{ex.Message}");
                 response.StatusCode = 500;
             }
             finally

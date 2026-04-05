@@ -48,7 +48,7 @@ namespace Core.Message
         public void Start()
         {
             int Threads = Environment.ProcessorCount;
-            _logger.LogDebug("Send Process Start High Thread Manager");
+            _logger.Debug("Send Process Start High Thread Manager");
             _outComingHighManager = new OutgoingMessageThreadManager(
                 this,
                 _outgoingHighMessages,
@@ -56,7 +56,7 @@ namespace Core.Message
                 DataPriority.High,
                 minThreads: ConstantsConfig.Out_High_MinThreadNum,
                 maxThreads: ConstantsConfig.Out_High_MaxThreadNum);
-            _logger.LogDebug("Send Process Start Medium Thread Manager");
+            _logger.Debug("Send Process Start Medium Thread Manager");
             _outComingMediumManager = new OutgoingMessageThreadManager(
                 this,
                 _outgoingMedumMessages,
@@ -64,7 +64,7 @@ namespace Core.Message
                 DataPriority.Medium,
                 minThreads: ConstantsConfig.Out_Medium_MinThreadNum,
                 maxThreads: ConstantsConfig.Out_Medium_MaxThreadNum);
-            _logger.LogDebug("Send Process Start Low Thread Manager");
+            _logger.Debug("Send Process Start Low Thread Manager");
             _outComingLowManager = new OutgoingMessageThreadManager(
                 this,
                 _outgoingLowMessages,
@@ -76,20 +76,20 @@ namespace Core.Message
         public void Stop()
         {
             // 取消消息处理取消令牌源，同样是关键操作步骤，使用Debug记录
-            _logger.LogDebug("Canceling the message - processing cancellation token source _cts.");
+            _logger.Debug("Canceling the message - processing cancellation token source _cts.");
             _cts.Cancel();
-            _logger.LogDebug("Successfully canceled the message - processing cancellation token source _cts.");
+            _logger.Debug("Successfully canceled the message - processing cancellation token source _cts.");
 
             _outComingHighManager.Shutdown();
-            _logger.LogDebug("All outgoing high-priority message processing threads have been shut down.");
+            _logger.Debug("All outgoing high-priority message processing threads have been shut down.");
 
             _outComingMediumManager.Shutdown();
-            _logger.LogDebug("All outgoing medium-priority message processing threads have been shut down.");
+            _logger.Debug("All outgoing medium-priority message processing threads have been shut down.");
 
             _outComingLowManager.Shutdown();
-            _logger.LogDebug("All outgoing low-priority message processing threads have been shut down.");
+            _logger.Debug("All outgoing low-priority message processing threads have been shut down.");
 
-            _logger.LogInformation("All outgoing message processing threads have been shut down.");
+            _logger.Info("All outgoing message processing threads have been shut down.");
         }
         public async Task ProcessOutgoingMessages(ServerOutgoingMessage msg, CancellationToken ct)
         {
@@ -99,7 +99,7 @@ namespace Core.Message
                 if (client == null)
                 {
                     await HandleRetry(msg);
-                    _logger.LogWarning($"Could not find client with UniqueId {msg.Data.Targetid} for message.");
+                    _logger.Warn($"Could not find client with UniqueId {msg.Data.Targetid} for message.");
                     return;
                 }
 
@@ -108,7 +108,7 @@ namespace Core.Message
                 if (!sent) throw new Exception("Send failed");
 
                 msg.SentTime = DateTime.Now;
-                _logger.LogInformation($"Sent {msg.Data.InfoType} to {client.Id} (Priority: {msg.Data.Priority})");
+                _logger.Info($"Sent {msg.Data.InfoType} to {client.Id} (Priority: {msg.Data.Priority})");
 
                 // 记录发送成功，无需重传
                 if (msg.Data.InfoType == InfoType.StcFile && msg.Data.Message == "FILE_COMPLETE")
@@ -126,14 +126,14 @@ namespace Core.Message
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInformation($"Message processing for client {msg.Data.Targetid} was cancelled.");
+                _logger.Info($"Message processing for client {msg.Data.Targetid} was cancelled.");
                 await HandleRetry(msg);
                 return;
             }
             catch (Exception ex)
             {
                 // 触发重传逻辑
-                _logger.LogWarning($"Retrying message to {msg.Data.Targetid} Because Send failed");
+                _logger.Warn($"Retrying message to {msg.Data.Targetid} Because Send failed");
                 await HandleRetry(msg);
             }
 
@@ -144,7 +144,7 @@ namespace Core.Message
             var policy = _retryPolicies[msg.Priority];
             if (msg.RetryCount >= policy.MaxRetries)
             {
-                _logger.LogWarning($"Max retries exceeded for message to {msg.Data.Targetid}. Dropping.");
+                _logger.Warn($"Max retries exceeded for message to {msg.Data.Targetid}. Dropping.");
 
                 var queue = _ResumeMessages.GetOrAdd(msg.Data.Targetid, new ConcurrentQueue<CommunicationData>());
                 queue.Enqueue(msg.Data);
@@ -166,7 +166,7 @@ namespace Core.Message
                     _outgoingLowMessages.Writer.TryWrite(msg);
                     break;
             }
-            _logger.LogInformation($"Retrying message to {msg.Data.Targetid}");
+            _logger.Info($"Retrying message to {msg.Data.Targetid}");
         }
 
         public void SendToClient(uint clientId, CommunicationData data, DataPriority priority = DataPriority.Medium)
@@ -238,10 +238,10 @@ namespace Core.Message
 
         private async Task SendPendingMessages(ClientConfig client, ConcurrentQueue<CommunicationData> queue)
         {
-            _logger.LogTrace($"Starting to send pending messages for client {client.UniqueId}.");
+            _logger.Trace($"Starting to send pending messages for client {client.UniqueId}.");
             if (queue.IsEmpty)
             {
-                _logger.LogDebug($"No pending messages found for client {client.UniqueId}.");
+                _logger.Debug($"No pending messages found for client {client.UniqueId}.");
                 return;
             }
 
@@ -249,21 +249,21 @@ namespace Core.Message
             {
                 try
                 {
-                    _logger.LogDebug($"Attempting to send message of type {data.InfoType} with priority {data.Priority} to client {client.UniqueId}.");
+                    _logger.Debug($"Attempting to send message of type {data.InfoType} with priority {data.Priority} to client {client.UniqueId}.");
                     SendToClient(client.Id, data, data.Priority);
-                    _logger.LogDebug($"Successfully sent message of type {data.InfoType} with priority {data.Priority} to client {client.UniqueId}.");
+                    _logger.Debug($"Successfully sent message of type {data.InfoType} with priority {data.Priority} to client {client.UniqueId}.");
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError($"Failed to send message of type {data.InfoType} with priority {data.Priority} to client {client.UniqueId}. Error: {ex.Message}");
+                    _logger.Error($"Failed to send message of type {data.InfoType} with priority {data.Priority} to client {client.UniqueId}. Error: {ex.Message}");
                 }
             }
-            _logger.LogTrace($"Finished sending all pending messages for client {client.UniqueId}.");
+            _logger.Trace($"Finished sending all pending messages for client {client.UniqueId}.");
         }
 
         private async Task<bool> SendDate(ClientConfig client, CommunicationData data)
         {
-            _logger.LogTrace($"Starting to send data to client {client.Id}.");
+            _logger.Trace($"Starting to send data to client {client.Id}.");
 
             try
             {
@@ -271,11 +271,11 @@ namespace Core.Message
                 // 检查客户端套接字是否存在、是否连接以及数据是否为空
                 if (client?.Socket == null || !client.Socket.Connected || data == null)
                 {
-                    _logger.LogWarning($"Client {client?.Id} Invalid parameters for SendData. Client socket is null or not connected, or data is null.");
+                    _logger.Warn($"Client {client?.Id} Invalid parameters for SendData. Client socket is null or not connected, or data is null.");
                     return false;
                 }
 
-                _logger.LogTrace($"Client {client.Id} Parameters are valid. Proceeding to create protocol packet.");
+                _logger.Trace($"Client {client.Id} Parameters are valid. Proceeding to create protocol packet.");
 
                 // 2. 获取配置(假设config是类成员变量或通过client获取)
                 //var config = config ?? new ProtocolConfiguration();
@@ -290,7 +290,7 @@ namespace Core.Message
                     },
                     ConstantsConfig.config);
 
-                _logger.LogTrace($"Client {client.Id} Protocol packet created. Proceeding to serialize it.");
+                _logger.Trace($"Client {client.Id} Protocol packet created. Proceeding to serialize it.");
 
                 // 4. 序列化为字节数组
                 byte[] protocolBytes;
@@ -298,18 +298,18 @@ namespace Core.Message
                 {
                     // 将协议数据包序列化为字节数组
                     protocolBytes = packet.ToBytes();
-                    _logger.LogTrace($"Client {client.Id} Protocol packet serialized to {protocolBytes.Length} bytes.");
+                    _logger.Trace($"Client {client.Id} Protocol packet serialized to {protocolBytes.Length} bytes.");
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError($"Client {client.Id} Packet serialization failed: {ex.Message}. Stack trace: {ex.StackTrace}");
+                    _logger.Error($"Client {client.Id} Packet serialization failed: {ex.Message}. Stack trace: {ex.StackTrace}");
                     return false;
                 }
 
                 // 5. 发送数据(确保发送完整)
                 // 初始化已发送的字节数
                 int totalSent = 0;
-                _logger.LogTrace($"Client {client.Id} Starting to send {protocolBytes.Length} bytes of data.");
+                _logger.Trace($"Client {client.Id} Starting to send {protocolBytes.Length} bytes of data.");
 
                 // 循环发送数据，直到所有数据都发送完毕
                 while (totalSent < protocolBytes.Length)
@@ -319,12 +319,12 @@ namespace Core.Message
                         new ArraySegment<byte>(protocolBytes, totalSent, protocolBytes.Length - totalSent),
                         SocketFlags.None);
 
-                    _logger.LogTrace($"Client {client.Id} Sent {sent} bytes of data at offset {totalSent}.");
+                    _logger.Trace($"Client {client.Id} Sent {sent} bytes of data at offset {totalSent}.");
 
                     // 如果发送的字节数为 0，说明连接已经关闭
                     if (sent == 0)
                     {
-                        _logger.LogWarning($"Client {client.Id} Connection closed during send. Sent {totalSent} bytes out of {protocolBytes.Length} bytes.");
+                        _logger.Warn($"Client {client.Id} Connection closed during send. Sent {totalSent} bytes out of {protocolBytes.Length} bytes.");
                         return false;
                     }
 
@@ -332,23 +332,23 @@ namespace Core.Message
                     totalSent += sent;
                 }
 
-                _logger.LogTrace($"Client {client.Id} Successfully sent {protocolBytes.Length} bytes of data.");
+                _logger.Trace($"Client {client.Id} Successfully sent {protocolBytes.Length} bytes of data.");
 
                 // 6. 更新统计
                 // 更新客户端发送的字节数统计信息
                 client.AddSentBytes(protocolBytes.Length);
-                _logger.LogTrace($"Client {client.Id} Updated sent bytes statistics. Total sent: {client.BytesSent} bytes.");
+                _logger.Trace($"Client {client.Id} Updated sent bytes statistics. Total sent: {client.BytesSent} bytes.");
 
                 return true;
             }
             catch (SocketException sex)
             {
-                _logger.LogError($"Client {client.Id} Socket error in SendData: {sex.Message}");
+                _logger.Error($"Client {client.Id} Socket error in SendData: {sex.Message}");
                 return false;
             }
             catch (Exception ex)
             {
-                _logger.LogCritical($"Client {client.Id} Unexpected error in SendData: {ex.Message}");
+                _logger.Critical($"Client {client.Id} Unexpected error in SendData: {ex.Message}");
                 return false;
             }
         }

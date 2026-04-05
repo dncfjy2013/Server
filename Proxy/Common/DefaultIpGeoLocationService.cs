@@ -152,7 +152,7 @@ namespace Server.Proxy.Common
 
             if (!File.Exists(filePath))
             {
-                _logger.LogWarning($"Configuration file not found: {filePath}");
+                _logger.Warn($"Configuration file not found: {filePath}");
                 return;
             }
 
@@ -167,19 +167,19 @@ namespace Server.Proxy.Common
                     var parts = line.Split(new[] { ' ', '\t', ',' }, 2, StringSplitOptions.TrimEntries);
                     if (parts.Length != 2)
                     {
-                        _logger.LogWarning($"Invalid line format (requires CIDR and zone): {line}");
+                        _logger.Warn($"Invalid line format (requires CIDR and zone): {line}");
                         continue;
                     }
 
                     if (TryAddMapping(parts[0], parts[1]))
                     {
-                        _logger.LogDebug($"Successfully loaded rule: {parts[0]} → {parts[1]}");
+                        _logger.Debug($"Successfully loaded rule: {parts[0]} → {parts[1]}");
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Failed to load configuration: {ex.Message}");
+                _logger.Error($"Failed to load configuration: {ex.Message}");
             }
         }
 
@@ -192,13 +192,13 @@ namespace Server.Proxy.Common
 
             if (string.IsNullOrEmpty(cidr) || string.IsNullOrEmpty(zone))
             {
-                _logger.LogWarning("CIDR or zone is empty");
+                _logger.Warn("CIDR or zone is empty");
                 return false;
             }
 
             if (!TryParseCidr(cidr, out var network, out var prefixLength))
             {
-                _logger.LogWarning($"Invalid CIDR format: {cidr}");
+                _logger.Warn($"Invalid CIDR format: {cidr}");
                 return false;
             }
 
@@ -225,7 +225,7 @@ namespace Server.Proxy.Common
             // 解析IP地址
             if (!IPAddress.TryParse(ipAddress, out var ip))
             {
-                _logger.LogWarning($"Invalid IP address: {ipAddress}");
+                _logger.Warn($"Invalid IP address: {ipAddress}");
                 return CacheResult(ipAddress, "unknown");
             }
 
@@ -255,7 +255,7 @@ namespace Server.Proxy.Common
                 _zoneToCidrs.Clear();
                 lock (_ipv4Ranges) { _ipv4Ranges.Clear(); }
                 lock (_ipv6Ranges) { _ipv6Ranges.Clear(); }
-                _logger.LogInformation("IP geolocation service disposed");
+                _logger.Info("IP geolocation service disposed");
             }
         }
 
@@ -279,7 +279,7 @@ namespace Server.Proxy.Common
         {
             if (!TryAddMapping(cidr, zone))
             {
-                _logger.LogWarning($"Failed to load built-in rule: {cidr} → {zone}");
+                _logger.Warn($"Failed to load built-in rule: {cidr} → {zone}");
             }
         }
 

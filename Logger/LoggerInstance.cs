@@ -132,12 +132,12 @@ namespace Logger
         #endregion
 
         #region ILogger
-        public void LogTrace<T>(T s, Func<T, Exception, string>? f = null, string? t = null) => Log(LogLevel.Trace, s, f, null, t);
-        public void LogDebug<T>(T s, Func<T, Exception, string>? f = null, string? t = null) => Log(LogLevel.Debug, s, f, null, t);
-        public void LogInformation<T>(T s, Func<T, Exception, string>? f = null, string? t = null) => Log(LogLevel.Information, s, f, null, t);
-        public void LogWarning<T>(T s, Exception? e = null, Func<T, Exception, string>? f = null, string? t = null) => Log(LogLevel.Warning, s, f, e, t);
-        public void LogError<T>(T s, Exception? e = null, Func<T, Exception, string>? f = null, string? t = null) => Log(LogLevel.Error, s, f, e, t);
-        public void LogCritical<T>(T s, Exception? e = null, Func<T, Exception, string>? f = null, string? t = null) => Log(LogLevel.Critical, s, f, e, t);
+        public void Trace<T>(T s, Func<T, Exception, string>? f = null, string? t = null) => Log(LogLevel.Trace, s, f, null, t);
+        public void Debug<T>(T s, Func<T, Exception, string>? f = null, string? t = null) => Log(LogLevel.Debug, s, f, null, t);
+        public void Info<T>(T s, Func<T, Exception, string>? f = null, string? t = null) => Log(LogLevel.Information, s, f, null, t);
+        public void Warn<T>(T s, Exception? e = null, Func<T, Exception, string>? f = null, string? t = null) => Log(LogLevel.Warning, s, f, e, t);
+        public void Error<T>(T s, Exception? e = null, Func<T, Exception, string>? f = null, string? t = null) => Log(LogLevel.Error, s, f, e, t);
+        public void Critical<T>(T s, Exception? e = null, Func<T, Exception, string>? f = null, string? t = null) => Log(LogLevel.Critical, s, f, e, t);
         #endregion
 
         #region 释放
