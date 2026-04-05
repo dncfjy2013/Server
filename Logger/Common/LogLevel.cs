@@ -1,4 +1,4 @@
-﻿namespace Server.Logger.Common
+﻿namespace Server.Logger
 {
     #region Level
     public enum LogLevel : byte

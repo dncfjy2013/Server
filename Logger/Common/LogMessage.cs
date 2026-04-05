@@ -1,5 +1,6 @@
 ﻿// 日志消息类 - 使用struct减少GC压力
-using Server.Logger.Common;
+using Server.Logger;
+using System.Text;
 
 public readonly struct LogMessage
 {
@@ -10,7 +11,6 @@ public readonly struct LogMessage
     public readonly string ThreadName;
     public readonly Exception Exception;
     public readonly IReadOnlyDictionary<string, object> Properties;
-
     public LogMessage(DateTime timestamp, LogLevel level, ReadOnlyMemory<byte> message, int threadId, string threadName,
         Exception exception = null, IReadOnlyDictionary<string, object> properties = null)
     {

@@ -1,20 +1,30 @@
 ﻿// 日志配置类
-using Server.Logger.Common;
+using Server.Logger;
 
 public sealed class LoggerConfig
 {
+    public string LogName = "DefaultName";
     public LogLevel ConsoleLogLevel { get; set; } = LogLevel.Trace;
-    public LogLevel FileLogLevel { get; set; } = LogLevel.Information;
+    public LogLevel FileLogLevel { get; set; } = LogLevel.Trace;
     public string LogDirectory { get; set; } = "Logs";
     public string LogFileNameFormat => "Log_{0:yyyyMMdd}_{1:D3}.dat";
     public bool EnableAsyncWriting { get; set; } = true;
-    public bool EnableConsoleWriting { get; set; } = false;
     public int MaxQueueSize { get; set; } = int.MaxValue;
-    public int FlushInterval { get; set; } = 500;
-    public bool EnableConsoleColor { get; set; } = true;
-    public int FileBufferSize { get; set; } = 64 * 1024;
     public int MaxDegreeOfParallelism { get; set; } = Environment.ProcessorCount;
-    public bool UseMemoryMappedFile { get; set; } = true;
-    public long MemoryMappedFileSize { get; set; } = 1024 * 1024 * 1000; // 1000MB
-    public long MemoryMappedThreadShould { get; set; } = 100 * 1024 * 1024;  // 100MB
+
+
+    public bool EnableConsoleWriting { get; set; } = false;
+    public bool EnableConsoleColor { get; set; } = true;
+
+
+    public int Flush_Interval { get; set; } = 500;
+    public int File_Buffer_Size { get; set; } = 64 * 1024;
+    public long File_Split_Size { get; set; } = 100L * 1024 * 1024;
+
+
+    public bool UseMemoryMappedFile { get; set; } = false;
+    public long MMF_BUFFER_SIZE{ get; set; } = 5 * 1024 * 1024; // 100MB
+    public long MMF_FLUSH_THRESHOLD{ get; set; } = 1 * 1024 * 1024;  // 16MB自动刷盘
+    public long MMF_Split_Size { get; set; } = 64 * 1024;
+    public string CACHE_FILE_NAME{ get; set; } = "mmf_cache.tmp";
 }
