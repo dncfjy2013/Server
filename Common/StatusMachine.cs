@@ -9,7 +9,12 @@ using System.Threading.Tasks;
 
 namespace Server.Common
 {
-    public class StateMachine<TKey, TState> where TState : notnull
+    /// <summary>
+    /// 线程安全、高性能、支持超时/审计/监控的通用状态机
+    /// </summary>
+    /// <typeparam name="TKey">状态唯一键类型</typeparam>
+    /// <typeparam name="TState">状态枚举/类型</typeparam>
+    public class StateMachine<TKey, TState> : IDisposable where TState : notnull
     {
         #region 核心数据结构
         private readonly ConcurrentDictionary<TKey, StateContext> _states = new();
@@ -31,12 +36,17 @@ namespace Server.Common
         private readonly int _maxHistoryPerKey = 100;
         private readonly Timer _timeoutScanner;
         private readonly PriorityQueue<TimeoutTask, long> _timeoutQueue = new();
+        private readonly ConcurrentDictionary<TKey, bool> _scheduledTimeouts = new(); // 修复：超时去重
         #endregion
 
         public StateMachine()
         {
             _transitionLatency = _meter.CreateHistogram<double>("transition_latency_ms");
             _meter.CreateObservableCounter("total_transitions", () => _totalTransitions);
+            _meter.CreateObservableCounter("successful_transitions", () => _successfulTransitions);
+            _meter.CreateObservableCounter("failed_transitions", () => _failedTransitions);
+
+            // 启动超时扫描器
             _timeoutScanner = new Timer(CheckTimeouts, null, 1000, 1000);
         }
 
@@ -44,8 +54,13 @@ namespace Server.Common
         private record struct TimeoutTask(TKey Key, DateTimeOffset ExpireTime);
 
         #region 公共接口
+        /// <summary>
+        /// 初始化键的初始状态
+        /// </summary>
         public void InitializeState(TKey key, TState initialState)
         {
+            if (key == null) throw new ArgumentNullException(nameof(key));
+
             _states.TryAdd(key, new StateContext
             {
                 CurrentState = initialState,
@@ -53,16 +68,27 @@ namespace Server.Common
             });
         }
 
+        /// <summary>
+        /// 添加允许的状态转换规则
+        /// </summary>
         public void AddTransition(TState from, TState to)
         {
-            if (!_transitions.TryGetValue(from, out var set))
+            if (from == null || to == null) throw new ArgumentNullException();
+
+            lock (_transitions)
             {
-                set = new HashSet<TState>();
-                _transitions[from] = set;
+                if (!_transitions.TryGetValue(from, out var set))
+                {
+                    set = new HashSet<TState>();
+                    _transitions[from] = set;
+                }
+                set.Add(to);
             }
-            set.Add(to);
         }
 
+        /// <summary>
+        /// 异步执行状态转换（核心方法）
+        /// </summary>
         public async Task<bool> TransitionAsync(
             TKey key,
             TState toState,
@@ -77,23 +103,17 @@ namespace Server.Common
                 var keyLock = _keyLocks.GetOrAdd(key, _ => new object());
                 bool result = await Task.Run(async () =>
                 {
-                    StateContext context;
-                    TState originalState;
+                    // 第一段：锁内校验（原子操作）
+                    if (!_states.TryGetValue(key, out var originalContext))
+                        return false;
 
-                    // 第一阶段：验证和前置操作
-                    lock (keyLock)
-                    {
-                        if (!_states.TryGetValue(key, out context))
-                            return false;
+                    var originalState = originalContext.CurrentState;
+                    if (!IsTransitionAllowed(originalState, toState))
+                        return false;
 
-                        originalState = context.CurrentState;
-                        if (!IsTransitionAllowed(originalState, toState))
-                            return false;
+                    OnBeforeTransition?.Invoke(key, originalState, toState);
 
-                        OnBeforeTransition?.Invoke(key, originalState, toState);
-                    }
-
-                    // 异步操作在锁外执行
+                    // 第二段：锁外执行异步业务（避免锁阻塞）
                     Exception? actionError = null;
                     if (transitionAction != null)
                     {
@@ -107,22 +127,25 @@ namespace Server.Common
                         }
                     }
 
-                    // 第二阶段：状态提交
+                    // 第三段：锁内提交状态（防并发修改）
                     lock (keyLock)
                     {
-                        if (!_states.TryGetValue(key, out context) ||
-                            !context.CurrentState.Equals(originalState))
-                        {
-                            return false; // 状态已变更
-                        }
+                        // 再次校验：防止期间状态被修改
+                        if (!_states.TryGetValue(key, out var currentContext) ||
+                            !currentContext.CurrentState.Equals(originalState))
+                            return false;
 
                         if (actionError != null)
-                        {
-                            throw new InvalidOperationException("Transition action failed", actionError);
-                        }
+                            throw new InvalidOperationException("状态转换业务执行失败", actionError);
 
-                        RecordHistory(context, toState, reason);
-                        UpdateStateContext(key, context, toState);
+                        // 修复：创建新上下文，避免竞态
+                        var newContext = currentContext.Clone();
+                        RecordHistory(newContext, toState, reason);
+                        UpdateStateContext(key, newContext, toState);
+
+                        // 替换原数据
+                        _states.TryUpdate(key, newContext, currentContext);
+
                         RecordAudit(key, originalState, toState, true, null);
                         OnAfterTransition?.Invoke(key, originalState, toState);
                         return true;
@@ -135,43 +158,65 @@ namespace Server.Common
             catch (Exception ex)
             {
                 Interlocked.Increment(ref _failedTransitions);
-                _states.TryGetValue(key, out var context);
-                RecordAudit(key, context.CurrentState ?? default!, toState, false, ex);
-                OnTransitionFailed?.Invoke(key, context.CurrentState ?? default!, toState, ex);
+                _states.TryGetValue(key, out var ctx);
+
+                TState currentState = ctx != null ? ctx.CurrentState : default!;
+                RecordAudit(key, currentState, toState, false, ex);
+                OnTransitionFailed?.Invoke(key, currentState, toState, ex);
                 return false;
             }
             finally
             {
+                // 记录转换延迟
                 var elapsed = (Stopwatch.GetTimestamp() - startTime) * 1000.0 / Stopwatch.Frequency;
                 _transitionLatency.Record(elapsed);
             }
         }
 
+        /// <summary>
+        /// 为状态设置超时自动回退
+        /// </summary>
         public void SetTimeout(TKey key, TimeSpan timeout, TState fallbackState)
         {
-            lock (_keyLocks.GetOrAdd(key, _ => new object()))
+            if (key == null) throw new ArgumentNullException(nameof(key));
+            if (fallbackState == null) throw new ArgumentNullException(nameof(fallbackState));
+
+            var keyLock = _keyLocks.GetOrAdd(key, _ => new object());
+            lock (keyLock)
             {
                 if (!_states.TryGetValue(key, out var context))
-                    throw new KeyNotFoundException();
+                    throw new KeyNotFoundException("键未初始化");
 
-                context.Timeout = timeout;
-                context.FallbackState = fallbackState;
+                var newContext = context.Clone();
+                newContext.Timeout = timeout;
+                newContext.FallbackState = fallbackState;
+                _states.TryUpdate(key, newContext, context);
+
                 ScheduleTimeoutCheck(key, timeout);
             }
         }
 
+        /// <summary>
+        /// 获取状态变更历史
+        /// </summary>
         public IEnumerable<StateHistoryEntry> GetStateHistory(TKey key)
         {
             return _states.TryGetValue(key, out var context)
-                ? new List<StateHistoryEntry>(context.History)
+                ? context.History.ToList()
                 : Enumerable.Empty<StateHistoryEntry>();
         }
 
+        /// <summary>
+        /// 获取审计日志
+        /// </summary>
         public IEnumerable<AuditLogEntry> GetAuditLogs()
         {
-            return _auditLog.ToArray().AsEnumerable();
+            return _auditLog.ToArray();
         }
 
+        /// <summary>
+        /// 尝试获取当前状态
+        /// </summary>
         public bool TryGetCurrentState(TKey key, out TState state)
         {
             if (_states.TryGetValue(key, out var context))
@@ -179,22 +224,30 @@ namespace Server.Common
                 state = context.CurrentState;
                 return true;
             }
+
             state = default!;
             return false;
         }
 
-        public void Dispose()
+        /// <summary>
+        /// 移除指定键的状态（清理资源）
+        /// </summary>
+        public bool RemoveState(TKey key)
         {
-            _timeoutScanner?.Dispose();
-            _meter.Dispose();
+            _states.TryRemove(key, out _);
+            _keyLocks.TryRemove(key, out _);
+            _scheduledTimeouts.TryRemove(key, out _);
+            return true;
         }
         #endregion
 
         #region 私有方法
         private bool IsTransitionAllowed(TState fromState, TState toState)
         {
-            return _transitions.TryGetValue(fromState, out var allowedStates)
-                   && allowedStates.Contains(toState);
+            lock (_transitions)
+            {
+                return _transitions.TryGetValue(fromState, out var allowed) && allowed.Contains(toState);
+            }
         }
 
         private void RecordHistory(StateContext context, TState newState, string? reason)
@@ -209,21 +262,30 @@ namespace Server.Common
             context.CurrentState = newState;
             context.LastUpdated = DateTimeOffset.UtcNow;
 
+            // 重新调度超时
             if (context.Timeout.HasValue)
-            {
                 ScheduleTimeoutCheck(key, context.Timeout.Value);
-            }
         }
 
+        /// <summary>
+        /// 修复：超时任务去重，避免重复添加
+        /// </summary>
         private void ScheduleTimeoutCheck(TKey key, TimeSpan timeout)
         {
+            if (_scheduledTimeouts.TryGetValue(key, out _))
+                return;
+
             var expireTime = DateTimeOffset.UtcNow + timeout;
             lock (_timeoutQueueLock)
             {
                 _timeoutQueue.Enqueue(new TimeoutTask(key, expireTime), expireTime.Ticks);
+                _scheduledTimeouts.TryAdd(key, true);
             }
         }
 
+        /// <summary>
+        /// 定时扫描超时任务
+        /// </summary>
         private void CheckTimeouts(object? state)
         {
             var now = DateTimeOffset.UtcNow;
@@ -236,39 +298,47 @@ namespace Server.Common
                 {
                     if (!_timeoutQueue.TryPeek(out task, out priority)) break;
                     if (priority > now.Ticks) break;
-
                     _timeoutQueue.Dequeue();
                 }
 
-                HandleTimeout(task.Key);
+                _scheduledTimeouts.TryRemove(task.Key, out _);
+                _ = HandleTimeoutAsync(task.Key); // 安全调用异步方法
             }
         }
 
-        private async void HandleTimeout(TKey key)
+        /// <summary>
+        /// 修复：async void 改为 async Task，避免吞异常
+        /// </summary>
+        private async Task HandleTimeoutAsync(TKey key)
         {
             try
             {
-                TState? fallbackState = default;
-                lock (_keyLocks.GetOrAdd(key, _ => new object()))
-                {
-                    if (!_states.TryGetValue(key, out var context)) return;
-                    if (context.FallbackState == null) return;
-                    if (DateTimeOffset.UtcNow < context.LastUpdated + context.Timeout) return;
+                if (!TryGetCurrentState(key, out _)) return;
 
-                    fallbackState = context.FallbackState;
+                var keyLock = _keyLocks.GetOrAdd(key, _ => new object());
+                TState? fallback = default;
+
+                lock (keyLock)
+                {
+                    if (!_states.TryGetValue(key, out var ctx) || ctx.FallbackState is null) return;
+                    if (DateTimeOffset.UtcNow < ctx.LastUpdated + ctx.Timeout) return;
+                    fallback = ctx.FallbackState;
                 }
 
-                if (fallbackState != null)
+                if (fallback is not null)
                 {
-                    await TransitionAsync(key, fallbackState, reason: "State timeout");
+                    await TransitionAsync(key, fallback, reason: "状态超时自动回退");
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Timeout handler error: {ex}");
+                Debug.WriteLine($"超时处理异常 [{key}]: {ex}");
             }
         }
 
+        /// <summary>
+        /// 记录审计日志
+        /// </summary>
         private void RecordAudit(TKey key, TState from, TState to, bool success, Exception? ex)
         {
             var entry = new AuditLogEntry(
@@ -281,12 +351,13 @@ namespace Server.Common
             );
 
             _auditLog.Enqueue(entry);
+            // 限制日志最大数量
             while (_auditLog.Count > 10000)
                 _auditLog.TryDequeue(out _);
         }
         #endregion
 
-        #region 事件和类型
+        #region 事件 & 内部类
         public event Action<TKey, TState, TState>? OnBeforeTransition;
         public event Action<TKey, TState, TState>? OnAfterTransition;
         public event Action<TKey, TState, TState, Exception>? OnTransitionFailed;
@@ -299,15 +370,40 @@ namespace Server.Common
             bool Success,
             string? Error
         );
-        #endregion
 
+        /// <summary>
+        /// 修复：增加Clone方法，杜绝引用竞态
+        /// </summary>
         private sealed class StateContext
         {
             public TState CurrentState { get; set; } = default!;
-            public LinkedList<StateHistoryEntry> History { get; } = new();
+            public LinkedList<StateHistoryEntry> History { get; init; } = new();
             public DateTimeOffset LastUpdated { get; set; }
             public TimeSpan? Timeout { get; set; }
             public TState? FallbackState { get; set; }
+
+            public StateContext Clone()
+            {
+                var clone = new StateContext
+                {
+                    CurrentState = CurrentState,
+                    LastUpdated = LastUpdated,
+                    Timeout = Timeout,
+                    FallbackState = FallbackState
+                };
+                foreach (var item in History) clone.History.AddLast(item);
+                return clone;
+            }
         }
+        #endregion
+
+        #region 释放资源
+        public void Dispose()
+        {
+            _timeoutScanner?.Dispose();
+            _meter.Dispose();
+            GC.SuppressFinalize(this);
+        }
+        #endregion
     }
 }

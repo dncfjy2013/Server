@@ -4,6 +4,7 @@ using log4net.Config;
 using System;
 using System.IO;
 using Test;
+using Test.CommonTest;
 
 public class Program
 {
@@ -48,11 +49,11 @@ public class Program
                         break;
 
                     case "3":
-                        Console.WriteLine("\n>>> 开始执行【所有测试】...");
+                        Console.WriteLine("\n>>> 开始执行【状态机压力测试开始】...");
                         _log.Info("开始执行全部测试");
-
+                        StateMachineTest.Test();
                         _log.Info("全部测试执行完成");
-                        Console.WriteLine(">>> 【所有测试】执行完毕！\n");
+                        Console.WriteLine(">>> 【状态机压力测试开始】执行完毕！\n");
                         break;
 
                     case "0":
@@ -85,7 +86,7 @@ public class Program
         Console.WriteLine("请选择要执行的操作：");
         Console.WriteLine("  1 - 执行 日志性能测试");
         Console.WriteLine("  2 - 执行 坐标系统全量测试");
-        Console.WriteLine("  3 - 执行 所有测试");
+        Console.WriteLine("  3 - 执行 状态机压力测试开始");
         Console.WriteLine("  0 - 退出程序");
         Console.Write("请输入数字并按回车：");
     }
