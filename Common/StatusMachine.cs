@@ -91,9 +91,8 @@ namespace Server.Common
         /// </summary>
         public async Task<bool> TransitionAsync(
             TKey key,
-            TState toState,
-            Func<TKey, TState, TState, Task>? transitionAction = null,
-            string? reason = null)
+            TState toState, string? reason = null,
+            Func<TKey, TState, TState, Task>? transitionAction = null)
         {
             var startTime = Stopwatch.GetTimestamp();
             Interlocked.Increment(ref _totalTransitions);

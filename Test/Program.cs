@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using Test;
 using Test.CommonTest;
+using Test.Entity;
 
 public class Program
 {
@@ -51,7 +52,7 @@ public class Program
                     case "3":
                         Console.WriteLine("\n>>> 开始执行【状态机压力测试开始】...");
                         _log.Info("开始执行全部测试");
-                        StateMachineTest.Test();
+                        StateMachine.Test();
                         _log.Info("全部测试执行完成");
                         Console.WriteLine(">>> 【状态机压力测试开始】执行完毕！\n");
                         break;
