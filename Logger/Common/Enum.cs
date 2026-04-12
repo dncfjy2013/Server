@@ -1,6 +1,5 @@
 ﻿namespace Logger
 {
-
     public enum LogLevel : byte
     {
         Trace = 0,
@@ -17,7 +16,6 @@
         Console = 0,
         File = 1,
         MMF = 2,
-        FileAndConsole = 3,
-        MMFAndConsole = 4,
+        FastSafe = 3,
     }
 }

@@ -119,7 +119,7 @@ namespace Logger.Core
 
         public void Write(LogMessage message)
         {
-            if (message.Level < _config.FileLogLevel || _disposed) return;
+            if (message.Equals(default(LogMessage)) || message.Level < _config.FileLogLevel || _disposed) return;
 
             lock (_lock)
             {

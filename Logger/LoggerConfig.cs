@@ -25,7 +25,7 @@ namespace Logger
 
         public long MMF_BUFFER_SIZE { get; set; } = 5 * 1024 * 1024;
         public long MMF_FLUSH_THRESHOLD { get; set; } = 1 * 1024 * 1024;
-        public long MMF_Split_Size { get; set; } = 64 * 1024;
+        public long MMF_Split_Size { get; set; } = 100L * 1024 * 1024;
         public string CACHE_FILE_NAME { get; set; } = "mmf_cache.tmp";
 
         /// <summary>

@@ -52,13 +52,8 @@ namespace Logger
                 case LogOutputType.MMF:
                     _outputs.Add(new OutputMemoryMapped(_config));
                     break;
-                case LogOutputType.FileAndConsole:
-                    _outputs.Add(new OutputConsole(_config));
-                    _outputs.Add(new OutputFileStream(_config));
-                    break;
-                case LogOutputType.MMFAndConsole:
-                    _outputs.Add(new OutputConsole(_config));
-                    _outputs.Add(new OutputMemoryMapped(_config));
+                case LogOutputType.FastSafe:
+                    _outputs.Add(new OutputFastSafe(_config));
                     break;
                 default:
                     _outputs.Add(new OutputConsole(_config));

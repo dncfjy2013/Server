@@ -81,7 +81,7 @@ namespace Logger.Core
         #region 日志写入核心
         public void Write(LogMessage message)
         {
-            if (message.Level < _config.FileLogLevel || _disposed)
+            if (message.Equals(default(LogMessage)) || message.Level < _config.FileLogLevel || _disposed)
                 return;
 
             lock (_lock)
